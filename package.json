@@ -1,0 +1,17 @@
+{
+  "name": "agent-bittrees-portal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "First-cut portal scaffold for agent.bittrees.org.",
+  "scripts": {
+    "check": "node --check src/server.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node --watch src/server.mjs",
+    "start": "node src/server.mjs",
+    "start:dist": "node dist/server.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
