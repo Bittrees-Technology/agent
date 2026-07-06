@@ -12,7 +12,7 @@ This repository contains the first-cut local scaffold for the `agent.bittrees.or
   - `/templates.json`
   - `/idacc/releases.json`
 - Schema-annotated responses for each stub route.
-- A build step that copies the source server into `dist/` and writes a portal manifest.
+- A build step that writes deployable static assets into `dist/` for Vercel.
 
 ## Source-aware content rules
 
@@ -54,7 +54,14 @@ npm run dev
 npm run build
 ```
 
-This copies `src/` into `dist/` and writes `dist/portal-manifest.json`.
+This writes deployable static files:
+
+- `dist/index.html`
+- `dist/llms.txt`
+- `dist/agents.json`
+- `dist/templates.json`
+- `dist/idacc/releases.json`
+- `dist/portal-manifest.json`
 
 To run the built copy:
 
@@ -65,5 +72,5 @@ npm run start:dist
 ## Notes
 
 - `/llms.txt` is JSON-encoded in this first cut so the schema annotation stays explicit.
-- No live Vercel or DNS connection is configured for this scaffold.
-- The repository is intentionally minimal and local-only.
+- `vercel.json` configures Vercel to build and serve the static `dist/` output.
+- The scaffold remains intentionally minimal and noindex until public launch approval.

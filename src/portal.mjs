@@ -230,7 +230,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderLandingPage() {
+export function renderLandingPage() {
   const routeCards = ROUTE_DEFINITIONS.slice(1)
     .map(
       (definition) => `
@@ -488,11 +488,11 @@ function renderLandingPage() {
 </html>`;
 }
 
-function buildStubResponse(routeDefinition) {
+export function buildStubResponse(routeDefinition, generatedAt = new Date().toISOString()) {
   return {
     $schema: SCHEMA_URL,
     route: routeDefinition.path,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     stub: true,
     schema: routeDefinition.schema,
     data: routeDefinition.data,
@@ -522,10 +522,10 @@ function sendHtml(res, statusCode, body, includeBody = true) {
   res.end(includeBody ? body : undefined);
 }
 
-export function buildPortalManifest() {
+export function buildPortalManifest(generatedAt = new Date().toISOString()) {
   return {
     name: 'agent.bittrees.org portal scaffold',
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     sourceScope: [...SOURCE_SCOPE],
     routes: ROUTE_DEFINITIONS.map((definition) => ({
       path: definition.path,
@@ -536,6 +536,25 @@ export function buildPortalManifest() {
       schemaTitle: definition.schema?.title ?? null,
     })),
   };
+}
+
+export function buildStaticAssets(generatedAt = new Date().toISOString()) {
+  const routeAssets = ROUTE_DEFINITIONS.slice(1).map((definition) => ({
+    path: definition.path.replace(/^\//, ''),
+    body: `${JSON.stringify(buildStubResponse(definition, generatedAt), null, 2)}\n`,
+  }));
+
+  return [
+    {
+      path: 'index.html',
+      body: renderLandingPage(),
+    },
+    ...routeAssets,
+    {
+      path: 'portal-manifest.json',
+      body: `${JSON.stringify(buildPortalManifest(generatedAt), null, 2)}\n`,
+    },
+  ];
 }
 
 export function createRequestHandler() {
