@@ -3,6 +3,12 @@
   "outputDirectory": "dist",
   "trailingSlash": false,
   "cleanUrls": false,
+  "rewrites": [
+    {
+      "source": "/identity-keys",
+      "destination": "/identity-keys/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

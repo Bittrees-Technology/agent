@@ -8,13 +8,17 @@ The portal is intentionally noindex until the source registry and public Bittree
 
 - A minimal Node.js server.
 - A human landing page at `/`.
+- A human identity and keys page at `/identity-keys`.
+- A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
 - A plain-text AI-agent entry point at `/llms.txt`.
 - Machine-readable JSON routes:
   - `/agents.json`
+  - `/identity-keys.json`
   - `/templates.json`
   - `/sources.json`
   - `/opportunities.json`
   - `/idacc/releases.json`
+  - `/monitoring.json`
 - Endpoint tests for route contracts and claim guardrails.
 - A build step that writes deployable static assets into `dist/` for Vercel.
 
@@ -29,6 +33,22 @@ The portal currently limits Bittrees claims to the approved local/Brain groundin
 Do not describe Bittrees primarily as an AI-agent blockchain platform, generic DAO suite, IDACC product, cross-chain AI execution network, DeFi bridge, NFT/metaverse expansion, or Solana/Cosmos AI-agent chain unless a specific approved source supports that exact claim.
 
 Mutable treasury, token, wallet, holdings, signer, quorum, price, or governance-state claims require fresh verification before reuse.
+
+## Identity and keys
+
+`/identity-keys` is the human-readable page for live agent identity and key readiness. `/identity-keys.json` defines the machine-readable contract for managed agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.
+
+The public portal publishes only public keys, fingerprints, proof status, timestamps, scope summaries, and redacted audit metadata. It must not publish private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, unredacted delegated secrets, or raw signatures that contain credentials.
+
+`/agents.json` now advertises a live registry management policy: signed agent/controller heartbeats can refresh routine live state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
+
+## Monitoring
+
+`/monitoring.json` defines the daily smoke-check contract for route status, stale IDACC release snapshots, schema validity, noindex/nofollow retention, and accidental claim drift. Run it against a deployed or local build with:
+
+```bash
+npm run smoke -- --base-url=https://agent.bittrees.org
+```
 
 ## Local setup
 
@@ -67,12 +87,15 @@ npm run build
 The build writes:
 
 - `dist/index.html`
+- `dist/identity-keys/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
+- `dist/identity-keys.json`
 - `dist/templates.json`
 - `dist/sources.json`
 - `dist/opportunities.json`
 - `dist/idacc/releases.json`
+- `dist/monitoring.json`
 - `dist/portal-manifest.json`
 
 To run the built copy:
@@ -85,5 +108,6 @@ npm run start:dist
 
 - `vercel.json` keeps `X-Robots-Tag: noindex, nofollow` enabled.
 - Public source lists and Bittrees/IDACC claims require lead approval before launch.
+- The identity/key route is live-contract-ready, but production registry writes still need an authenticated control-plane writer, controller-signed challenge verification, and redaction tests.
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.
