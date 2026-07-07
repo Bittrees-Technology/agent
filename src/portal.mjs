@@ -1,7 +1,20 @@
+import { randomUUID } from 'node:crypto';
+import { appendFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
+export const ROBOTS_TXT_PATH = '/robots.txt';
+const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const REVIEWED_AT = '2026-07-07';
 const NEXT_REVIEW_DUE = '2026-07-21';
+const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
+  'CONTRIBUTION_INTENTS_WRITE_ENABLED',
+  'CONTRIBUTION_INTENTS_ENABLED',
+  'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
+];
 
 export const SOURCE_SCOPE = [
   'Bittrees Research',
@@ -106,6 +119,42 @@ const READ_ONLY_LAUNCH_POSTURE = {
     },
   ],
 };
+
+function isTruthyFlag(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function isContributionIntentsWriteEnabled() {
+  return CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES.some((flagName) => isTruthyFlag(process.env[flagName]));
+}
+
+function getContributionIntentStoragePaths() {
+  const storageDir = process.env.CONTRIBUTION_INTENTS_DATA_DIR ?? join(PROJECT_ROOT, 'var', 'contribution-intents');
+
+  return {
+    storageDir,
+    submissionsLogPath: join(storageDir, 'submissions.jsonl'),
+    notificationsLogPath: join(storageDir, 'fleet-notifications.jsonl'),
+  };
+}
+
+function buildContributionIntentSecurityGate() {
+  if (!isContributionIntentsWriteEnabled()) {
+    return READ_ONLY_LAUNCH_POSTURE;
+  }
+
+  return {
+    ...READ_ONLY_LAUNCH_POSTURE,
+    mode: 'feature-flag-live-write-enabled',
+    liveWritesEnabled: true,
+    liveWriteReason:
+      'Contribution-intent writes are enabled in a non-production environment and are persisted locally with fleet notifications.',
+  };
+}
 
 const CONTRIBUTION_LANES = [
   {
@@ -702,7 +751,7 @@ const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
   $schema: SCHEMA_URL,
   $id: `${PORTAL_BASE_URL}/schemas/contribution-intent-response.v1.json`,
   title: 'agent.bittrees.org contribution intent response',
-  description: 'Response contract for the disabled contribution-intent route.',
+  description: 'Response contract for the contribution-intent route.',
   type: 'object',
   additionalProperties: false,
   required: ['schema', 'status', 'accepted', 'liveWrite', 'message'],
@@ -714,6 +763,10 @@ const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
     message: { type: 'string' },
     receiptId: { type: 'string' },
     nextStep: { type: 'string' },
+    errors: {
+      type: 'array',
+      items: { type: 'string' },
+    },
   },
 };
 
@@ -799,52 +852,61 @@ function buildDataSchema({ id, title, description, required, properties }) {
   };
 }
 
-const llmsData = {
-  schema: 'agent.bittrees.llms.v1',
-  status: 'active-static-reviewed',
-  review: REVIEW_STATE,
-  sources: SOURCE_RECORDS,
-  portal: {
-    name: 'agent.bittrees.org',
-    baseUrl: PORTAL_BASE_URL,
-    purpose:
-      'Source-grounded onboarding and machine-readable discovery for agents contributing to Bittrees-scoped work.',
-    launchPosture: READ_ONLY_LAUNCH_POSTURE,
-  },
-  instructions: [
-    'Use this portal as a static discovery layer, not as an authority to submit live work.',
-    'Route contribution intent through the documented schema only; live POST submissions currently return 501.',
-    'Do not infer public Bittrees identity, authorization, trust, wallet authority, or legal authority from a route listing.',
-    'Use owner routes and validation paths when handing work to IDACC-managed agents.',
-  ],
-  routes: [
-    {
-      path: '/agents.json',
-      schema: 'agent.bittrees.agents.v1',
-      purpose: 'Reviewed static snapshot of contribution lanes, owner routes, and dispatch-ready agents.',
-      owner: 'engineering-team/architecture-engineer',
+function buildLlmsData() {
+  const contributionIntentGate = buildContributionIntentSecurityGate();
+  const liveWritesEnabled = contributionIntentGate.liveWritesEnabled === true;
+
+  return {
+    schema: 'agent.bittrees.llms.v1',
+    status: 'active-static-reviewed',
+    review: REVIEW_STATE,
+    sources: SOURCE_RECORDS,
+    portal: {
+      name: 'agent.bittrees.org',
+      baseUrl: PORTAL_BASE_URL,
+      purpose:
+        'Source-grounded onboarding and machine-readable discovery for agents contributing to Bittrees-scoped work.',
+      launchPosture: contributionIntentGate,
     },
-    {
-      path: '/templates.json',
-      schema: 'agent.bittrees.templates.v1',
-      purpose: 'Reusable Bittrees-scoped task templates with acceptance and validation requirements.',
-      owner: 'engineering-team/architecture-engineer',
-    },
-    {
-      path: '/idacc/releases.json',
-      schema: 'agent.bittrees.idacc-releases.v1',
-      purpose: 'IDACC release discovery metadata with integrity and install-approval status.',
-      owner: 'engineering-lead',
-    },
-    {
-      path: '/contribution-intents',
-      schema: 'agent.bittrees.contribution-intent.contract.v1',
-      purpose: 'Documented submission contract; POST returns 501 until security clearance.',
-      owner: 'technology-security/security-router',
-    },
-  ],
-  sourceScope: SOURCE_SCOPE,
-};
+    instructions: [
+      'Use this portal as a static discovery layer, not as an authority to submit live work.',
+      liveWritesEnabled
+        ? 'Route contribution intent through the documented schema only; feature-flagged non-production POST writes persist local review artifacts and queue fleet notifications.'
+        : 'Route contribution intent through the documented schema only; POST defaults to 501 until non-production write capture is explicitly enabled.',
+      'Do not infer public Bittrees identity, authorization, trust, wallet authority, or legal authority from a route listing.',
+      'Use owner routes and validation paths when handing work to IDACC-managed agents.',
+    ],
+    routes: [
+      {
+        path: '/agents.json',
+        schema: 'agent.bittrees.agents.v1',
+        purpose: 'Reviewed static snapshot of contribution lanes, owner routes, and dispatch-ready agents.',
+        owner: 'engineering-team/architecture-engineer',
+      },
+      {
+        path: '/templates.json',
+        schema: 'agent.bittrees.templates.v1',
+        purpose: 'Reusable Bittrees-scoped task templates with acceptance and validation requirements.',
+        owner: 'engineering-team/architecture-engineer',
+      },
+      {
+        path: '/idacc/releases.json',
+        schema: 'agent.bittrees.idacc-releases.v1',
+        purpose: 'IDACC release discovery metadata with integrity and install-approval status.',
+        owner: 'engineering-lead',
+      },
+      {
+        path: '/contribution-intents',
+        schema: 'agent.bittrees.contribution-intent.contract.v1',
+        purpose: liveWritesEnabled
+          ? 'Documented submission contract; feature-flagged POST writes persist local review artifacts and queue fleet notifications.'
+          : 'Documented submission contract; POST defaults to 501 until non-production write capture is enabled.',
+        owner: 'technology-security/security-router',
+      },
+    ],
+    sourceScope: SOURCE_SCOPE,
+  };
+}
 
 const agentsData = {
   schema: 'agent.bittrees.agents.v1',
@@ -934,15 +996,29 @@ const idaccReleasesData = {
   securityGate: READ_ONLY_LAUNCH_POSTURE,
 };
 
-const contributionContractData = {
-  schema: 'agent.bittrees.contribution-intent.contract.v1',
-  status: 'contract-only-disabled',
-  review: REVIEW_STATE,
-  sources: SOURCE_RECORDS.filter((source) =>
-    ['memory:642', 'output:agent-bittrees-portal-repo-readiness'].includes(source.id),
-  ),
-  contract: CONTRIBUTION_INTENT_CONTRACT,
-};
+function buildContributionIntentContractData() {
+  const liveWritesEnabled = isContributionIntentsWriteEnabled();
+  const securityGate = buildContributionIntentSecurityGate();
+
+  return {
+    schema: 'agent.bittrees.contribution-intent.contract.v1',
+    status: liveWritesEnabled ? 'feature-flag-live-write-enabled' : 'contract-only-disabled',
+    review: REVIEW_STATE,
+    sources: SOURCE_RECORDS.filter((source) =>
+      ['memory:642', 'output:agent-bittrees-portal-repo-readiness'].includes(source.id),
+    ),
+    contract: {
+      ...CONTRIBUTION_INTENT_CONTRACT,
+      launchStatus: liveWritesEnabled ? 'feature-flag-live-write-enabled' : 'contract-only-disabled',
+      securityGate,
+      featureFlag: {
+        name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0],
+        aliases: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES.slice(1),
+        enabled: liveWritesEnabled,
+      },
+    },
+  };
+}
 
 function buildRouteDefinition({ path, label, title, description, schema, data, methods = ['GET', 'HEAD'] }) {
   return {
@@ -982,7 +1058,7 @@ export const ROUTE_DEFINITIONS = [
         sourceScope: buildStringArraySchema('Approved Bittrees source scope.'),
       },
     }),
-    data: llmsData,
+    data: buildLlmsData,
   }),
   buildRouteDefinition({
     path: '/agents.json',
@@ -1046,7 +1122,7 @@ export const ROUTE_DEFINITIONS = [
     path: '/contribution-intents',
     label: 'contribution-intents',
     title: 'agent.bittrees.org contribution intent contract',
-    description: 'Documented contribution-intent submission contract; POST is disabled and returns 501.',
+    description: 'Documented contribution-intent submission contract; POST defaults to 501 and can be feature-flag enabled for non-production review capture.',
     schema: buildDataSchema({
       id: 'contribution-intent-contract.v1',
       title: 'agent.bittrees.org contribution intent contract schema',
@@ -1056,12 +1132,13 @@ export const ROUTE_DEFINITIONS = [
         contract: { type: 'object' },
       },
     }),
-    data: contributionContractData,
+    data: buildContributionIntentContractData,
     methods: ['GET', 'HEAD', 'POST'],
   }),
 ];
 
 export const ROUTE_MAP = new Map(ROUTE_DEFINITIONS.slice(1).map((definition) => [definition.path, definition]));
+const CANONICAL_ROUTE_PATHS = new Set([ROBOTS_TXT_PATH, ...ROUTE_DEFINITIONS.map((definition) => definition.path)]);
 
 function escapeHtml(value) {
   return String(value)
@@ -1072,7 +1149,22 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderLandingPage() {
+function buildCanonicalUrl(pathname) {
+  return new URL(pathname, PORTAL_BASE_URL).toString();
+}
+
+export function normalizeCanonicalPath(pathname) {
+  if (pathname === '/') {
+    return pathname;
+  }
+
+  const normalizedPath = pathname.replace(/\/+$/, '');
+  return normalizedPath === '' ? '/' : normalizedPath;
+}
+
+export function renderLandingPage() {
+  const contributionIntentGate = buildContributionIntentSecurityGate();
+  const liveWritesEnabled = contributionIntentGate.liveWritesEnabled === true;
   const routeCards = ROUTE_DEFINITIONS.slice(1)
     .map(
       (definition) => `
@@ -1089,12 +1181,19 @@ function renderLandingPage() {
   const noGoItems = READ_ONLY_LAUNCH_POSTURE.noGoItems
     .map((item) => `<li>${escapeHtml(item.label)}: ${escapeHtml(item.status)}</li>`)
     .join('');
+  const heroCopy = liveWritesEnabled
+    ? 'This launch draft publishes reviewed machine-readable manifests for Bittrees-scoped contribution lanes, reusable task templates, and IDACC release discovery. A feature-flagged non-production intake path is enabled: contribution intent submissions are validated, persisted locally, and queued for fleet review.'
+    : 'This launch draft publishes reviewed machine-readable manifests for Bittrees-scoped contribution lanes, reusable task templates, and IDACC release discovery. The portal is intentionally read-only: contribution intent is documented as a schema and route contract, but live submission writes are disabled pending security-router clearance.';
+  const launchPostureCopy = liveWritesEnabled
+    ? 'Feature-flag intake capture is enabled for non-production review, while public launch, install promotion, and broader security clearance remain blocked until the open security gate clears.'
+    : 'Live writes, install promotion, and public launch remain blocked until the open security gate clears.';
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href="${PORTAL_BASE_URL}/" />
     <meta name="robots" content="noindex,nofollow" />
     <title>agent.bittrees.org</title>
     <style>
@@ -1247,12 +1346,7 @@ function renderLandingPage() {
           <p class="eyebrow">agent.bittrees.org static discovery portal</p>
           <h1 id="hero-title">Bittrees contribution discovery for agents.</h1>
         </div>
-        <p class="lede">
-          This launch draft publishes reviewed machine-readable manifests for Bittrees-scoped
-          contribution lanes, reusable task templates, and IDACC release discovery. The portal is
-          intentionally read-only: contribution intent is documented as a schema and route contract,
-          but live submission writes are disabled pending security-router clearance.
-        </p>
+        <p class="lede">${escapeHtml(heroCopy)}</p>
         <div class="pill-row" aria-label="Machine-readable routes">
           <a class="pill" href="/llms.txt">/llms.txt</a>
           <a class="pill" href="/agents.json">/agents.json</a>
@@ -1272,7 +1366,7 @@ function renderLandingPage() {
         </article>
         <article class="section">
           <h2>Launch posture</h2>
-          <p>Live writes, install promotion, and public launch remain blocked until the open security gate clears.</p>
+          <p>${escapeHtml(launchPostureCopy)}</p>
           <ul>
             ${noGoItems}
           </ul>
@@ -1288,58 +1382,508 @@ function renderLandingPage() {
 </html>`;
 }
 
-function buildDiscoveryResponse(routeDefinition) {
+export function buildDiscoveryResponse(routeDefinition, generatedAt = new Date().toISOString()) {
   return {
     $schema: SCHEMA_URL,
     route: routeDefinition.path,
-    generatedAt: new Date().toISOString(),
-    stub: routeDefinition.stub,
+    canonicalUrl: buildCanonicalUrl(routeDefinition.path),
+    generatedAt,
+    stub: routeDefinition.stub ?? false,
     schema: routeDefinition.schema,
-    data: routeDefinition.data,
+    data: typeof routeDefinition.data === 'function' ? routeDefinition.data({ generatedAt }) : routeDefinition.data,
+  };
+}
+
+function buildContributionIntentResponse({
+  status,
+  accepted,
+  liveWrite,
+  message,
+  receiptId,
+  nextStep,
+  errors,
+  generatedAt = new Date().toISOString(),
+}) {
+  return {
+    $schema: SCHEMA_URL,
+    route: CONTRIBUTION_INTENT_CONTRACT.endpoint,
+    canonicalUrl: buildCanonicalUrl(CONTRIBUTION_INTENT_CONTRACT.endpoint),
+    generatedAt,
+    requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
+    responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
+    securityGate: buildContributionIntentSecurityGate(),
+    schema: 'agent.bittrees.contribution-intent.response.v1',
+    status,
+    accepted,
+    liveWrite,
+    message,
+    ...(receiptId ? { receiptId } : {}),
+    ...(nextStep ? { nextStep } : {}),
+    ...(Array.isArray(errors) && errors.length ? { errors } : {}),
   };
 }
 
 function buildContributionIntentDisabledResponse() {
+  return buildContributionIntentResponse({
+    status: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.status,
+    accepted: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.accepted,
+    liveWrite: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.liveWrite,
+    message: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.message,
+    nextStep: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.nextStep,
+  });
+}
+
+function buildContributionIntentAcceptedResponse(receiptId, nextStep) {
+  return buildContributionIntentResponse({
+    status: 'accepted',
+    accepted: true,
+    liveWrite: true,
+    receiptId,
+    nextStep,
+    message: 'Contribution intent accepted, persisted, and fleet notification queued.',
+  });
+}
+
+function buildContributionIntentRejectedResponse(message, nextStep, errors = []) {
+  return buildContributionIntentResponse({
+    status: 'rejected',
+    accepted: false,
+    liveWrite: true,
+    message,
+    nextStep,
+    errors,
+  });
+}
+
+function buildContributionIntentAcceptanceNextStep(notificationRecord) {
+  const primaryRoute = notificationRecord.ownerRoute || notificationRecord.requestedOwnerRoute;
+  const targetList = Array.isArray(notificationRecord.targets) ? notificationRecord.targets.filter(Boolean) : [];
+  const targetText = targetList.length ? ` Notification targets: ${targetList.join(', ')}.` : '';
+
+  if (primaryRoute) {
+    return `Lead review has been queued for ${primaryRoute}.${targetText} Use the receipt ID to correlate stored submission and fleet-notification records.`;
+  }
+
+  return `Lead review has been queued.${targetText} Use the receipt ID to correlate stored submission and fleet-notification records.`;
+}
+
+function logTelemetryRequest({ timestamp = new Date().toISOString(), method, path, status }) {
+  console.log(JSON.stringify({ timestamp, method, path, status }));
+}
+
+function sendResponse(res, statusCode, headers, body, includeBody = true, telemetry = null) {
+  const payload = body ?? '';
+  res.writeHead(statusCode, {
+    ...headers,
+    'Content-Length': Buffer.byteLength(payload),
+  });
+  res.end(includeBody ? payload : undefined);
+
+  if (telemetry) {
+    logTelemetryRequest(telemetry);
+  }
+}
+
+function sendJson(res, statusCode, body, includeBody = true, telemetry = null) {
+  return sendResponse(
+    res,
+    statusCode,
+    {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+    `${JSON.stringify(body, null, 2)}\n`,
+    includeBody,
+    telemetry,
+  );
+}
+
+function sendHtml(res, statusCode, body, includeBody = true, telemetry = null) {
+  return sendResponse(
+    res,
+    statusCode,
+    {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+    body,
+    includeBody,
+    telemetry,
+  );
+}
+
+function sendText(res, statusCode, body, includeBody = true, telemetry = null) {
+  return sendResponse(
+    res,
+    statusCode,
+    {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+    body,
+    includeBody,
+    telemetry,
+  );
+}
+
+function sendRedirect(res, statusCode, location, telemetry = null) {
+  return sendResponse(
+    res,
+    statusCode,
+    {
+      Location: location,
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Robots-Tag': 'noindex, nofollow',
+    },
+    '',
+    false,
+    telemetry,
+  );
+}
+
+const CONTRIBUTION_INTENT_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{6,118}[a-z0-9]$/;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function pushUnknownKeys(errors, value, allowedKeys, path) {
+  const allowed = new Set(allowedKeys);
+
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      errors.push(`${path}.${key} is not allowed.`);
+    }
+  }
+}
+
+function validateStringField(errors, value, path, { minLength = 0, maxLength = Number.POSITIVE_INFINITY, pattern, allowedValues } = {}) {
+  if (typeof value !== 'string') {
+    errors.push(`${path} must be a string.`);
+    return false;
+  }
+
+  if (value.length < minLength) {
+    errors.push(`${path} must be at least ${minLength} characters.`);
+  }
+
+  if (value.length > maxLength) {
+    errors.push(`${path} must be at most ${maxLength} characters.`);
+  }
+
+  if (pattern && !pattern.test(value)) {
+    errors.push(`${path} has an invalid format.`);
+  }
+
+  if (allowedValues && !allowedValues.includes(value)) {
+    errors.push(`${path} must be one of: ${allowedValues.join(', ')}.`);
+  }
+
+  return true;
+}
+
+function validateStringArrayField(errors, value, path, { minItems = 0, maxItems = Number.POSITIVE_INFINITY, minLength = 1, maxLength = 400 } = {}) {
+  if (!Array.isArray(value)) {
+    errors.push(`${path} must be an array.`);
+    return false;
+  }
+
+  if (value.length < minItems) {
+    errors.push(`${path} must include at least ${minItems} item(s).`);
+  }
+
+  if (value.length > maxItems) {
+    errors.push(`${path} must include at most ${maxItems} item(s).`);
+  }
+
+  value.forEach((item, index) => {
+    validateStringField(errors, item, `${path}[${index}]`, { minLength, maxLength });
+  });
+
+  return true;
+}
+
+function validateContributionIntentRequest(payload) {
+  const errors = [];
+
+  if (!isPlainObject(payload)) {
+    return {
+      ok: false,
+      errors: ['Request body must be a JSON object.'],
+    };
+  }
+
+  pushUnknownKeys(errors, payload, CONTRIBUTION_INTENT_REQUEST_SCHEMA.required.concat(['schema', 'intentId', 'submittedAt', 'contributor', 'targetLane', 'summary', 'proposedTemplate', 'handoff', 'safety']), 'body');
+  validateStringField(errors, payload.schema, 'body.schema', {
+    allowedValues: ['agent.bittrees.contribution-intent.v1'],
+  });
+  validateStringField(errors, payload.intentId, 'body.intentId', {
+    minLength: 8,
+    maxLength: 120,
+    pattern: CONTRIBUTION_INTENT_ID_PATTERN,
+  });
+  validateStringField(errors, payload.submittedAt, 'body.submittedAt', { minLength: 1, maxLength: 120 });
+
+  if (payload.submittedAt && Number.isNaN(Date.parse(payload.submittedAt))) {
+    errors.push('body.submittedAt must be an ISO-8601 date-time string.');
+  }
+
+  if (!isPlainObject(payload.contributor)) {
+    errors.push('body.contributor must be an object.');
+  } else {
+    pushUnknownKeys(errors, payload.contributor, ['kind', 'name', 'agentId', 'team', 'contactRoute'], 'body.contributor');
+    validateStringField(errors, payload.contributor.kind, 'body.contributor.kind', {
+      allowedValues: ['agent', 'human', 'team'],
+    });
+    validateStringField(errors, payload.contributor.name, 'body.contributor.name', {
+      minLength: 1,
+      maxLength: 120,
+    });
+    if (payload.contributor.agentId !== undefined) {
+      validateStringField(errors, payload.contributor.agentId, 'body.contributor.agentId', {
+        minLength: 1,
+        maxLength: 160,
+      });
+    }
+    if (payload.contributor.team !== undefined) {
+      validateStringField(errors, payload.contributor.team, 'body.contributor.team', {
+        minLength: 1,
+        maxLength: 120,
+      });
+    }
+    validateStringField(errors, payload.contributor.contactRoute, 'body.contributor.contactRoute', {
+      minLength: 1,
+      maxLength: 300,
+    });
+  }
+
+  validateStringField(errors, payload.targetLane, 'body.targetLane', {
+    allowedValues: CONTRIBUTION_LANES.map((lane) => lane.id),
+  });
+  validateStringField(errors, payload.summary, 'body.summary', {
+    minLength: 20,
+    maxLength: 1200,
+  });
+  validateStringField(errors, payload.proposedTemplate, 'body.proposedTemplate', {
+    allowedValues: TEMPLATE_LIBRARY.map((template) => template.id),
+  });
+
+  if (!isPlainObject(payload.handoff)) {
+    errors.push('body.handoff must be an object.');
+  } else {
+    pushUnknownKeys(
+      errors,
+      payload.handoff,
+      ['requestedOwnerRoute', 'goalId', 'expectedOutput', 'acceptanceCriteria', 'outOfScope', 'backlogPolicy', 'sourceIds'],
+      'body.handoff',
+    );
+    validateStringField(errors, payload.handoff.requestedOwnerRoute, 'body.handoff.requestedOwnerRoute', {
+      minLength: 1,
+      maxLength: 160,
+    });
+    if (payload.handoff.goalId !== undefined) {
+      validateStringField(errors, payload.handoff.goalId, 'body.handoff.goalId', {
+        minLength: 1,
+        maxLength: 120,
+      });
+    }
+    validateStringField(errors, payload.handoff.expectedOutput, 'body.handoff.expectedOutput', {
+      minLength: 10,
+      maxLength: 1200,
+    });
+    validateStringArrayField(errors, payload.handoff.acceptanceCriteria, 'body.handoff.acceptanceCriteria', {
+      minItems: 1,
+      maxItems: 10,
+      minLength: 5,
+      maxLength: 400,
+    });
+    validateStringArrayField(errors, payload.handoff.outOfScope, 'body.handoff.outOfScope', {
+      minItems: 1,
+      maxItems: 10,
+      minLength: 3,
+      maxLength: 300,
+    });
+    validateStringField(errors, payload.handoff.backlogPolicy, 'body.handoff.backlogPolicy', {
+      minLength: 10,
+      maxLength: 600,
+    });
+    if (payload.handoff.sourceIds !== undefined) {
+      validateStringArrayField(errors, payload.handoff.sourceIds, 'body.handoff.sourceIds', {
+        minItems: 0,
+        maxItems: 20,
+        minLength: 1,
+        maxLength: 160,
+      });
+    }
+  }
+
+  if (!isPlainObject(payload.safety)) {
+    errors.push('body.safety must be an object.');
+  } else {
+    pushUnknownKeys(errors, payload.safety, ['noSecretsIncluded', 'noLiveWriteAcknowledged', 'noOnchainActionRequested'], 'body.safety');
+    if (payload.safety.noSecretsIncluded !== true) {
+      errors.push('body.safety.noSecretsIncluded must be true.');
+    }
+    if (payload.safety.noLiveWriteAcknowledged !== true) {
+      errors.push('body.safety.noLiveWriteAcknowledged must be true.');
+    }
+    if (payload.safety.noOnchainActionRequested !== true) {
+      errors.push('body.safety.noOnchainActionRequested must be true.');
+    }
+  }
+
+  const laneDefinition = CONTRIBUTION_LANES.find((lane) => lane.id === payload.targetLane);
+  const templateDefinition = TEMPLATE_LIBRARY.find((template) => template.id === payload.proposedTemplate);
+
   return {
-    $schema: SCHEMA_URL,
-    route: CONTRIBUTION_INTENT_CONTRACT.endpoint,
-    generatedAt: new Date().toISOString(),
-    ...CONTRIBUTION_INTENT_CONTRACT.disabledResponse,
-    requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
-    responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
-    securityGate: READ_ONLY_LAUNCH_POSTURE,
+    ok: errors.length === 0,
+    errors,
+    laneDefinition,
+    templateDefinition,
+    normalized: {
+      ...payload,
+      contributor: isPlainObject(payload.contributor) ? { ...payload.contributor } : payload.contributor,
+      handoff: isPlainObject(payload.handoff) ? { ...payload.handoff } : payload.handoff,
+      safety: isPlainObject(payload.safety) ? { ...payload.safety } : payload.safety,
+    },
   };
 }
 
-function sendJson(res, statusCode, body, includeBody = true) {
-  const payload = `${JSON.stringify(body, null, 2)}\n`;
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(payload),
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Robots-Tag': 'noindex, nofollow',
+function readRequestText(req, maxBytes = 1024 * 1024) {
+  if (typeof req.body === 'string') {
+    return Promise.resolve(req.body);
+  }
+
+  if (Buffer.isBuffer(req.body)) {
+    return Promise.resolve(req.body.toString('utf8'));
+  }
+
+  if (req.body && typeof req.body === 'object') {
+    return Promise.resolve(JSON.stringify(req.body));
+  }
+
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+
+    req.on('data', (chunk) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.byteLength;
+
+      if (totalBytes > maxBytes) {
+        reject(Object.assign(new Error('Request body exceeds the 1 MiB limit.'), { statusCode: 413 }));
+        req.destroy?.();
+        return;
+      }
+
+      chunks.push(buffer);
+    });
+
+    req.on('end', () => {
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+
+    req.on('error', reject);
   });
-  res.end(includeBody ? payload : undefined);
 }
 
-function sendHtml(res, statusCode, body, includeBody = true) {
-  res.writeHead(statusCode, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Robots-Tag': 'noindex, nofollow',
-  });
-  res.end(includeBody ? body : undefined);
+function buildContributionIntentSubmissionRecord({ receiptId, receivedAt, requestBody, laneDefinition, templateDefinition, notificationRecord, storagePaths }) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.submission.v1',
+    receiptId,
+    receivedAt,
+    featureFlag: {
+      name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0],
+      enabled: true,
+    },
+    request: requestBody,
+    lane: laneDefinition
+      ? {
+          id: laneDefinition.id,
+          label: laneDefinition.label,
+          ownerRoute: laneDefinition.ownerRoute,
+          fallbackRoute: laneDefinition.fallbackRoute,
+          validationPath: laneDefinition.validationPath,
+        }
+      : null,
+    template: templateDefinition
+      ? {
+          id: templateDefinition.id,
+          name: templateDefinition.name,
+          owner: templateDefinition.owner,
+          validationPath: templateDefinition.validationPath,
+        }
+      : null,
+    persistence: {
+      storageDir: storagePaths.storageDir,
+      submissionsLogPath: storagePaths.submissionsLogPath,
+      notificationsLogPath: storagePaths.notificationsLogPath,
+    },
+    fleetNotification: notificationRecord,
+  };
 }
 
-export function buildPortalManifest() {
+function buildFleetNotificationRecord({ receiptId, receivedAt, requestBody, laneDefinition, templateDefinition }) {
+  const targets = new Set([
+    requestBody?.handoff?.requestedOwnerRoute,
+    laneDefinition?.ownerRoute,
+    laneDefinition?.fallbackRoute,
+    ...(laneDefinition?.validationPath ?? []),
+  ]);
+
+  return {
+    schema: 'agent.bittrees.contribution-intent.notification.v1',
+    notificationId: receiptId,
+    receiptId,
+    queuedAt: receivedAt,
+    status: 'queued',
+    channel: 'fleet',
+    route: CONTRIBUTION_INTENT_CONTRACT.endpoint,
+    targetLane: requestBody.targetLane,
+    contributor: requestBody.contributor,
+    summary: requestBody.summary,
+    requestedOwnerRoute: requestBody.handoff.requestedOwnerRoute,
+    expectedOutput: requestBody.handoff.expectedOutput,
+    backlogPolicy: requestBody.handoff.backlogPolicy,
+    validationPath: laneDefinition?.validationPath ?? [],
+    ownerRoute: laneDefinition?.ownerRoute ?? null,
+    fallbackRoute: laneDefinition?.fallbackRoute ?? null,
+    targets: Array.from(targets).filter(Boolean),
+    sourceIds: requestBody.handoff.sourceIds ?? [],
+    template: templateDefinition
+      ? {
+          id: templateDefinition.id,
+          name: templateDefinition.name,
+          owner: templateDefinition.owner,
+        }
+      : null,
+    featureFlag: {
+      name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0],
+      enabled: true,
+    },
+  };
+}
+
+async function persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord) {
+  await mkdir(storagePaths.storageDir, { recursive: true });
+  await appendFile(storagePaths.submissionsLogPath, `${JSON.stringify(submissionRecord)}\n`);
+  await appendFile(storagePaths.notificationsLogPath, `${JSON.stringify(notificationRecord)}\n`);
+}
+
+export function buildPortalManifest(generatedAt = new Date().toISOString()) {
   return {
     name: 'agent.bittrees.org portal scaffold',
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     sourceScope: [...SOURCE_SCOPE],
-    launchPosture: READ_ONLY_LAUNCH_POSTURE,
+    launchPosture: buildContributionIntentSecurityGate(),
     routes: ROUTE_DEFINITIONS.map((definition) => ({
       path: definition.path,
       label: definition.label,
@@ -1352,15 +1896,185 @@ export function buildPortalManifest() {
   };
 }
 
+export function buildStaticAssets(generatedAt = new Date().toISOString()) {
+  const routeAssets = ROUTE_DEFINITIONS.slice(1).map((definition) => ({
+    path: definition.path.replace(/^\//, ''),
+    body: `${JSON.stringify(buildDiscoveryResponse(definition, generatedAt), null, 2)}\n`,
+  }));
+
+  return [
+    {
+      path: 'index.html',
+      body: renderLandingPage(),
+    },
+    {
+      path: ROBOTS_TXT_PATH.replace(/^\//, ''),
+      body: ROBOTS_TXT_BODY,
+    },
+    ...routeAssets,
+    {
+      path: 'portal-manifest.json',
+      body: `${JSON.stringify(buildPortalManifest(generatedAt), null, 2)}\n`,
+    },
+  ];
+}
+
+async function handleContributionIntentPost(req, res, includeBody, telemetry) {
+  if (!isContributionIntentsWriteEnabled()) {
+    req.resume?.();
+    return sendJson(res, 501, buildContributionIntentDisabledResponse(), includeBody, {
+      ...telemetry,
+      status: 501,
+    });
+  }
+
+  let requestText = '';
+
+  try {
+    requestText = await readRequestText(req);
+  } catch (error) {
+    const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
+    return sendJson(
+      res,
+      statusCode,
+      buildContributionIntentRejectedResponse(
+        statusCode === 413
+          ? 'Contribution intent rejected because the request body exceeded the 1 MiB limit.'
+          : 'Contribution intent rejected because the request body could not be read.',
+        'Submit a valid JSON body no larger than 1 MiB that matches the documented schema.',
+      ),
+      includeBody,
+      {
+        ...telemetry,
+        status: statusCode,
+      },
+    );
+  }
+
+  let payload = null;
+
+  try {
+    payload = JSON.parse(requestText);
+  } catch {
+    return sendJson(
+      res,
+      400,
+      buildContributionIntentRejectedResponse(
+        'Contribution intent rejected because the request body was not valid JSON.',
+        'Submit a JSON object that matches the documented request schema.',
+        ['Request body must be valid JSON.'],
+      ),
+      includeBody,
+      {
+        ...telemetry,
+        status: 400,
+      },
+    );
+  }
+
+  const validation = validateContributionIntentRequest(payload);
+
+  if (!validation.ok) {
+    return sendJson(
+      res,
+      400,
+      buildContributionIntentRejectedResponse(
+        'Contribution intent rejected because the request body did not match the documented schema.',
+        'Fix the validation errors and resubmit the contribution intent.',
+        validation.errors,
+      ),
+      includeBody,
+      {
+        ...telemetry,
+        status: 400,
+      },
+    );
+  }
+
+  const receiptId = randomUUID();
+  const receivedAt = new Date().toISOString();
+  const storagePaths = getContributionIntentStoragePaths();
+  const notificationRecord = buildFleetNotificationRecord({
+    receiptId,
+    receivedAt,
+    requestBody: validation.normalized,
+    laneDefinition: validation.laneDefinition,
+    templateDefinition: validation.templateDefinition,
+  });
+  const submissionRecord = buildContributionIntentSubmissionRecord({
+    receiptId,
+    receivedAt,
+    requestBody: validation.normalized,
+    laneDefinition: validation.laneDefinition,
+    templateDefinition: validation.templateDefinition,
+    notificationRecord,
+    storagePaths,
+  });
+
+  try {
+    await persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord);
+  } catch (error) {
+    console.error('Contribution intent persistence failed:', error);
+    return sendJson(
+      res,
+      500,
+      buildContributionIntentRejectedResponse(
+        'Contribution intent could not be persisted for lead review.',
+        'Retry later or contact the owning lead if the error persists.',
+      ),
+      includeBody,
+      {
+        ...telemetry,
+        status: 500,
+      },
+    );
+  }
+
+  return sendJson(
+    res,
+    202,
+    buildContributionIntentAcceptedResponse(
+      receiptId,
+      buildContributionIntentAcceptanceNextStep(notificationRecord),
+    ),
+    includeBody,
+    {
+      ...telemetry,
+      status: 202,
+    },
+  );
+}
+
 export function createRequestHandler() {
-  return function handleRequest(req, res) {
+  return async function handleRequest(req, res) {
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const includeBody = req.method !== 'HEAD';
-    const routeDefinition = ROUTE_MAP.get(requestUrl.pathname);
+    const pathname = requestUrl.pathname;
+    const telemetry = { method: req.method ?? 'GET', path: pathname };
 
-    if (requestUrl.pathname === '/contribution-intents' && req.method === 'POST') {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !(pathname === '/contribution-intents' && req.method === 'POST')) {
       req.resume();
-      return sendJson(res, 501, buildContributionIntentDisabledResponse(), includeBody);
+    }
+
+    const normalizedPath = normalizeCanonicalPath(pathname);
+    if (pathname !== normalizedPath && CANONICAL_ROUTE_PATHS.has(normalizedPath)) {
+      return sendRedirect(res, 301, `${normalizedPath}${requestUrl.search}`, {
+        ...telemetry,
+        status: 301,
+      });
+    }
+
+    const routeDefinition = ROUTE_MAP.get(pathname);
+
+    if (pathname === ROBOTS_TXT_PATH) {
+      return sendText(res, 200, ROBOTS_TXT_BODY, includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === '/contribution-intents' && req.method === 'POST') {
+      return handleContributionIntentPost(req, res, includeBody, telemetry);
     }
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -1370,7 +2084,7 @@ export function createRequestHandler() {
         {
           $schema: SCHEMA_URL,
           error: 'method_not_allowed',
-          message: 'Only GET and HEAD are enabled, except POST /contribution-intents which returns 501.',
+          message: 'Only GET and HEAD are enabled, except POST /contribution-intents which is reserved for contribution-intent intake.',
           allowedMethods: ['GET', 'HEAD'],
           disabledSubmissionStub: {
             path: '/contribution-intents',
@@ -1379,15 +2093,25 @@ export function createRequestHandler() {
           },
         },
         includeBody,
+        {
+          ...telemetry,
+          status: 405,
+        },
       );
     }
 
-    if (requestUrl.pathname === '/') {
-      return sendHtml(res, 200, renderLandingPage(), includeBody);
+    if (pathname === '/') {
+      return sendHtml(res, 200, renderLandingPage(), includeBody, {
+        ...telemetry,
+        status: 200,
+      });
     }
 
     if (routeDefinition) {
-      return sendJson(res, 200, buildDiscoveryResponse(routeDefinition), includeBody);
+      return sendJson(res, 200, buildDiscoveryResponse(routeDefinition), includeBody, {
+        ...telemetry,
+        status: 200,
+      });
     }
 
     return sendJson(
@@ -1400,6 +2124,10 @@ export function createRequestHandler() {
         availableRoutes: ROUTE_DEFINITIONS.map((definition) => definition.path),
       },
       includeBody,
+      {
+        ...telemetry,
+        status: 404,
+      },
     );
   };
 }
