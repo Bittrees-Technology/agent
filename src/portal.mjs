@@ -1,4 +1,7 @@
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
+const PORTAL_BASE_URL = 'https://agent.bittrees.org';
+const REVIEWED_AT = '2026-07-07';
+const NEXT_REVIEW_DUE = '2026-07-21';
 
 export const SOURCE_SCOPE = [
   'Bittrees Research',
@@ -6,104 +9,951 @@ export const SOURCE_SCOPE = [
   'Bittrees Capital / treasury workflows',
 ];
 
-const PLACEHOLDER_NOTICE =
-  'Anything beyond the established source scope is an explicit placeholder until sourced.';
+const SOURCE_RECORDS = [
+  {
+    id: 'memory:642',
+    label: 'Brain goal record for Plan 70',
+    owner: 'control-center',
+    url: 'brain://memory/642',
+    retrievedAt: REVIEWED_AT,
+    notes: [
+      'Plan 70 defines the agent.bittrees.org portal objective and sections 4 and 6.',
+      'Section 4 requires /llms.txt, /agents.json, /templates.json, /idacc/releases.json, timestamps, sources, owners, and validation status.',
+      'Section 6 requires templates for research, onboarding, ops/governance, source-grounded reports, legal handoffs, and safe onchain/treasury handoffs.',
+    ],
+  },
+  {
+    id: 'memory:639',
+    label: 'Brain draft plan source for Plan 70',
+    owner: 'control-center',
+    url: 'brain://memory/639',
+    retrievedAt: REVIEWED_AT,
+    notes: ['Draft plan content mirrors the approved Plan 70 structure.'],
+  },
+  {
+    id: 'output:agent-bittrees-portal-repo-readiness',
+    label: 'agent.bittrees.org portal repo readiness packet',
+    owner: 'architecture-engineer',
+    url: 'output/agent-bittrees-portal-repo-readiness.md',
+    retrievedAt: REVIEWED_AT,
+    notes: [
+      'Readiness packet identifies launch blockers and security-router NO-GO controls.',
+      'The repo must remain static/read-only until security gate controls clear.',
+    ],
+  },
+  {
+    id: 'output:idacc-contributor-lane-map',
+    label: 'IDACC contributor lane map',
+    owner: 'architecture-engineer',
+    url: 'output/idacc-contributor-lane-map.md',
+    retrievedAt: REVIEWED_AT,
+    notes: ['Defines Bittrees contribution lanes and manager-derived agent routing evidence.'],
+  },
+  {
+    id: 'manager:/agents-snapshot:2026-07-07',
+    label: 'Local manager agent inventory snapshot',
+    owner: 'engineering-team/architecture-engineer',
+    url: 'http://127.0.0.1:4100/agents',
+    retrievedAt: REVIEWED_AT,
+    notes: ['Used only as a reviewed static snapshot, not as a live portal dependency.'],
+  },
+  {
+    id: 'github:bobofbuilding/idacc/releases/latest:2026-07-07',
+    label: 'GitHub latest release API for bobofbuilding/idacc',
+    owner: 'engineering-lead',
+    url: 'https://api.github.com/repos/bobofbuilding/idacc/releases/latest',
+    retrievedAt: REVIEWED_AT,
+    notes: ['Used for IDACC release version, publish time, asset name, and SHA-256 digest.'],
+  },
+];
 
-function buildStringArraySchema(description) {
+const REVIEW_STATE = {
+  reviewedAt: REVIEWED_AT,
+  nextReviewDue: NEXT_REVIEW_DUE,
+  reviewOwner: 'engineering-team/architecture-engineer',
+  validationStatus: 'static-launch-draft',
+  goalId: 'goal_plan_rzit49',
+  sourceIds: SOURCE_RECORDS.map((source) => source.id),
+};
+
+const READ_ONLY_LAUNCH_POSTURE = {
+  mode: 'read-only-static-launch-draft',
+  liveWritesEnabled: false,
+  liveWriteReason:
+    'Security-router clearance is still required before any public endpoint accepts or persists contribution intent.',
+  blockedUntil: 'security-router-clearance',
+  securityOwner: 'technology-security/security-router',
+  noGoItems: [
+    {
+      id: 'content-approval-integrity',
+      label: 'Content approval and integrity controls for manifests and templates',
+      status: 'open',
+    },
+    {
+      id: 'idacc-release-signatures',
+      label: 'Signed and hashed IDACC release artifacts',
+      status: 'partial-hash-present-signature-open',
+    },
+    {
+      id: 'static-read-only-protected-endpoints',
+      label: 'Static/read-only or protected endpoint posture',
+      status: 'open',
+    },
+    {
+      id: 'client-bundle-secret-scanning',
+      label: 'Client-bundle secret scanning before publish',
+      status: 'open',
+    },
+  ],
+};
+
+const CONTRIBUTION_LANES = [
+  {
+    id: 'research',
+    label: 'Research',
+    sourceScope: ['Bittrees Research'],
+    ownerRoute: 'M:research/research-lead',
+    fallbackRoute: 'M:default/researcher',
+    validationPath: ['researcher'],
+    dispatchStatus: 'specialist-team-not-currently-running',
+  },
+  {
+    id: 'operations-governance',
+    label: 'Operations/governance',
+    sourceScope: ['Bittrees, Inc. operations/governance'],
+    ownerRoute: 'M:default/lead',
+    fallbackRoute: 'M:engineering-team/engineering-lead',
+    validationPath: ['coder', 'researcher'],
+    dispatchStatus: 'running-owner-available',
+  },
+  {
+    id: 'treasury',
+    label: 'Treasury',
+    sourceScope: ['Bittrees Capital / treasury workflows'],
+    ownerRoute: 'M:onchain-execution/onchain-lead',
+    fallbackRoute: 'M:skillmesh/skillmesh-ops-lead',
+    validationPath: ['coder', 'researcher', 'onchain-lead'],
+    dispatchStatus: 'execution-gated-no-portal-action',
+  },
+  {
+    id: 'discovery',
+    label: 'Discovery',
+    sourceScope: ['Bittrees Research', 'Bittrees, Inc. operations/governance'],
+    ownerRoute: 'M:skillmesh/skillmesh-ops-lead',
+    fallbackRoute: 'M:ops-team/task-master',
+    validationPath: ['coder', 'researcher'],
+    dispatchStatus: 'running-owner-available',
+  },
+  {
+    id: 'awareness',
+    label: 'Awareness',
+    sourceScope: ['Bittrees Research'],
+    ownerRoute: 'M:research/writer',
+    fallbackRoute: 'M:default/researcher',
+    validationPath: ['researcher'],
+    dispatchStatus: 'specialist-team-not-currently-running',
+  },
+];
+
+const ACTIVE_AGENT_SNAPSHOT = [
+  {
+    id: 'default.lead',
+    name: 'lead',
+    team: 'default',
+    role: 'Primary Lead',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance', 'research'],
+    ownerRoute: 'M:default/lead',
+    sourceIds: ['manager:/agents?team=default', 'output:idacc-contributor-lane-map'],
+  },
+  {
+    id: 'default.researcher',
+    name: 'researcher',
+    team: 'default',
+    role: 'Research and synthesis validator',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['research'],
+    ownerRoute: 'M:default/researcher',
+    sourceIds: ['manager:/agents?team=default', 'output:idacc-contributor-lane-map'],
+  },
+  {
+    id: 'default.coder',
+    name: 'coder',
+    team: 'default',
+    role: 'Implementation and code-quality validator',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance'],
+    ownerRoute: 'M:default/coder',
+    sourceIds: ['manager:/agents?team=default', 'output:idacc-contributor-lane-map'],
+  },
+  {
+    id: 'engineering-team.architect',
+    name: 'architect',
+    team: 'engineering-team',
+    role: 'System Architect',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance'],
+    ownerRoute: 'M:engineering-team/architect',
+    sourceIds: ['manager:/agents?team=engineering-team'],
+  },
+  {
+    id: 'engineering-team.backend-engineer',
+    name: 'backend-engineer',
+    team: 'engineering-team',
+    role: 'Backend Software Engineer',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance'],
+    ownerRoute: 'M:engineering-team/backend-engineer',
+    sourceIds: ['manager:/agents?team=engineering-team'],
+  },
+  {
+    id: 'engineering-team.frontend-engineer',
+    name: 'frontend-engineer',
+    team: 'engineering-team',
+    role: 'Frontend Software Engineer',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance', 'awareness'],
+    ownerRoute: 'M:engineering-team/frontend-engineer',
+    sourceIds: ['manager:/agents?team=engineering-team'],
+  },
+  {
+    id: 'engineering-team.architecture-engineer',
+    name: 'architecture-engineer',
+    team: 'engineering-team',
+    role: 'Architecture Engineering Specialist',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance'],
+    ownerRoute: 'M:engineering-team/architecture-engineer',
+    sourceIds: ['manager:/agents?team=engineering-team'],
+  },
+  {
+    id: 'engineering-team.engineering-lead',
+    name: 'engineering-lead',
+    team: 'engineering-team',
+    role: 'Engineering Team Lead',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance'],
+    ownerRoute: 'M:engineering-team/engineering-lead',
+    sourceIds: ['manager:/agents?team=engineering-team', 'output:routing-matrix'],
+  },
+  {
+    id: 'ops-team.task-master',
+    name: 'task-master',
+    team: 'ops-team',
+    role: 'Task and workflow supervisor',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['discovery', 'operations-governance'],
+    ownerRoute: 'M:ops-team/task-master',
+    sourceIds: ['manager:/agents?team=ops-team'],
+  },
+  {
+    id: 'skillmesh.skill-discoverer',
+    name: 'skill-discoverer',
+    team: 'skillmesh',
+    role: 'Autonomous self-improvement and skill discovery agent',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['discovery', 'awareness'],
+    ownerRoute: 'M:skillmesh/skill-discoverer',
+    sourceIds: ['manager:/agents?team=skillmesh'],
+  },
+  {
+    id: 'skillmesh.ipfs-guardian',
+    name: 'ipfs-guardian',
+    team: 'skillmesh',
+    role: 'IPFS data integrity agent',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance', 'discovery'],
+    ownerRoute: 'M:skillmesh/ipfs-guardian',
+    sourceIds: ['manager:/agents?team=skillmesh'],
+  },
+  {
+    id: 'skillmesh.event-watcher',
+    name: 'event-watcher',
+    team: 'skillmesh',
+    role: 'On-chain event monitor',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['operations-governance', 'research'],
+    ownerRoute: 'M:skillmesh/event-watcher',
+    sourceIds: ['manager:/agents?team=skillmesh'],
+  },
+  {
+    id: 'skillmesh.anomaly-classifier',
+    name: 'anomaly-classifier',
+    team: 'skillmesh',
+    role: 'Chain activity anomaly classifier',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['research', 'operations-governance'],
+    ownerRoute: 'M:skillmesh/anomaly-classifier',
+    sourceIds: ['manager:/agents?team=skillmesh'],
+  },
+  {
+    id: 'skillmesh.skillmesh-ops-lead',
+    name: 'skillmesh-ops-lead',
+    team: 'skillmesh',
+    role: 'SkillMesh Team Lead',
+    runtimeStatus: 'running',
+    health: 'online',
+    dispatchReady: true,
+    lanes: ['discovery', 'operations-governance', 'treasury'],
+    ownerRoute: 'M:skillmesh/skillmesh-ops-lead',
+    sourceIds: ['manager:/agents?team=skillmesh', 'output:routing-matrix'],
+  },
+  {
+    id: 'technology-security.security-router',
+    name: 'security-router',
+    team: 'technology-security',
+    role: 'Security Triage Coordinator and Team Lead',
+    runtimeStatus: 'stopped',
+    health: 'unknown',
+    dispatchReady: false,
+    lanes: ['operations-governance', 'research'],
+    ownerRoute: 'M:technology-security/security-router',
+    sourceIds: ['manager:/agents?team=technology-security', 'output:agent-bittrees-portal-repo-readiness'],
+    notes: ['Security-router clearance is required before enabling live submission writes.'],
+  },
+];
+
+const TEAM_SUMMARIES = [
+  {
+    team: 'default',
+    activeAgents: ['lead', 'researcher', 'coder'],
+    contributionLanes: ['operations-governance', 'research'],
+    ownerRoute: 'M:default/lead',
+  },
+  {
+    team: 'engineering-team',
+    activeAgents: ['architect', 'backend-engineer', 'frontend-engineer', 'architecture-engineer', 'engineering-lead'],
+    contributionLanes: ['operations-governance', 'awareness'],
+    ownerRoute: 'M:engineering-team/engineering-lead',
+  },
+  {
+    team: 'ops-team',
+    activeAgents: ['task-master'],
+    contributionLanes: ['discovery', 'operations-governance'],
+    ownerRoute: 'M:ops-team/ops-lead',
+  },
+  {
+    team: 'skillmesh',
+    activeAgents: ['skill-discoverer', 'ipfs-guardian', 'event-watcher', 'anomaly-classifier', 'skillmesh-ops-lead'],
+    contributionLanes: ['discovery', 'operations-governance', 'research', 'treasury'],
+    ownerRoute: 'M:skillmesh/skillmesh-ops-lead',
+  },
+  {
+    team: 'technology-security',
+    activeAgents: [],
+    contributionLanes: ['operations-governance', 'research'],
+    ownerRoute: 'M:technology-security/security-router',
+    status: 'blocked-runtime-stopped',
+  },
+  {
+    team: 'research',
+    activeAgents: [],
+    contributionLanes: ['research', 'awareness'],
+    ownerRoute: 'M:research/research-lead',
+    status: 'specialist-team-stopped',
+  },
+  {
+    team: 'legal',
+    activeAgents: [],
+    contributionLanes: ['operations-governance', 'research'],
+    ownerRoute: 'M:legal/general-counsel',
+    status: 'specialist-team-stopped',
+  },
+  {
+    team: 'onchain-execution',
+    activeAgents: [],
+    contributionLanes: ['treasury', 'research', 'operations-governance'],
+    ownerRoute: 'M:onchain-execution/onchain-lead',
+    status: 'specialist-team-stopped',
+  },
+];
+
+const TEMPLATE_LIBRARY = [
+  {
+    id: 'bittrees-research-task',
+    name: 'Bittrees Research task',
+    purpose: 'Route source-grounded research, fact-checking, and synthesis work.',
+    owner: 'research-lead',
+    sourceScope: ['Bittrees Research'],
+    bittreesRelevance: 'high',
+    defaultLane: 'research',
+    requiredFields: [
+      'goal_id',
+      'research_question',
+      'source_requirements',
+      'expected_output',
+      'acceptance_criteria',
+      'validation_path',
+      'out_of_scope',
+      'backlog_policy',
+    ],
+    acceptanceCriteria: [
+      'Primary sources or explicit source gaps are listed.',
+      'Claims are scoped to Bittrees Research and cite source IDs.',
+      'Default researcher validation is required before publication-sensitive use.',
+    ],
+    validationPath: ['researcher'],
+    outOfScope: ['Legal advice', 'onchain execution', 'unsupported public Bittrees claims'],
+    backlogPolicy: 'Non-essential reading lists or broad market scans become backlog candidates.',
+    sourceIds: ['memory:642', 'output:goal-aligned-task-brief-template'],
+    reviewedAt: REVIEWED_AT,
+  },
+  {
+    id: 'contributor-onboarding',
+    name: 'Contributor onboarding',
+    purpose: 'Help a human or agent choose a Bittrees contribution lane and first task shape.',
+    owner: 'lead',
+    sourceScope: ['Bittrees Research', 'Bittrees, Inc. operations/governance'],
+    bittreesRelevance: 'high',
+    defaultLane: 'operations-governance',
+    requiredFields: [
+      'contributor_type',
+      'skills_or_capabilities',
+      'desired_lane',
+      'available_time_window',
+      'expected_output',
+      'acceptance_criteria',
+      'validation_path',
+      'backlog_policy',
+    ],
+    acceptanceCriteria: [
+      'The handoff names one primary lane and owner route.',
+      'The first task has concrete output and acceptance criteria.',
+      'Authority-sensitive work is gated to the relevant lead.',
+    ],
+    validationPath: ['coder', 'researcher'],
+    outOfScope: ['Credential collection', 'wallet signing', 'employment or compensation commitments'],
+    backlogPolicy: 'Unscoped contributor interests remain discovery backlog until an owner accepts them.',
+    sourceIds: ['memory:642', 'output:idacc-contributor-lane-map'],
+    reviewedAt: REVIEWED_AT,
+  },
+  {
+    id: 'ops-governance-work',
+    name: 'Operations/governance work',
+    purpose: 'Frame Bittrees, Inc. operations, governance, routing, or workflow improvements.',
+    owner: 'ops-lead',
+    sourceScope: ['Bittrees, Inc. operations/governance'],
+    bittreesRelevance: 'high',
+    defaultLane: 'operations-governance',
+    requiredFields: [
+      'goal_id',
+      'operational_problem',
+      'owner_route',
+      'expected_output',
+      'acceptance_criteria',
+      'validation_path',
+      'out_of_scope',
+      'backlog_policy',
+    ],
+    acceptanceCriteria: [
+      'The task reduces duplicated work, routing ambiguity, or validation loops.',
+      'Implementation and evidence responsibilities are separated when needed.',
+      'No production, credential, or destructive action is implied without approval.',
+    ],
+    validationPath: ['coder', 'researcher'],
+    outOfScope: ['Production deploys', 'destructive manager actions', 'credential changes'],
+    backlogPolicy: 'Generic automation ideas without a goal or efficiency justification move to backlog.',
+    sourceIds: ['memory:296', 'output:routing-matrix'],
+    reviewedAt: REVIEWED_AT,
+  },
+  {
+    id: 'source-grounded-report',
+    name: 'Source-grounded report',
+    purpose: 'Produce a report with source accounting, evidence quality notes, and residual risk.',
+    owner: 'researcher',
+    sourceScope: ['Bittrees Research', 'Bittrees, Inc. operations/governance'],
+    bittreesRelevance: 'medium',
+    defaultLane: 'research',
+    requiredFields: [
+      'question',
+      'source_set',
+      'method',
+      'findings',
+      'limitations',
+      'used_source_ids',
+      'validation_path',
+    ],
+    acceptanceCriteria: [
+      'Findings are separated from assumptions.',
+      'Every material claim has a source ID or explicit source-gap note.',
+      'Residual risk and validation status are explicit.',
+    ],
+    validationPath: ['researcher'],
+    outOfScope: ['Unsourced claims', 'binding legal/financial advice', 'private or secret data'],
+    backlogPolicy: 'Nice-to-have appendix work stays backlog unless requested by a validator.',
+    sourceIds: ['memory:642', 'output:goal-aligned-task-brief-template'],
+    reviewedAt: REVIEWED_AT,
+  },
+  {
+    id: 'legal-review-handoff',
+    name: 'Legal review handoff',
+    purpose: 'Prepare a scoped legal or compliance review request without giving legal advice.',
+    owner: 'general-counsel',
+    sourceScope: ['Bittrees, Inc. operations/governance'],
+    bittreesRelevance: 'high',
+    defaultLane: 'operations-governance',
+    requiredFields: [
+      'review_question',
+      'jurisdiction_or_policy_scope',
+      'source_materials',
+      'requested_decision',
+      'acceptance_criteria',
+      'out_of_scope',
+      'validation_path',
+    ],
+    acceptanceCriteria: [
+      'The request distinguishes facts, assumptions, and requested legal review.',
+      'No agent presents the handoff as binding legal advice.',
+      'Default researcher validation and legal lead review are both represented.',
+    ],
+    validationPath: ['researcher', 'general-counsel'],
+    outOfScope: ['Binding legal advice by non-legal agents', 'external filings', 'signatures'],
+    backlogPolicy: 'Non-urgent legal research questions wait for legal owner acceptance.',
+    sourceIds: ['memory:45', 'output:routing-matrix'],
+    reviewedAt: REVIEWED_AT,
+  },
+  {
+    id: 'safe-onchain-treasury-handoff',
+    name: 'Safe onchain/treasury handoff',
+    purpose: 'Route treasury, wallet, governance, or onchain work through explicit approval gates.',
+    owner: 'onchain-lead',
+    sourceScope: ['Bittrees Capital / treasury workflows'],
+    bittreesRelevance: 'high',
+    defaultLane: 'treasury',
+    requiredFields: [
+      'chain_or_protocol',
+      'read_only_question_or_action_request',
+      'funds_or_signature_implications',
+      'expected_output',
+      'acceptance_criteria',
+      'operator_approval_requirement',
+      'validation_path',
+      'out_of_scope',
+    ],
+    acceptanceCriteria: [
+      'Read-only analysis is separated from any execution request.',
+      'Any transfer, signature, deployment, or governance action requires explicit operator approval.',
+      'Coder, researcher, onchain, and security review requirements are named before execution.',
+    ],
+    validationPath: ['coder', 'researcher', 'onchain-lead', 'security-router'],
+    outOfScope: ['Portal-triggered signing', 'wallet custody', 'transaction broadcast', 'credential handling'],
+    backlogPolicy: 'Speculative treasury ideas become backlog unless tied to an active approved objective.',
+    sourceIds: ['memory:45', 'output:routing-matrix', 'output:agent-bittrees-portal-repo-readiness'],
+    reviewedAt: REVIEWED_AT,
+  },
+];
+
+const IDACC_RELEASES = [
+  {
+    version: 'v0.1.615',
+    status: 'discoverable-not-install-approved',
+    publishedAt: '2026-07-07T05:14:15Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.615',
+    sourceRepository: 'https://github.com/bobofbuilding/idacc',
+    sourceCommit: '2b3dd0b',
+    notes: ['Automated release of outstanding ID Agents Control Center code.'],
+    assets: [
+      {
+        name: 'ID-Agents-Control-Center-0.1.615-arm64.zip',
+        platform: 'darwin-arm64',
+        contentType: 'application/zip',
+        sizeBytes: 102677733,
+        sha256: 'd708188ff7160ba6b8f5e2909585f5d70f9889e1206a58a4e470b2a05a2291e5',
+        downloadUrl:
+          'https://github.com/bobofbuilding/idacc/releases/download/v0.1.615/ID-Agents-Control-Center-0.1.615-arm64.zip',
+        installAllowedFromPortal: false,
+        verificationStatus: 'hash-present-signature-pending-security-review',
+      },
+    ],
+    owner: 'engineering-lead',
+    reviewedAt: REVIEWED_AT,
+    sourceIds: ['github:bobofbuilding/idacc/releases/latest:2026-07-07'],
+  },
+];
+
+const CONTRIBUTION_INTENT_REQUEST_SCHEMA = {
+  $schema: SCHEMA_URL,
+  $id: `${PORTAL_BASE_URL}/schemas/contribution-intent-request.v1.json`,
+  title: 'agent.bittrees.org contribution intent request',
+  description:
+    'Contract for a future contribution-intent submission. The launch portal documents this schema but does not accept live writes.',
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'schema',
+    'intentId',
+    'submittedAt',
+    'contributor',
+    'targetLane',
+    'summary',
+    'proposedTemplate',
+    'handoff',
+    'safety',
+  ],
+  properties: {
+    schema: { const: 'agent.bittrees.contribution-intent.v1' },
+    intentId: {
+      type: 'string',
+      minLength: 8,
+      maxLength: 120,
+      pattern: '^[a-z0-9][a-z0-9._:-]{6,118}[a-z0-9]$',
+    },
+    submittedAt: {
+      type: 'string',
+      format: 'date-time',
+    },
+    contributor: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'name', 'contactRoute'],
+      properties: {
+        kind: { enum: ['agent', 'human', 'team'] },
+        name: { type: 'string', minLength: 1, maxLength: 120 },
+        agentId: { type: 'string', minLength: 1, maxLength: 160 },
+        team: { type: 'string', minLength: 1, maxLength: 120 },
+        contactRoute: { type: 'string', minLength: 1, maxLength: 300 },
+      },
+    },
+    targetLane: {
+      enum: CONTRIBUTION_LANES.map((lane) => lane.id),
+    },
+    summary: {
+      type: 'string',
+      minLength: 20,
+      maxLength: 1200,
+    },
+    proposedTemplate: {
+      enum: TEMPLATE_LIBRARY.map((template) => template.id),
+    },
+    handoff: {
+      type: 'object',
+      additionalProperties: false,
+      required: [
+        'requestedOwnerRoute',
+        'expectedOutput',
+        'acceptanceCriteria',
+        'outOfScope',
+        'backlogPolicy',
+      ],
+      properties: {
+        requestedOwnerRoute: { type: 'string', minLength: 1, maxLength: 160 },
+        goalId: { type: 'string', minLength: 1, maxLength: 120 },
+        expectedOutput: { type: 'string', minLength: 10, maxLength: 1200 },
+        acceptanceCriteria: {
+          type: 'array',
+          items: { type: 'string', minLength: 5, maxLength: 400 },
+          minItems: 1,
+          maxItems: 10,
+        },
+        outOfScope: {
+          type: 'array',
+          items: { type: 'string', minLength: 3, maxLength: 300 },
+          minItems: 1,
+          maxItems: 10,
+        },
+        backlogPolicy: { type: 'string', minLength: 10, maxLength: 600 },
+        sourceIds: {
+          type: 'array',
+          items: { type: 'string', minLength: 1, maxLength: 160 },
+          maxItems: 20,
+        },
+      },
+    },
+    safety: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['noSecretsIncluded', 'noLiveWriteAcknowledged', 'noOnchainActionRequested'],
+      properties: {
+        noSecretsIncluded: { const: true },
+        noLiveWriteAcknowledged: { const: true },
+        noOnchainActionRequested: { const: true },
+      },
+    },
+  },
+};
+
+const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
+  $schema: SCHEMA_URL,
+  $id: `${PORTAL_BASE_URL}/schemas/contribution-intent-response.v1.json`,
+  title: 'agent.bittrees.org contribution intent response',
+  description: 'Response contract for the disabled contribution-intent route.',
+  type: 'object',
+  additionalProperties: false,
+  required: ['schema', 'status', 'accepted', 'liveWrite', 'message'],
+  properties: {
+    schema: { const: 'agent.bittrees.contribution-intent.response.v1' },
+    status: { enum: ['not_implemented', 'accepted', 'rejected'] },
+    accepted: { type: 'boolean' },
+    liveWrite: { type: 'boolean' },
+    message: { type: 'string' },
+    receiptId: { type: 'string' },
+    nextStep: { type: 'string' },
+  },
+};
+
+const CONTRIBUTION_INTENT_CONTRACT = {
+  schema: 'agent.bittrees.contribution-intent.contract.v1',
+  endpoint: '/contribution-intents',
+  methods: ['GET', 'HEAD', 'POST'],
+  launchStatus: 'contract-only-disabled',
+  requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
+  responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
+  disabledResponse: {
+    statusCode: 501,
+    schema: 'agent.bittrees.contribution-intent.response.v1',
+    status: 'not_implemented',
+    accepted: false,
+    liveWrite: false,
+    message:
+      'Contribution-intent submission is documented but disabled until security-router clears live write handling.',
+    nextStep: 'Use this schema for offline handoff packets; do not POST secrets, credentials, wallet data, or live execution requests.',
+  },
+  securityGate: READ_ONLY_LAUNCH_POSTURE,
+  reviewedAt: REVIEWED_AT,
+  sourceIds: ['memory:642', 'output:agent-bittrees-portal-repo-readiness'],
+};
+
+function buildStringArraySchema(description, minItems = 1) {
   return {
     type: 'array',
     description,
     items: { type: 'string' },
-    minItems: 1,
+    minItems,
   };
 }
 
-function buildStubDataSchema({
-  title,
-  description,
-  itemKey,
-  itemDescription,
-  itemSchema,
-  extraProperties = {},
-  requiredExtras = [],
-}) {
+const sourceRecordSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['id', 'label', 'owner', 'url', 'retrievedAt', 'notes'],
+  properties: {
+    id: { type: 'string' },
+    label: { type: 'string' },
+    owner: { type: 'string' },
+    url: { type: 'string' },
+    retrievedAt: { type: 'string' },
+    notes: buildStringArraySchema('Source-specific notes.'),
+  },
+};
+
+const reviewStateSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['reviewedAt', 'nextReviewDue', 'reviewOwner', 'validationStatus', 'goalId', 'sourceIds'],
+  properties: {
+    reviewedAt: { type: 'string' },
+    nextReviewDue: { type: 'string' },
+    reviewOwner: { type: 'string' },
+    validationStatus: { type: 'string' },
+    goalId: { type: 'string' },
+    sourceIds: buildStringArraySchema('Source IDs used for this reviewed route.'),
+  },
+};
+
+function buildDataSchema({ id, title, description, required, properties }) {
   return {
     $schema: SCHEMA_URL,
+    $id: `${PORTAL_BASE_URL}/schemas/${id}.json`,
     title,
     description,
     type: 'object',
     additionalProperties: false,
-    required: ['status', 'sourceScope', 'placeholderNotice', itemKey, 'notes', ...requiredExtras],
+    required: ['schema', 'status', 'review', 'sources', ...required],
     properties: {
-      status: { const: 'placeholder' },
-      sourceScope: {
-        ...buildStringArraySchema(
-          'Only Bittrees facts already established in Brain or local memory are listed here.',
-        ),
-        items: {
-          type: 'string',
-          enum: [...SOURCE_SCOPE],
-        },
-      },
-      placeholderNotice: {
-        type: 'string',
-        const: PLACEHOLDER_NOTICE,
-      },
-      [itemKey]: {
+      schema: { type: 'string' },
+      status: { type: 'string' },
+      review: reviewStateSchema,
+      sources: {
         type: 'array',
-        description: itemDescription,
-        items: itemSchema,
+        items: sourceRecordSchema,
+        minItems: 1,
       },
-      notes: buildStringArraySchema('Implementation notes for this first-cut scaffold.'),
-      ...extraProperties,
+      ...properties,
     },
   };
 }
 
-function buildSectionSchema() {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    required: ['heading', 'body'],
-    properties: {
-      heading: { type: 'string' },
-      body: { type: 'string' },
+const llmsData = {
+  schema: 'agent.bittrees.llms.v1',
+  status: 'active-static-reviewed',
+  review: REVIEW_STATE,
+  sources: SOURCE_RECORDS,
+  portal: {
+    name: 'agent.bittrees.org',
+    baseUrl: PORTAL_BASE_URL,
+    purpose:
+      'Source-grounded onboarding and machine-readable discovery for agents contributing to Bittrees-scoped work.',
+    launchPosture: READ_ONLY_LAUNCH_POSTURE,
+  },
+  instructions: [
+    'Use this portal as a static discovery layer, not as an authority to submit live work.',
+    'Route contribution intent through the documented schema only; live POST submissions currently return 501.',
+    'Do not infer public Bittrees identity, authorization, trust, wallet authority, or legal authority from a route listing.',
+    'Use owner routes and validation paths when handing work to IDACC-managed agents.',
+  ],
+  routes: [
+    {
+      path: '/agents.json',
+      schema: 'agent.bittrees.agents.v1',
+      purpose: 'Reviewed static snapshot of contribution lanes, owner routes, and dispatch-ready agents.',
+      owner: 'engineering-team/architecture-engineer',
     },
-  };
-}
+    {
+      path: '/templates.json',
+      schema: 'agent.bittrees.templates.v1',
+      purpose: 'Reusable Bittrees-scoped task templates with acceptance and validation requirements.',
+      owner: 'engineering-team/architecture-engineer',
+    },
+    {
+      path: '/idacc/releases.json',
+      schema: 'agent.bittrees.idacc-releases.v1',
+      purpose: 'IDACC release discovery metadata with integrity and install-approval status.',
+      owner: 'engineering-lead',
+    },
+    {
+      path: '/contribution-intents',
+      schema: 'agent.bittrees.contribution-intent.contract.v1',
+      purpose: 'Documented submission contract; POST returns 501 until security clearance.',
+      owner: 'technology-security/security-router',
+    },
+  ],
+  sourceScope: SOURCE_SCOPE,
+};
 
-function buildRouteDefinition({
-  path,
-  label,
-  title,
-  description,
-  itemKey,
-  itemDescription,
-  itemSchema,
-  data,
-  extraProperties = {},
-  requiredExtras = [],
-}) {
+const agentsData = {
+  schema: 'agent.bittrees.agents.v1',
+  status: 'active-static-reviewed',
+  review: REVIEW_STATE,
+  sources: SOURCE_RECORDS.filter((source) =>
+    ['memory:642', 'output:idacc-contributor-lane-map', 'manager:/agents-snapshot:2026-07-07'].includes(source.id),
+  ),
+  sourceScope: SOURCE_SCOPE,
+  lanes: CONTRIBUTION_LANES,
+  teams: TEAM_SUMMARIES,
+  agents: ACTIVE_AGENT_SNAPSHOT.map((agent) => ({
+    reviewedAt: REVIEWED_AT,
+    ...agent,
+  })),
+  caveats: [
+    'This is a reviewed snapshot, not a live manager inventory feed.',
+    'dispatchReady only means the manager snapshot showed running/online at review time.',
+    'Stopped specialist owners remain the correct authority route for their domains even when not immediately dispatch-ready.',
+  ],
+};
+
+const templatesData = {
+  schema: 'agent.bittrees.templates.v1',
+  status: 'active-static-reviewed',
+  review: REVIEW_STATE,
+  sources: SOURCE_RECORDS.filter((source) =>
+    [
+      'memory:642',
+      'memory:639',
+      'output:idacc-contributor-lane-map',
+      'output:agent-bittrees-portal-repo-readiness',
+    ].includes(source.id),
+  ),
+  sourceScope: SOURCE_SCOPE,
+  templates: TEMPLATE_LIBRARY,
+  requiredTemplateFields: [
+    'scope',
+    'acceptanceCriteria',
+    'bittreesRelevance',
+    'outOfScope',
+    'backlogPolicy',
+    'owner',
+    'validationPath',
+    'sourceIds',
+    'reviewedAt',
+  ],
+  contributionIntentDefaults: {
+    endpoint: CONTRIBUTION_INTENT_CONTRACT.endpoint,
+    launchStatus: CONTRIBUTION_INTENT_CONTRACT.launchStatus,
+    acceptedLiveSubmission: false,
+    requestSchemaId: CONTRIBUTION_INTENT_REQUEST_SCHEMA.$id,
+  },
+};
+
+const idaccReleasesData = {
+  schema: 'agent.bittrees.idacc-releases.v1',
+  status: 'active-static-reviewed-install-gated',
+  review: REVIEW_STATE,
+  sources: SOURCE_RECORDS.filter((source) =>
+    [
+      'memory:642',
+      'github:bobofbuilding/idacc/releases/latest:2026-07-07',
+      'output:agent-bittrees-portal-repo-readiness',
+    ].includes(source.id),
+  ),
+  project: {
+    id: 'idacc',
+    name: 'ID Agents Control Center',
+    repository: 'https://github.com/bobofbuilding/idacc',
+    relationToIdAgents:
+      'Control client for an id-agents manager; it observes and commands a running manager rather than owning manager state.',
+    owner: 'engineering-lead',
+  },
+  releases: IDACC_RELEASES,
+  installPolicy: {
+    portalInstallAllowed: false,
+    reason:
+      'Release is discoverable, but portal install/download promotion remains blocked until security-router clears release integrity and endpoint controls.',
+    requiredBeforeInstallPromotion: [
+      'Signed release artifacts or an approved equivalent verification policy.',
+      'Hash manifest review against the published assets.',
+      'Security-router review of download and update UX.',
+      'Secret-scan and client-bundle review before public launch.',
+    ],
+  },
+  securityGate: READ_ONLY_LAUNCH_POSTURE,
+};
+
+const contributionContractData = {
+  schema: 'agent.bittrees.contribution-intent.contract.v1',
+  status: 'contract-only-disabled',
+  review: REVIEW_STATE,
+  sources: SOURCE_RECORDS.filter((source) =>
+    ['memory:642', 'output:agent-bittrees-portal-repo-readiness'].includes(source.id),
+  ),
+  contract: CONTRIBUTION_INTENT_CONTRACT,
+};
+
+function buildRouteDefinition({ path, label, title, description, schema, data, methods = ['GET', 'HEAD'] }) {
   return {
     path,
     label,
     title,
     description,
-    schema: buildStubDataSchema({
-      title,
-      description,
-      itemKey,
-      itemDescription,
-      itemSchema,
-      extraProperties,
-      requiredExtras,
-    }),
-    data: {
-      status: 'placeholder',
-      sourceScope: [...SOURCE_SCOPE],
-      placeholderNotice: PLACEHOLDER_NOTICE,
-      ...data,
-    },
+    schema,
+    data,
+    methods,
+    stub: false,
   };
 }
 
@@ -112,110 +962,102 @@ export const ROUTE_DEFINITIONS = [
     path: '/',
     label: 'Landing page',
     title: 'agent.bittrees.org landing page',
-    description: 'Human-facing landing page for the portal skeleton.',
+    description: 'Human-facing overview for the static agent.bittrees.org portal.',
+    methods: ['GET', 'HEAD'],
   },
   buildRouteDefinition({
     path: '/llms.txt',
     label: 'llms.txt',
-    title: 'agent.bittrees.org llms.txt stub data',
-    description: 'JSON-encoded llms.txt scaffold with explicit schema annotation.',
-    itemKey: 'sections',
-    itemDescription: 'Sections that summarize the portal stub.',
-    itemSchema: buildSectionSchema(),
-    requiredExtras: ['summary'],
-    extraProperties: {
-      summary: {
-        type: 'string',
+    title: 'agent.bittrees.org llms.txt data',
+    description: 'Agent-readable route index, launch posture, source scope, and integration instructions.',
+    schema: buildDataSchema({
+      id: 'llms.v1',
+      title: 'agent.bittrees.org llms.txt data schema',
+      description: 'Schema for the JSON-encoded llms.txt route.',
+      required: ['portal', 'instructions', 'routes', 'sourceScope'],
+      properties: {
+        portal: { type: 'object' },
+        instructions: buildStringArraySchema('Agent crawler instructions.'),
+        routes: { type: 'array', items: { type: 'object' }, minItems: 1 },
+        sourceScope: buildStringArraySchema('Approved Bittrees source scope.'),
       },
-    },
-    data: {
-      summary: 'JSON-encoded llms.txt scaffold for agent.bittrees.org.',
-      sections: [
-        {
-          heading: 'Source scope',
-          body: 'This scaffold only states Bittrees facts already established in Brain or local memory.',
-        },
-        {
-          heading: 'Placeholders',
-          body: 'Any content outside the established scope is explicitly marked as a placeholder.',
-        },
-        {
-          heading: 'Route format',
-          body: 'This first cut uses JSON so the schema annotation is visible to machine consumers.',
-        },
-      ],
-      notes: ['This route is intentionally stubbed and machine-readable.'],
-    },
+    }),
+    data: llmsData,
   }),
   buildRouteDefinition({
     path: '/agents.json',
     label: 'agents.json',
-    title: 'agent.bittrees.org agents stub data',
-    description: 'Placeholder directory of agents and roles.',
-    itemKey: 'agents',
-    itemDescription: 'Known agents for the portal skeleton.',
-    itemSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['id', 'name', 'role'],
+    title: 'agent.bittrees.org agents data',
+    description: 'Reviewed static snapshot of contribution lanes, owner routes, teams, and agents.',
+    schema: buildDataSchema({
+      id: 'agents.v1',
+      title: 'agent.bittrees.org agents data schema',
+      description: 'Schema for contribution lane and agent routing discovery.',
+      required: ['sourceScope', 'lanes', 'teams', 'agents', 'caveats'],
       properties: {
-        id: { type: 'string' },
-        name: { type: 'string' },
-        role: { type: 'string' },
+        sourceScope: buildStringArraySchema('Approved Bittrees source scope.'),
+        lanes: { type: 'array', items: { type: 'object' }, minItems: 1 },
+        teams: { type: 'array', items: { type: 'object' }, minItems: 1 },
+        agents: { type: 'array', items: { type: 'object' }, minItems: 1 },
+        caveats: buildStringArraySchema('Snapshot caveats.'),
       },
-    },
-    data: {
-      agents: [],
-      notes: ['No agent registry is wired in yet.'],
-    },
+    }),
+    data: agentsData,
   }),
   buildRouteDefinition({
     path: '/templates.json',
     label: 'templates.json',
-    title: 'agent.bittrees.org templates stub data',
-    description: 'Placeholder catalog of templates.',
-    itemKey: 'templates',
-    itemDescription: 'Known templates for the portal skeleton.',
-    itemSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['id', 'name', 'purpose'],
+    title: 'agent.bittrees.org templates data',
+    description: 'Reusable Bittrees-scoped task and handoff templates.',
+    schema: buildDataSchema({
+      id: 'templates.v1',
+      title: 'agent.bittrees.org templates data schema',
+      description: 'Schema for reviewed template library metadata.',
+      required: ['sourceScope', 'templates', 'requiredTemplateFields', 'contributionIntentDefaults'],
       properties: {
-        id: { type: 'string' },
-        name: { type: 'string' },
-        purpose: { type: 'string' },
+        sourceScope: buildStringArraySchema('Approved Bittrees source scope.'),
+        templates: { type: 'array', items: { type: 'object' }, minItems: 1 },
+        requiredTemplateFields: buildStringArraySchema('Fields every template must expose.'),
+        contributionIntentDefaults: { type: 'object' },
       },
-    },
-    data: {
-      templates: [],
-      notes: ['Template catalog is empty in this first cut.'],
-    },
+    }),
+    data: templatesData,
   }),
   buildRouteDefinition({
     path: '/idacc/releases.json',
     label: 'idacc/releases.json',
-    title: 'agent.bittrees.org idacc releases stub data',
-    description: 'Placeholder release feed for the idacc namespace.',
-    itemKey: 'releases',
-    itemDescription: 'Known release entries for the portal skeleton.',
-    itemSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['version', 'status', 'publishedAt', 'notes'],
+    title: 'agent.bittrees.org IDACC releases data',
+    description: 'IDACC release discovery metadata with integrity and install-gate status.',
+    schema: buildDataSchema({
+      id: 'idacc-releases.v1',
+      title: 'agent.bittrees.org IDACC releases data schema',
+      description: 'Schema for IDACC release discovery metadata.',
+      required: ['project', 'releases', 'installPolicy', 'securityGate'],
       properties: {
-        version: { type: 'string' },
-        status: { type: 'string' },
-        publishedAt: { type: 'string' },
-        notes: {
-          type: 'array',
-          items: { type: 'string' },
-        },
+        project: { type: 'object' },
+        releases: { type: 'array', items: { type: 'object' }, minItems: 1 },
+        installPolicy: { type: 'object' },
+        securityGate: { type: 'object' },
       },
-    },
-    data: {
-      releases: [],
-      notes: ['Release feed is empty until an upstream source is connected.'],
-    },
+    }),
+    data: idaccReleasesData,
+  }),
+  buildRouteDefinition({
+    path: '/contribution-intents',
+    label: 'contribution-intents',
+    title: 'agent.bittrees.org contribution intent contract',
+    description: 'Documented contribution-intent submission contract; POST is disabled and returns 501.',
+    schema: buildDataSchema({
+      id: 'contribution-intent-contract.v1',
+      title: 'agent.bittrees.org contribution intent contract schema',
+      description: 'Schema for the contribution-intent contract route.',
+      required: ['contract'],
+      properties: {
+        contract: { type: 'object' },
+      },
+    }),
+    data: contributionContractData,
+    methods: ['GET', 'HEAD', 'POST'],
   }),
 ];
 
@@ -244,6 +1086,9 @@ function renderLandingPage() {
     .join('');
 
   const sourceScopeItems = SOURCE_SCOPE.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  const noGoItems = READ_ONLY_LAUNCH_POSTURE.noGoItems
+    .map((item) => `<li>${escapeHtml(item.label)}: ${escapeHtml(item.status)}</li>`)
+    .join('');
 
   return `<!doctype html>
 <html lang="en">
@@ -255,15 +1100,15 @@ function renderLandingPage() {
     <style>
       :root {
         color-scheme: dark;
-        --bg: #07111f;
-        --bg-2: #0c1930;
-        --panel: rgba(10, 18, 34, 0.76);
-        --text: #edf2ff;
-        --muted: #b5bfd9;
-        --accent: #78f0d6;
-        --accent-2: #ffc56c;
-        --border: rgba(255, 255, 255, 0.12);
-        --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+        --bg: #0a1219;
+        --bg-2: #162018;
+        --panel: rgba(11, 20, 26, 0.86);
+        --text: #f4f7ef;
+        --muted: #bdc8b9;
+        --accent: #65e0b7;
+        --accent-2: #f0cf75;
+        --border: rgba(255, 255, 255, 0.14);
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
       }
 
       * { box-sizing: border-box; }
@@ -273,99 +1118,72 @@ function renderLandingPage() {
         color: var(--text);
         font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
         background:
-          radial-gradient(circle at top left, rgba(120, 240, 214, 0.18), transparent 32%),
-          radial-gradient(circle at top right, rgba(255, 197, 108, 0.14), transparent 24%),
+          linear-gradient(140deg, rgba(101, 224, 183, 0.16), transparent 34%),
+          linear-gradient(220deg, rgba(240, 207, 117, 0.13), transparent 30%),
           linear-gradient(160deg, var(--bg), var(--bg-2));
-      }
-
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        background-image:
-          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-        background-size: 42px 42px;
-        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent 90%);
       }
 
       main {
         position: relative;
-        max-width: 1100px;
+        max-width: 1120px;
         margin: 0 auto;
-        padding: 72px 24px 56px;
+        padding: 64px 24px 56px;
       }
 
       .hero {
         display: grid;
         gap: 24px;
-        padding: 36px;
+        padding: 32px;
         border: 1px solid var(--border);
-        border-radius: 28px;
+        border-radius: 8px;
         background: var(--panel);
         box-shadow: var(--shadow);
-        backdrop-filter: blur(20px);
       }
 
       .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        width: fit-content;
         margin: 0 0 14px;
-        padding: 8px 14px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        color: var(--muted);
-        letter-spacing: 0.08em;
+        color: var(--accent);
+        letter-spacing: 0;
         text-transform: uppercase;
         font-size: 0.78rem;
-      }
-
-      .eyebrow::before {
-        content: "";
-        width: 10px;
-        height: 10px;
-        border-radius: 999px;
-        background: linear-gradient(135deg, var(--accent), var(--accent-2));
-        box-shadow: 0 0 0 4px rgba(120, 240, 214, 0.12);
       }
 
       h1 {
         margin: 0;
         max-width: 12ch;
-        font-size: clamp(3rem, 8vw, 5.8rem);
-        line-height: 0.95;
-        letter-spacing: -0.05em;
+        font-size: clamp(2.8rem, 8vw, 5.4rem);
+        line-height: 0.98;
+        letter-spacing: 0;
       }
 
       .lede {
-        max-width: 65ch;
+        max-width: 72ch;
         margin: 0;
         color: var(--muted);
-        font-size: 1.08rem;
-        line-height: 1.75;
+        font-size: 1.05rem;
+        line-height: 1.72;
       }
 
-      .grid {
+      .grid,
+      .sections {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 18px;
-        margin-top: 22px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+        margin-top: 18px;
       }
 
-      .card {
-        padding: 20px;
+      .card,
+      .section {
+        padding: 18px;
         border: 1px solid var(--border);
-        border-radius: 22px;
-        background: rgba(8, 14, 27, 0.72);
+        border-radius: 8px;
+        background: rgba(10, 16, 22, 0.72);
       }
 
       .card h2,
       .section h2 {
         margin: 0 0 10px;
-        font-size: 1.15rem;
+        font-size: 1.05rem;
       }
 
       .card p,
@@ -373,33 +1191,19 @@ function renderLandingPage() {
       .section li {
         margin: 0;
         color: var(--muted);
-        line-height: 1.7;
+        line-height: 1.65;
       }
 
       .card-kicker {
-        margin: 0 0 12px;
+        margin: 0 0 10px;
         color: var(--accent);
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         text-transform: uppercase;
-        letter-spacing: 0.09em;
-      }
-
-      .sections {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 18px;
-        margin-top: 18px;
-      }
-
-      .section {
-        padding: 20px;
-        border: 1px solid var(--border);
-        border-radius: 22px;
-        background: rgba(8, 14, 27, 0.62);
+        letter-spacing: 0;
       }
 
       .section ul {
-        margin: 12px 0 0;
+        margin: 10px 0 0;
         padding-left: 18px;
       }
 
@@ -407,39 +1211,32 @@ function renderLandingPage() {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
-        margin-top: 14px;
+        margin-top: 8px;
       }
 
       .pill {
         display: inline-flex;
         align-items: center;
+        min-height: 34px;
         padding: 7px 12px;
-        border-radius: 999px;
-        border: 1px solid rgba(120, 240, 214, 0.22);
-        background: rgba(120, 240, 214, 0.08);
+        border-radius: 8px;
+        border: 1px solid rgba(101, 224, 183, 0.28);
+        background: rgba(101, 224, 183, 0.08);
         color: var(--text);
         text-decoration: none;
         font-size: 0.9rem;
       }
 
       .footer-note {
-        margin-top: 18px;
+        margin-top: 12px;
         color: var(--muted);
         font-size: 0.94rem;
       }
 
       @media (max-width: 720px) {
-        main {
-          padding: 20px;
-        }
-
-        .hero {
-          padding: 24px;
-        }
-
-        h1 {
-          max-width: 100%;
-        }
+        main { padding: 20px; }
+        .hero { padding: 22px; }
+        h1 { max-width: 100%; }
       }
     </style>
   </head>
@@ -447,40 +1244,43 @@ function renderLandingPage() {
     <main>
       <section class="hero" aria-labelledby="hero-title">
         <div>
-          <p class="eyebrow">agent.bittrees.org portal scaffold</p>
-          <h1 id="hero-title">A first-cut portal shell.</h1>
+          <p class="eyebrow">agent.bittrees.org static discovery portal</p>
+          <h1 id="hero-title">Bittrees contribution discovery for agents.</h1>
         </div>
         <p class="lede">
-          This local-only scaffold keeps Bittrees-specific wording source-aware. The
-          established scope currently visible here is limited to
-          <strong>Bittrees Research</strong>, <strong>Bittrees, Inc. operations/governance</strong>,
-          and <strong>Bittrees Capital / treasury workflows</strong>. Anything else is an explicit
-          placeholder until sourced.
+          This launch draft publishes reviewed machine-readable manifests for Bittrees-scoped
+          contribution lanes, reusable task templates, and IDACC release discovery. The portal is
+          intentionally read-only: contribution intent is documented as a schema and route contract,
+          but live submission writes are disabled pending security-router clearance.
         </p>
         <div class="pill-row" aria-label="Machine-readable routes">
           <a class="pill" href="/llms.txt">/llms.txt</a>
           <a class="pill" href="/agents.json">/agents.json</a>
           <a class="pill" href="/templates.json">/templates.json</a>
           <a class="pill" href="/idacc/releases.json">/idacc/releases.json</a>
+          <a class="pill" href="/contribution-intents">/contribution-intents</a>
         </div>
       </section>
 
       <section class="sections" aria-label="Portal notes">
         <article class="section">
           <h2>Source-aware scope</h2>
-          <p>Only the established Bittrees items are surfaced in this first cut.</p>
+          <p>Static content is limited to reviewed Bittrees source areas.</p>
           <ul>
             ${sourceScopeItems}
           </ul>
         </article>
         <article class="section">
-          <h2>Deployment status</h2>
-          <p>No live Vercel or DNS integration is connected to this scaffold.</p>
-          <p class="footer-note">The repo is intentionally local and minimal for now.</p>
+          <h2>Launch posture</h2>
+          <p>Live writes, install promotion, and public launch remain blocked until the open security gate clears.</p>
+          <ul>
+            ${noGoItems}
+          </ul>
+          <p class="footer-note">Last reviewed: ${escapeHtml(REVIEWED_AT)}.</p>
         </article>
       </section>
 
-      <section class="grid" aria-label="Stub routes">
+      <section class="grid" aria-label="Discovery routes">
         ${routeCards}
       </section>
     </main>
@@ -488,14 +1288,26 @@ function renderLandingPage() {
 </html>`;
 }
 
-function buildStubResponse(routeDefinition) {
+function buildDiscoveryResponse(routeDefinition) {
   return {
     $schema: SCHEMA_URL,
     route: routeDefinition.path,
     generatedAt: new Date().toISOString(),
-    stub: true,
+    stub: routeDefinition.stub,
     schema: routeDefinition.schema,
     data: routeDefinition.data,
+  };
+}
+
+function buildContributionIntentDisabledResponse() {
+  return {
+    $schema: SCHEMA_URL,
+    route: CONTRIBUTION_INTENT_CONTRACT.endpoint,
+    generatedAt: new Date().toISOString(),
+    ...CONTRIBUTION_INTENT_CONTRACT.disabledResponse,
+    requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
+    responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
+    securityGate: READ_ONLY_LAUNCH_POSTURE,
   };
 }
 
@@ -527,12 +1339,14 @@ export function buildPortalManifest() {
     name: 'agent.bittrees.org portal scaffold',
     generatedAt: new Date().toISOString(),
     sourceScope: [...SOURCE_SCOPE],
+    launchPosture: READ_ONLY_LAUNCH_POSTURE,
     routes: ROUTE_DEFINITIONS.map((definition) => ({
       path: definition.path,
       label: definition.label,
       description: definition.description ?? 'Landing page',
       kind: definition.path === '/' ? 'html' : 'json',
-      stub: definition.path !== '/',
+      methods: definition.methods,
+      stub: definition.stub ?? false,
       schemaTitle: definition.schema?.title ?? null,
     })),
   };
@@ -542,30 +1356,50 @@ export function createRequestHandler() {
   return function handleRequest(req, res) {
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const includeBody = req.method !== 'HEAD';
+    const routeDefinition = ROUTE_MAP.get(requestUrl.pathname);
+
+    if (requestUrl.pathname === '/contribution-intents' && req.method === 'POST') {
+      req.resume();
+      return sendJson(res, 501, buildContributionIntentDisabledResponse(), includeBody);
+    }
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      return sendJson(res, 405, {
-        $schema: SCHEMA_URL,
-        error: 'method_not_allowed',
-        message: 'Only GET and HEAD are supported by this scaffold.',
-        allowedMethods: ['GET', 'HEAD'],
-      }, includeBody);
+      return sendJson(
+        res,
+        405,
+        {
+          $schema: SCHEMA_URL,
+          error: 'method_not_allowed',
+          message: 'Only GET and HEAD are enabled, except POST /contribution-intents which returns 501.',
+          allowedMethods: ['GET', 'HEAD'],
+          disabledSubmissionStub: {
+            path: '/contribution-intents',
+            method: 'POST',
+            statusCode: 501,
+          },
+        },
+        includeBody,
+      );
     }
 
     if (requestUrl.pathname === '/') {
       return sendHtml(res, 200, renderLandingPage(), includeBody);
     }
 
-    const routeDefinition = ROUTE_MAP.get(requestUrl.pathname);
     if (routeDefinition) {
-      return sendJson(res, 200, buildStubResponse(routeDefinition), includeBody);
+      return sendJson(res, 200, buildDiscoveryResponse(routeDefinition), includeBody);
     }
 
-    return sendJson(res, 404, {
-      $schema: SCHEMA_URL,
-      error: 'not_found',
-      message: 'No scaffold route exists at this path.',
-      availableRoutes: ROUTE_DEFINITIONS.map((definition) => definition.path),
-    }, includeBody);
+    return sendJson(
+      res,
+      404,
+      {
+        $schema: SCHEMA_URL,
+        error: 'not_found',
+        message: 'No portal route exists at this path.',
+        availableRoutes: ROUTE_DEFINITIONS.map((definition) => definition.path),
+      },
+      includeBody,
+    );
   };
 }
