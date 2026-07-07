@@ -5,11 +5,12 @@
   "type": "module",
   "description": "First-cut portal scaffold for agent.bittrees.org.",
   "scripts": {
-    "check": "node --check src/server.mjs",
+    "check": "node --check src/server.mjs && node --check api/index.js",
     "build": "node scripts/build.mjs",
     "dev": "node --watch src/server.mjs",
     "start": "node src/server.mjs",
-    "start:dist": "node dist/server.mjs"
+    "start:dist": "node dist/server.mjs",
+    "verify:api": "node scripts/verify-api-handler.mjs"
   },
   "engines": {
     "node": ">=20.0.0"
