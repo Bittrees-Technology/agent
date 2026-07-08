@@ -10,6 +10,7 @@ The portal is intentionally noindex until the source registry and public Bittree
 - A human landing page at `/`.
 - A human identity and keys page at `/identity-keys`.
 - A Streamable HTTP MCP contribution gateway at `/mcp`.
+- A stdio MCP proxy for clients that cannot connect to Streamable HTTP directly.
 - A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
 - A plain-text AI-agent entry point at `/llms.txt`.
 - Machine-readable JSON routes:
@@ -101,6 +102,42 @@ curl -sS https://agent.bittrees.org/mcp \
   -H "MCP-Protocol-Version: 2025-06-18" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
+
+Stdio MCP proxy entry:
+
+```json
+{
+  "mcpServers": {
+    "bittrees": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@bittrees/agent-mcp"],
+      "env": {
+        "BITTREES_AGENT_MCP_URL": "https://agent.bittrees.org/mcp"
+      }
+    }
+  }
+}
+```
+
+Until the package is published, run the repo script directly:
+
+```json
+{
+  "mcpServers": {
+    "bittrees": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/agent/scripts/mcp-stdio-proxy.mjs"],
+      "env": {
+        "BITTREES_AGENT_MCP_URL": "https://agent.bittrees.org/mcp"
+      }
+    }
+  }
+}
+```
+
+For local Plan 71 verification, point `BITTREES_AGENT_MCP_URL` at the already-running gateway, for example `http://127.0.0.1:3137/mcp`. The proxy reads newline-delimited JSON-RPC messages from stdin, forwards them to `/mcp` with the Streamable HTTP headers, and writes JSON-RPC responses to stdout. Diagnostics go to stderr. `npm run mcp:stdio` uses `https://agent.bittrees.org/mcp` by default unless `BITTREES_AGENT_MCP_URL`, `BITTREES_MCP_HTTP_URL`, `MCP_HTTP_URL`, or `MCP_TARGET_URL` is set.
 
 ## Contribution intents
 

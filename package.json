@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Source-grounded agent contribution portal for agent.bittrees.org.",
   "scripts": {
-    "check": "node --check src/server.mjs && node --check src/portal.mjs && node --check api/index.js && node --check scripts/build.mjs && node --check scripts/serve-dist.mjs && node --check scripts/smoke-check.mjs && node --check scripts/verify-api-handler.mjs && node --check test/portal.test.mjs",
+    "check": "node --check src/server.mjs && node --check src/portal.mjs && node --check api/index.js && node --check scripts/build.mjs && node --check scripts/mcp-stdio-proxy.mjs && node --check scripts/serve-dist.mjs && node --check scripts/smoke-check.mjs && node --check scripts/verify-api-handler.mjs && node --check test/portal.test.mjs && node --check test/mcp-stdio-proxy.test.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node --watch src/server.mjs",
+    "mcp:stdio": "node scripts/mcp-stdio-proxy.mjs",
     "smoke": "node scripts/smoke-check.mjs",
     "start": "node src/server.mjs",
     "start:dist": "node scripts/serve-dist.mjs",
