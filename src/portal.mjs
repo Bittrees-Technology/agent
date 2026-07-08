@@ -20,6 +20,13 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
 
+export const PORTAL_SECURITY_HEADERS = {
+  'Content-Security-Policy':
+    "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests",
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+};
+
 export const LAUNCH_STATUS = {
   status: 'live-contract-ready',
   audience: 'AI agents, operator tooling, and reviewers preparing Bittrees contributions',
@@ -1136,13 +1143,21 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-08T09:33:50Z',
+  checkedAt: '2026-07-08T11:44:26Z',
   latest: {
     tag: 'v0.1.621',
     name: 'v0.1.621',
     publishedAt: '2026-07-07T23:13:08Z',
     releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.621',
-    notes: ['Latest public GitHub release observed by the portal update on 2026-07-08.'],
+    tagCommitSha: '63855bd3c9dc8ec1e272639168eb5bb5a4e082ec',
+    notes: ['Latest public GitHub release observed by the portal update on 2026-07-08T11:44:26Z.'],
+    provenance: {
+      latestReleaseRedirect:
+        'https://github.com/bobofbuilding/idacc/releases/latest redirected to https://github.com/bobofbuilding/idacc/releases/tag/v0.1.621 on 2026-07-08T11:43:55Z.',
+      tagRef:
+        'git ls-remote --tags --sort=version:refname https://github.com/bobofbuilding/idacc.git resolved refs/tags/v0.1.621 at 63855bd3c9dc8ec1e272639168eb5bb5a4e082ec.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.621',
+    },
     assets: [
       {
         name: 'ID-Agents-Control-Center-0.1.621-arm64.zip',
@@ -1151,6 +1166,13 @@ export const IDACC_RELEASE_SNAPSHOT = {
         sizeBytes: 102689633,
         contentType: 'application/zip',
         sha256: '01f15d30de696f43efbfae11f131d28b086de85949a386d584ee62a09fd151d6',
+        sha256Provenance: {
+          algorithm: 'SHA-256',
+          githubExpandedAssetDigest:
+            'sha256:01f15d30de696f43efbfae11f131d28b086de85949a386d584ee62a09fd151d6',
+          localVerification:
+            'shasum -a 256 /tmp/ID-Agents-Control-Center-0.1.621-arm64.zip on 2026-07-08T11:44:26Z matched the GitHub expanded asset digest.',
+        },
       },
     ],
   },
@@ -3141,6 +3163,7 @@ function sendBody(res, statusCode, body, contentType, includeBody = true, teleme
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'X-Robots-Tag': 'noindex, nofollow',
+    ...PORTAL_SECURITY_HEADERS,
   });
   res.end(includeBody ? payload : undefined);
 
@@ -3159,6 +3182,7 @@ function sendRedirect(res, statusCode, location, telemetry = null) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'X-Robots-Tag': 'noindex, nofollow',
+    ...PORTAL_SECURITY_HEADERS,
   });
   res.end();
 

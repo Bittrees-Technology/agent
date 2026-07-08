@@ -24,6 +24,17 @@ function check(condition, message) {
   if (!condition) failures.push(message);
 }
 
+function checkSecurityHeaders(response, path) {
+  const csp = response.headers.get('content-security-policy') ?? '';
+  const xFrameOptions = response.headers.get('x-frame-options') ?? '';
+  const referrerPolicy = response.headers.get('referrer-policy') ?? '';
+
+  check(csp.includes("default-src 'none'"), `${path} missing restrictive CSP default-src`);
+  check(csp.includes("frame-ancestors 'none'"), `${path} missing CSP frame-ancestors`);
+  check(xFrameOptions.toLowerCase() === 'deny', `${path} missing X-Frame-Options DENY`);
+  check(referrerPolicy.toLowerCase() === 'no-referrer', `${path} missing Referrer-Policy no-referrer`);
+}
+
 function routeUrl(path) {
   return new URL(path, baseUrl).toString();
 }
@@ -36,6 +47,7 @@ async function readJson(path) {
   const robots = response.headers.get('x-robots-tag') ?? '';
 
   check(response.status === 200, `${path} returned ${response.status}`);
+  checkSecurityHeaders(response, path);
   check(robots.toLowerCase().includes('noindex'), `${path} missing noindex header`);
   check(robots.toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
 
@@ -57,6 +69,7 @@ async function checkRoute(path, kind) {
   const robots = response.headers.get('x-robots-tag') ?? '';
 
   check(response.status === 200, `${path} returned ${response.status}`);
+  checkSecurityHeaders(response, path);
   check(robots.toLowerCase().includes('noindex'), `${path} missing noindex header`);
   check(robots.toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
 

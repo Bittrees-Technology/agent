@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, normalizeCanonicalPath } from '../src/portal.mjs';
+import { PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, normalizeCanonicalPath } from '../src/portal.mjs';
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const distDir = join(rootDir, 'dist');
@@ -50,6 +50,7 @@ function sendText(res, statusCode, body) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'X-Robots-Tag': 'noindex, nofollow',
+    ...PORTAL_SECURITY_HEADERS,
   });
   res.end(body);
 }
@@ -66,6 +67,7 @@ function sendRedirect(res, statusCode, location, telemetry) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'X-Robots-Tag': 'noindex, nofollow',
+    ...PORTAL_SECURITY_HEADERS,
   });
   res.end();
   logTelemetry(telemetry);
@@ -105,6 +107,7 @@ const server = createServer(async (req, res) => {
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
       'X-Robots-Tag': 'noindex, nofollow',
+      ...PORTAL_SECURITY_HEADERS,
     });
     res.end(req.method === 'HEAD' ? undefined : body);
   } catch (error) {

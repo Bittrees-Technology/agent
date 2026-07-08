@@ -12,6 +12,7 @@ import {
   JSON_ROUTE_MAP,
   LAUNCH_FRESHNESS_MONITORING,
   LIVE_AGENT_REGISTRY,
+  PORTAL_SECURITY_HEADERS,
   ROUTE_DEFINITIONS,
   buildJsonResponse,
   buildLlmsTxt,
@@ -73,6 +74,13 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('opportunities.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
   assert.ok(assetPaths.has('monitoring.json'));
+});
+
+test('portal security headers enforce browser launch gate', () => {
+  assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /default-src 'none'/);
+  assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.equal(PORTAL_SECURITY_HEADERS['X-Frame-Options'], 'DENY');
+  assert.equal(PORTAL_SECURITY_HEADERS['Referrer-Policy'], 'no-referrer');
 });
 
 test('identity and keys page renders the live-readiness contract', () => {
@@ -196,5 +204,7 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
   assert.match(asset.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '63855bd3c9dc8ec1e272639168eb5bb5a4e082ec');
+  assert.match(asset.sha256Provenance.localVerification, /shasum -a 256/);
   assert.equal(response.data.releases.length, 1);
 });
