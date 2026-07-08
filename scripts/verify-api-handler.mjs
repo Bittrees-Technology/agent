@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import handler from '../api/index.js';
+import { PORTAL_SECURITY_HEADERS } from '../src/portal.mjs';
 
 const SAMPLE_CONTRIBUTION_INTENT = {
   schema: 'agent.bittrees.contribution-intent.v1',
@@ -80,7 +81,7 @@ function mockRequest({ method, path, host = 'agent.bittrees.org', headers = {}, 
   req.method = method;
   req.url = path;
   req.headers = { host, ...headers };
-  req.body = body;
+  req.body = body ?? (method === 'GET' || method === 'HEAD' ? undefined : '');
   req.resume = () => req;
   req.destroy = () => req;
   return req;
@@ -106,18 +107,80 @@ const CHECKS = [
   { method: 'GET', path: '/' },
   { method: 'HEAD', path: '/' },
   { method: 'GET', path: '/robots.txt' },
+  { method: 'GET', path: '/identity-keys' },
+  { method: 'GET', path: '/identity-keys/', expectedStatus: 301 },
+  { method: 'GET', path: '/identity-keys.json' },
+  { method: 'GET', path: '/identity-keys.json/', expectedStatus: 301 },
   { method: 'GET', path: '/llms.txt' },
-  { method: 'GET', path: '/llms.txt/' },
+  { method: 'GET', path: '/llms.txt/', expectedStatus: 301 },
   { method: 'GET', path: '/agents.json' },
   { method: 'GET', path: '/templates.json' },
   { method: 'GET', path: '/idacc/releases.json' },
   { method: 'GET', path: '/contribution-intents' },
+  { method: 'GET', path: '/gateway/contribution-intents' },
+  { method: 'GET', path: '/mcp' },
+  { method: 'GET', path: '/mcp.json' },
   { method: 'POST', path: '/contribution-intents' },
-  { method: 'POST', path: '/contribution-intents/' },
-  { method: 'GET', path: '/does-not-exist' },
+  { method: 'POST', path: '/contribution-intents/', expectedStatus: 301 },
+  { method: 'POST', path: '/gateway/contribution-intents' },
+  { method: 'POST', path: '/gateway/contribution-intents/', expectedStatus: 301 },
+  { method: 'GET', path: '/does-not-exist', expectedStatus: 404 },
 ];
 
 let failed = 0;
+
+function checkTelemetryLine(telemetryLines, label, expectedStatus) {
+  if (telemetryLines.length === 0) {
+    failed += 1;
+    console.error(`  FAIL: no telemetry line emitted for ${label}`);
+    return null;
+  }
+
+  try {
+    const telemetry = JSON.parse(telemetryLines[0]);
+    const keys = Object.keys(telemetry).sort().join(',');
+
+    if (keys !== 'method,path,status,timestamp') {
+      failed += 1;
+      console.error(`  FAIL: unexpected telemetry keys for ${label}: ${keys}`);
+    }
+
+    if (expectedStatus !== undefined && telemetry.status !== expectedStatus) {
+      failed += 1;
+      console.error(`  FAIL: expected telemetry status ${expectedStatus} for ${label}, received ${telemetry.status}`);
+    }
+
+    return telemetry;
+  } catch (error) {
+    failed += 1;
+    console.error(`  FAIL: telemetry was not valid JSON for ${label}: ${error.message}`);
+    return null;
+  }
+}
+
+function checkHardeningHeaders(headers, label) {
+  const normalizedHeaders = Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), String(value)]),
+  );
+
+  for (const [header, expectedValue] of Object.entries(PORTAL_SECURITY_HEADERS)) {
+    const actualValue = normalizedHeaders[header.toLowerCase()];
+    if (actualValue !== expectedValue) {
+      failed += 1;
+      console.error(`  FAIL: ${label} missing ${header}: expected ${expectedValue}, received ${actualValue}`);
+    }
+  }
+
+  if (normalizedHeaders['x-content-type-options'] !== 'nosniff') {
+    failed += 1;
+    console.error(`  FAIL: ${label} missing X-Content-Type-Options nosniff`);
+  }
+
+  if (normalizedHeaders['x-robots-tag'] !== 'noindex, nofollow') {
+    failed += 1;
+    console.error(`  FAIL: ${label} missing X-Robots-Tag noindex,nofollow`);
+  }
+}
 
 for (const check of CHECKS) {
   const req = mockRequest(check);
@@ -143,23 +206,175 @@ for (const check of CHECKS) {
     console.error(`  FAIL: no status code written for ${check.method} ${check.path}`);
   }
 
-  if (telemetryLines.length === 0) {
+  if (check.expectedStatus !== undefined && res.statusCode !== check.expectedStatus) {
     failed += 1;
-    console.error(`  FAIL: no telemetry line emitted for ${check.method} ${check.path}`);
-    continue;
+    console.error(`  FAIL: expected ${check.expectedStatus} for ${check.method} ${check.path}, received ${res.statusCode}`);
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/identity-keys') {
+    if (!res.body.includes('Identity and keys.')) {
+      failed += 1;
+      console.error('  FAIL: /identity-keys did not render the identity and keys page.');
+    }
+
+    if (!res.body.includes('blocked-without-explicit-controller-or-safe-approval')) {
+      failed += 1;
+      console.error('  FAIL: /identity-keys did not render the execution gate policy.');
+    }
+
+    if (/rawPrivateKey|secretKey|mnemonic|seedPhrase/.test(res.body)) {
+      failed += 1;
+      console.error('  FAIL: /identity-keys rendered a forbidden secret field name.');
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/identity-keys.json') {
+    try {
+      const parsedBody = JSON.parse(res.body);
+      const serializedBody = JSON.stringify(parsedBody);
+
+      if (parsedBody.route !== '/identity-keys.json') {
+        failed += 1;
+        console.error(`  FAIL: /identity-keys.json route field mismatch: ${parsedBody.route}`);
+      }
+
+      if (parsedBody.status !== 'live-contract-ready') {
+        failed += 1;
+        console.error(`  FAIL: /identity-keys.json status mismatch: ${parsedBody.status}`);
+      }
+
+      if (parsedBody.data?.registryManagement?.identityKeysRoute !== '/identity-keys.json') {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json registry management does not point back to the identity route.');
+      }
+
+      const publicKeySection = parsedBody.data?.identityKeys?.sections?.some(
+        (section) => section.id === 'public-operational-keys',
+      );
+      if (!publicKeySection) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json missing public-operational-keys section.');
+      }
+
+      const executionGate = parsedBody.data?.identityKeys?.onchainExecutionReadiness?.some(
+        (level) => level.level === 'execute' && level.automation === 'blocked-without-explicit-controller-or-safe-approval',
+      );
+      if (!executionGate) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json missing blocked execute policy.');
+      }
+
+      if (/rawPrivateKey|secretKey|mnemonic|seedPhrase/.test(serializedBody)) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json exposed a forbidden secret field name.');
+      }
+    } catch (error) {
+      failed += 1;
+      console.error(`  FAIL: /identity-keys.json response was not valid JSON: ${error.message}`);
+    }
+  }
+
+  checkTelemetryLine(telemetryLines, `${check.method} ${check.path}`, res.statusCode);
+  checkHardeningHeaders(res.headers, `${check.method} ${check.path}`);
+}
+
+for (const check of [
+  {
+    label: 'POST /mcp initialize',
+    body: {
+      jsonrpc: '2.0',
+      id: 101,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: {
+          name: 'verify-api-handler',
+          version: '0.1.0',
+        },
+      },
+    },
+    assertBody(parsedBody) {
+      if (parsedBody?.result?.protocolVersion !== '2025-06-18') {
+        failed += 1;
+        console.error('  FAIL: MCP initialize did not negotiate 2025-06-18.');
+      }
+    },
+  },
+  {
+    label: 'POST /mcp tools/list',
+    body: {
+      jsonrpc: '2.0',
+      id: 102,
+      method: 'tools/list',
+      params: {},
+    },
+    assertBody(parsedBody) {
+      const toolNames = new Set((parsedBody?.result?.tools ?? []).map((tool) => tool.name));
+      for (const toolName of [
+        'list_contribution_opportunities',
+        'get_contribution_brief',
+        'get_bittrees_context',
+        'register_external_agent',
+        'claim_contribution',
+        'submit_contribution',
+        'check_contribution_status',
+        'respond_to_review_feedback',
+        'get_agent_reputation',
+        'lookup_contribution_attestation',
+      ]) {
+        if (!toolNames.has(toolName)) {
+          failed += 1;
+          console.error(`  FAIL: MCP tools/list missing ${toolName}.`);
+        }
+      }
+    },
+  },
+]) {
+  const req = mockRequest({
+    method: 'POST',
+    path: '/mcp',
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'mcp-protocol-version': '2025-06-18',
+    },
+    body: JSON.stringify(check.body),
+  });
+  const res = mockResponse();
+  const originalConsoleLog = console.log;
+  const telemetryLines = [];
+
+  console.log = (...args) => {
+    telemetryLines.push(args.join(' '));
+  };
+
+  try {
+    await handler(req, res);
+  } finally {
+    console.log = originalConsoleLog;
+  }
+
+  console.log(`${check.label} -> ${res.statusCode} | ${res.body.slice(0, 80).replace(/\n/g, ' ')}`);
+
+  if (res.statusCode !== 200) {
+    failed += 1;
+    console.error(`  FAIL: expected 200 for ${check.label}, received ${res.statusCode}`);
   }
 
   try {
-    const telemetry = JSON.parse(telemetryLines[0]);
-    const keys = Object.keys(telemetry).sort().join(',');
-
-    if (keys !== 'method,path,status,timestamp') {
-      failed += 1;
-      console.error(`  FAIL: unexpected telemetry keys for ${check.method} ${check.path}: ${keys}`);
-    }
+    check.assertBody(JSON.parse(res.body));
   } catch (error) {
     failed += 1;
-    console.error(`  FAIL: telemetry was not valid JSON for ${check.method} ${check.path}: ${error.message}`);
+    console.error(`  FAIL: ${check.label} response was not valid JSON: ${error.message}`);
+  }
+
+  checkTelemetryLine(telemetryLines, check.label, 200);
+  checkHardeningHeaders(res.headers, check.label);
+
+  if (String(res.headers['MCP-Protocol-Version']) !== '2025-06-18') {
+    failed += 1;
+    console.error(`  FAIL: ${check.label} missing MCP-Protocol-Version header.`);
   }
 }
 
@@ -210,10 +425,50 @@ try {
     console.error('  FAIL: disabled form POST did not include offline packet instructions.');
   }
 
-  if (telemetryLines.length === 0) {
-    failed += 1;
-    console.error('  FAIL: no telemetry line emitted for disabled form POST /contribution-intents');
+  checkTelemetryLine(telemetryLines, 'disabled form POST /contribution-intents', 501);
+  checkHardeningHeaders(res.headers, 'disabled form POST /contribution-intents');
+
+  const gatewayReq = mockRequest({
+    method: 'POST',
+    path: '/gateway/contribution-intents',
+    headers: {
+      accept: 'text/html',
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: buildContributionIntentFormBody(),
+  });
+  const gatewayRes = mockResponse();
+  const gatewayTelemetryLines = [];
+
+  console.log = (...args) => {
+    gatewayTelemetryLines.push(args.join(' '));
+  };
+
+  try {
+    await handler(gatewayReq, gatewayRes);
+  } finally {
+    console.log = originalConsoleLog;
   }
+
+  console.log(`POST /gateway/contribution-intents (form write disabled) -> ${gatewayRes.statusCode} | ${gatewayRes.body.slice(0, 80).replace(/\n/g, ' ')}`);
+
+  if (gatewayRes.statusCode !== 501) {
+    failed += 1;
+    console.error(`  FAIL: expected 501 for disabled form POST /gateway/contribution-intents, received ${gatewayRes.statusCode}`);
+  }
+
+  if (!String(gatewayRes.headers['Content-Type']).includes('text/html')) {
+    failed += 1;
+    console.error('  FAIL: disabled gateway form POST did not return HTML.');
+  }
+
+  if (!gatewayRes.body.includes('Offline packet template')) {
+    failed += 1;
+    console.error('  FAIL: disabled gateway form POST did not include offline packet instructions.');
+  }
+
+  checkTelemetryLine(gatewayTelemetryLines, 'disabled form POST /gateway/contribution-intents', 501);
+  checkHardeningHeaders(gatewayRes.headers, 'disabled form POST /gateway/contribution-intents');
 } finally {
   for (const [flagName, value] of savedDisabledFlags) {
     if (value === undefined) delete process.env[flagName];
@@ -293,14 +548,12 @@ try {
     console.error(`  FAIL: enabled POST did not persist readable logs: ${error.message}`);
   }
 
-  if (telemetryLines.length === 0) {
-    failed += 1;
-    console.error('  FAIL: no telemetry line emitted for enabled POST /contribution-intents');
-  }
+  checkTelemetryLine(telemetryLines, 'enabled JSON POST /contribution-intents', 202);
+  checkHardeningHeaders(res.headers, 'enabled JSON POST /contribution-intents');
 
   const invalidFormReq = mockRequest({
     method: 'POST',
-    path: '/contribution-intents',
+    path: '/gateway/contribution-intents',
     headers: {
       accept: 'text/html',
       'content-type': 'application/x-www-form-urlencoded',
@@ -310,26 +563,32 @@ try {
   const invalidFormRes = mockResponse();
 
   await handler(invalidFormReq, invalidFormRes);
-  console.log(`POST /contribution-intents (invalid form) -> ${invalidFormRes.statusCode} | ${invalidFormRes.body.slice(0, 80).replace(/\n/g, ' ')}`);
+  console.log(`POST /gateway/contribution-intents (invalid form) -> ${invalidFormRes.statusCode} | ${invalidFormRes.body.slice(0, 80).replace(/\n/g, ' ')}`);
 
   if (invalidFormRes.statusCode !== 400) {
     failed += 1;
-    console.error(`  FAIL: expected 400 for invalid form POST /contribution-intents, received ${invalidFormRes.statusCode}`);
+    console.error(`  FAIL: expected 400 for invalid form POST /gateway/contribution-intents, received ${invalidFormRes.statusCode}`);
   }
 
   if (!String(invalidFormRes.headers['Content-Type']).includes('text/html')) {
     failed += 1;
-    console.error('  FAIL: invalid form POST did not return HTML.');
+    console.error('  FAIL: invalid gateway form POST did not return HTML.');
   }
 
   if (!invalidFormRes.body.includes('body.summary must be at least 20 characters.')) {
     failed += 1;
-    console.error('  FAIL: invalid form POST did not render schema validation feedback.');
+    console.error('  FAIL: invalid gateway form POST did not render schema validation feedback.');
   }
+
+  if (!invalidFormRes.body.includes('action="/gateway/contribution-intents"')) {
+    failed += 1;
+    console.error('  FAIL: invalid gateway form POST did not re-render the gateway form action.');
+  }
+  checkHardeningHeaders(invalidFormRes.headers, 'invalid gateway form POST /gateway/contribution-intents');
 
   const formReq = mockRequest({
     method: 'POST',
-    path: '/contribution-intents',
+    path: '/gateway/contribution-intents',
     headers: {
       accept: 'text/html',
       'content-type': 'application/x-www-form-urlencoded',
@@ -339,22 +598,23 @@ try {
   const formRes = mockResponse();
 
   await handler(formReq, formRes);
-  console.log(`POST /contribution-intents (write enabled form) -> ${formRes.statusCode} | ${formRes.body.slice(0, 80).replace(/\n/g, ' ')}`);
+  console.log(`POST /gateway/contribution-intents (write enabled form) -> ${formRes.statusCode} | ${formRes.body.slice(0, 80).replace(/\n/g, ' ')}`);
 
   if (formRes.statusCode !== 202) {
     failed += 1;
-    console.error(`  FAIL: expected 202 for enabled form POST /contribution-intents, received ${formRes.statusCode}`);
+    console.error(`  FAIL: expected 202 for enabled form POST /gateway/contribution-intents, received ${formRes.statusCode}`);
   }
 
   if (!String(formRes.headers['Content-Type']).includes('text/html')) {
     failed += 1;
-    console.error('  FAIL: enabled form POST did not return HTML.');
+    console.error('  FAIL: enabled gateway form POST did not return HTML.');
   }
 
   if (!formRes.body.includes('Receipt ID:')) {
     failed += 1;
-    console.error('  FAIL: enabled form POST did not render a receipt.');
+    console.error('  FAIL: enabled gateway form POST did not render a receipt.');
   }
+  checkHardeningHeaders(formRes.headers, 'enabled gateway form POST /gateway/contribution-intents');
 
   try {
     const submissionsLog = await readFile(join(tempDir, 'submissions.jsonl'), 'utf8');
@@ -364,21 +624,21 @@ try {
 
     if (!submissionRecord.request?.intentId?.startsWith('intent-')) {
       failed += 1;
-      console.error('  FAIL: form submission did not receive a generated intentId.');
+      console.error('  FAIL: gateway form submission did not receive a generated intentId.');
     }
 
     if (submissionRecord.request?.summary !== 'Submit a gateway form contribution intent through the urlencoded visitor workflow.') {
       failed += 1;
-      console.error('  FAIL: form submission did not preserve the urlencoded summary.');
+      console.error('  FAIL: gateway form submission did not preserve the urlencoded summary.');
     }
 
     if (!formRes.body.includes(notificationRecord.receiptId)) {
       failed += 1;
-      console.error('  FAIL: form receipt did not match the persisted fleet notification receipt ID.');
+      console.error('  FAIL: gateway form receipt did not match the persisted fleet notification receipt ID.');
     }
   } catch (error) {
     failed += 1;
-    console.error(`  FAIL: enabled form POST did not persist readable logs: ${error.message}`);
+    console.error(`  FAIL: enabled gateway form POST did not persist readable logs: ${error.message}`);
   }
 } finally {
   if (savedWriteFlag === undefined) delete process.env.CONTRIBUTION_INTENTS_WRITE_ENABLED;

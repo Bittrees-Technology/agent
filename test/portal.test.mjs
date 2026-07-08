@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import test from 'node:test';
 
 import {
@@ -12,14 +14,50 @@ import {
   JSON_ROUTE_MAP,
   LAUNCH_FRESHNESS_MONITORING,
   LIVE_AGENT_REGISTRY,
+  MCP_CONTRIBUTION_TOOLS,
+  MCP_GATEWAY,
   PORTAL_SECURITY_HEADERS,
   ROUTE_DEFINITIONS,
   buildJsonResponse,
   buildLlmsTxt,
   buildPortalManifest,
   buildStaticAssets,
+  callMcpTool,
+  createRequestHandler,
   renderIdentityKeysPage,
 } from '../src/portal.mjs';
+
+async function withPortalServer(callback) {
+  const server = createServer(createRequestHandler());
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    return await callback(baseUrl);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+}
+
+async function mcpPost(baseUrl, body) {
+  const response = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json, text/event-stream',
+      'Content-Type': 'application/json',
+      'MCP-Protocol-Version': MCP_GATEWAY.protocolVersion,
+    },
+    body: JSON.stringify(body),
+  });
+
+  return {
+    response,
+    json: await response.json(),
+  };
+}
 
 test('llms.txt is a plain-text agent entry point', () => {
   const llms = buildLlmsTxt();
@@ -29,6 +67,9 @@ test('llms.txt is a plain-text agent entry point', () => {
   assert.match(llms, /\/templates\.json/);
   assert.match(llms, /\/identity-keys/);
   assert.match(llms, /\/identity-keys\.json/);
+  assert.match(llms, /\/mcp/);
+  assert.match(llms, /list_contribution_opportunities/);
+  assert.match(llms, /submit_contribution/);
   assert.match(llms, /Contribution Workflow/);
   assert.match(llms, /\/monitoring\.json/);
   assert.match(llms, /signed heartbeats/);
@@ -72,6 +113,10 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
+  assert.ok(assetPaths.has('contribution-intents'));
+  assert.ok(assetPaths.has('gateway/contribution-intents'));
+  assert.ok(assetPaths.has('mcp/index.html'));
+  assert.ok(assetPaths.has('mcp.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
   assert.ok(assetPaths.has('monitoring.json'));
 });
@@ -81,6 +126,19 @@ test('portal security headers enforce browser launch gate', () => {
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /frame-ancestors 'none'/);
   assert.equal(PORTAL_SECURITY_HEADERS['X-Frame-Options'], 'DENY');
   assert.equal(PORTAL_SECURITY_HEADERS['Referrer-Policy'], 'no-referrer');
+});
+
+test('vercel catch-all headers mirror the portal launch gate', () => {
+  const vercelConfig = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const catchAllHeaders = vercelConfig.headers.find((entry) => entry.source === '/(.*)')?.headers ?? [];
+  const configuredHeaders = Object.fromEntries(catchAllHeaders.map((header) => [header.key, header.value]));
+
+  for (const [header, value] of Object.entries(PORTAL_SECURITY_HEADERS)) {
+    assert.equal(configuredHeaders[header], value);
+  }
+
+  assert.equal(configuredHeaders['X-Content-Type-Options'], 'nosniff');
+  assert.equal(configuredHeaders['X-Robots-Tag'], 'noindex, nofollow');
 });
 
 test('identity and keys page renders the live-readiness contract', () => {
@@ -189,9 +247,167 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.match(htmlAsset.body, /Choose lane/);
   assert.equal(response.status, LAUNCH_FRESHNESS_MONITORING.status);
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/identity-keys'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/sources.json'));
+  assert.ok(response.data.monitoring.schemaValidity.routes.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.claimDrift.baselineApprovedClaimIds.includes(APPROVED_CLAIMS[0].id));
   assert.ok(response.data.monitoring.claimDrift.baselineExcludedClaimIds.includes(EXCLUDED_CLAIM_REVIEW[0].id));
+});
+
+test('mcp gateway contract exposes required contribution tools', () => {
+  const mcpRoute = JSON_ROUTE_MAP.get('/mcp.json');
+  const response = buildJsonResponse(mcpRoute, '2026-07-06T00:00:00.000Z');
+  const toolNames = new Set(MCP_CONTRIBUTION_TOOLS.map((tool) => tool.name));
+
+  for (const toolName of [
+    'list_contribution_opportunities',
+    'get_contribution_brief',
+    'get_bittrees_context',
+    'register_external_agent',
+    'claim_contribution',
+    'submit_contribution',
+    'check_contribution_status',
+    'respond_to_review_feedback',
+    'get_agent_reputation',
+    'lookup_contribution_attestation',
+  ]) {
+    assert.ok(toolNames.has(toolName), `missing ${toolName}`);
+  }
+
+  assert.equal(response.status, MCP_GATEWAY.status);
+  assert.equal(response.data.gateway.path, '/mcp');
+  assert.equal(response.data.reviewGate.productionMutationAllowed, false);
+});
+
+test('mcp tool calls are review-gated and structured', () => {
+  const listResult = callMcpTool('list_contribution_opportunities', { priority: 'high' });
+  assert.equal(listResult.isError, false);
+  assert.ok(listResult.structuredContent.count >= 1);
+
+  const submitResult = callMcpTool('submit_contribution', {
+    agentId: 'external-agent-test',
+    opportunityId: 'source-registry-hardening',
+    title: 'Source registry review packet',
+    artifact: {
+      kind: 'markdown',
+      value: 'Reviewed source registry entries with citation and freshness notes.',
+    },
+    evidence: ['memory:54', 'portal-route:/sources.json'],
+  });
+
+  assert.equal(submitResult.structuredContent.status, 'submission_queued_for_review');
+  assert.equal(submitResult.structuredContent.reviewGate.productionMutationAllowed, false);
+  assert.equal(submitResult.structuredContent.attestation.publicAttestation, false);
+
+  const statusResult = callMcpTool('check_contribution_status', {
+    id: submitResult.structuredContent.submission.id,
+  });
+  assert.equal(statusResult.structuredContent.status, 'status_found');
+  assert.equal(statusResult.structuredContent.result.kind, 'submission');
+});
+
+test('mcp streamable http endpoint initializes and serves tools', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const initialized = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: MCP_GATEWAY.protocolVersion,
+        capabilities: {},
+        clientInfo: {
+          name: 'portal-test-client',
+          version: '0.1.0',
+        },
+      },
+    });
+    assert.equal(initialized.response.status, 200);
+    assert.equal(initialized.json.result.protocolVersion, MCP_GATEWAY.protocolVersion);
+    assert.ok(initialized.json.result.capabilities.tools);
+
+    const listed = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+      params: {},
+    });
+    assert.equal(listed.response.status, 200);
+    assert.ok(listed.json.result.tools.some((tool) => tool.name === 'submit_contribution'));
+
+    const called = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'get_bittrees_context',
+        arguments: {
+          includeSources: false,
+        },
+      },
+    });
+    assert.equal(called.response.status, 200);
+    assert.equal(called.json.result.structuredContent.status, 'source-grounded-context-ready');
+  });
+});
+
+test('mcp endpoint rejects browser-origin mismatch and server-initiated sse get', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const originRejected = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        Origin: 'https://not-bittrees.example',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+    assert.equal(originRejected.status, 403);
+
+    const sseRejected = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
+      headers: {
+        Accept: 'text/event-stream',
+      },
+    });
+    assert.equal(sseRejected.status, 405);
+  });
+});
+
+test('mcp endpoint rejects oversized request bodies with 413', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const oversized = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': MCP_GATEWAY.protocolVersion,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'oversized-body',
+        method: 'tools/call',
+        params: {
+          name: 'register_external_agent',
+          arguments: {
+            agentId: 'oversized-test-agent',
+            displayName: 'Oversized Test Agent',
+            operator: 'backend-engineer',
+            contact: {
+              kind: 'internal-route',
+              value: 'engineering-team/backend-engineer',
+            },
+            capabilities: ['schema validation'],
+            evidencePolicy: 'x'.repeat(1_100_000),
+          },
+        },
+      }),
+    });
+
+    const body = await oversized.json();
+
+    assert.equal(oversized.status, 413);
+    assert.equal(body.error.code, -32000);
+    assert.match(body.error.message, /1 MiB limit/);
+  });
 });
 
 test('idacc release snapshot includes verifiable download metadata', () => {
@@ -200,11 +416,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.621');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.623');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
   assert.match(asset.sha256, /^[a-f0-9]{64}$/);
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '63855bd3c9dc8ec1e272639168eb5bb5a4e082ec');
-  assert.match(asset.sha256Provenance.localVerification, /shasum -a 256/);
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '063da5374dd79515af13d7ba803d923bc5187630');
+  assert.match(asset.sha256Provenance.localVerification, /GitHub Releases API asset digest/);
   assert.equal(response.data.releases.length, 1);
 });

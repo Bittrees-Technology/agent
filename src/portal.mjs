@@ -34,6 +34,27 @@ export const LAUNCH_STATUS = {
     'Keep noindex enabled until the source registry, identity/key contract, and public claims are approved by lead.',
 };
 
+export const MCP_PROTOCOL_VERSION = '2025-06-18';
+export const MCP_SUPPORTED_PROTOCOL_VERSIONS = [MCP_PROTOCOL_VERSION, '2025-03-26'];
+
+export const MCP_GATEWAY = {
+  path: '/mcp',
+  status: 'review-gated-live-contract',
+  transport: 'Streamable HTTP',
+  protocolVersion: MCP_PROTOCOL_VERSION,
+  supportedProtocolVersions: MCP_SUPPORTED_PROTOCOL_VERSIONS,
+  persistenceMode: 'process-local-review-queue-stub',
+  productionMutationAllowed: false,
+  reviewGate:
+    'External registrations, claims, submissions, feedback responses, and attestations are queued for owner/reviewer validation before any production publication or task-state mutation.',
+  safetyInvariants: [
+    'Read tools may return source-grounded public context.',
+    'Write-like contribution tools create review queue stubs only.',
+    'No wallet, signer, governance, treasury, or public-claim authority is granted by this gateway.',
+    'Credentials, private keys, bearer tokens, seed phrases, and raw delegated secrets are rejected from public payloads.',
+  ],
+};
+
 export const CONTRIBUTION_INTENT_LAUNCH_POSTURE = {
   mode: 'read-only-public-launch-default',
   liveWritesEnabled: false,
@@ -1143,35 +1164,38 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-08T11:44:26Z',
+  checkedAt: '2026-07-08T17:52:38Z',
   latest: {
-    tag: 'v0.1.621',
-    name: 'v0.1.621',
-    publishedAt: '2026-07-07T23:13:08Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.621',
-    tagCommitSha: '63855bd3c9dc8ec1e272639168eb5bb5a4e082ec',
-    notes: ['Latest public GitHub release observed by the portal update on 2026-07-08T11:44:26Z.'],
+    tag: 'v0.1.623',
+    name: 'v0.1.623',
+    publishedAt: '2026-07-08T15:45:34Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.623',
+    tagCommitSha: '063da5374dd79515af13d7ba803d923bc5187630',
+    notes: [
+      'Latest public GitHub release observed by the portal update on 2026-07-08T17:52:38Z.',
+      'Release notes: Add guarded ID Agents manager source installer.',
+    ],
     provenance: {
       latestReleaseRedirect:
-        'https://github.com/bobofbuilding/idacc/releases/latest redirected to https://github.com/bobofbuilding/idacc/releases/tag/v0.1.621 on 2026-07-08T11:43:55Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.623 on 2026-07-08T17:52:38Z.',
       tagRef:
-        'git ls-remote --tags --sort=version:refname https://github.com/bobofbuilding/idacc.git resolved refs/tags/v0.1.621 at 63855bd3c9dc8ec1e272639168eb5bb5a4e082ec.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.621',
+        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.623 resolved refs/tags/v0.1.623 at 063da5374dd79515af13d7ba803d923bc5187630.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.623',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.621-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.623-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.621/ID-Agents-Control-Center-0.1.621-arm64.zip',
-        sizeBytes: 102689633,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.623/ID-Agents-Control-Center-0.1.623-arm64.zip',
+        sizeBytes: 102699416,
         contentType: 'application/zip',
-        sha256: '01f15d30de696f43efbfae11f131d28b086de85949a386d584ee62a09fd151d6',
+        sha256: 'ecdbdcbc3fffe243d72d868586b0ef8cc9ae74cc2a0c2335b1c99ec91fb71262',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:01f15d30de696f43efbfae11f131d28b086de85949a386d584ee62a09fd151d6',
+            'sha256:ecdbdcbc3fffe243d72d868586b0ef8cc9ae74cc2a0c2335b1c99ec91fb71262',
           localVerification:
-            'shasum -a 256 /tmp/ID-Agents-Control-Center-0.1.621-arm64.zip on 2026-07-08T11:44:26Z matched the GitHub expanded asset digest.',
+            'GitHub Releases API asset digest field observed on 2026-07-08T17:52:38Z; no local zip download was performed during this snapshot refresh.',
         },
       },
     ],
@@ -1205,6 +1229,9 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/sources.json',
     '/opportunities.json',
     CONTRIBUTION_INTENT_CONTRACT_PATH,
+    GATEWAY_CONTRIBUTION_INTENT_PATH,
+    MCP_GATEWAY.path,
+    '/mcp.json',
     '/idacc/releases.json',
     '/monitoring.json',
   ],
@@ -1224,6 +1251,8 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/sources.json',
       '/opportunities.json',
       CONTRIBUTION_INTENT_CONTRACT_PATH,
+      GATEWAY_CONTRIBUTION_INTENT_PATH,
+      '/mcp.json',
       '/idacc/releases.json',
       '/monitoring.json',
     ],
@@ -1236,6 +1265,685 @@ export const LAUNCH_FRESHNESS_MONITORING = {
   },
   smokeCommand: 'npm run smoke -- --base-url=https://agent.bittrees.org',
 };
+
+export const MCP_IMPORT_SNIPPETS = [
+  {
+    id: 'endpoint-url',
+    label: 'Streamable HTTP endpoint',
+    format: 'url',
+    value: 'https://agent.bittrees.org/mcp',
+  },
+  {
+    id: 'generic-mcp-client',
+    label: 'Generic MCP client entry',
+    format: 'json',
+    value: {
+      mcpServers: {
+        bittrees: {
+          type: 'streamable-http',
+          url: 'https://agent.bittrees.org/mcp',
+          headers: {
+            'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+          },
+        },
+      },
+    },
+  },
+  {
+    id: 'initialize-curl',
+    label: 'Initialize with curl',
+    format: 'bash',
+    value:
+      'curl -sS https://agent.bittrees.org/mcp -H "Accept: application/json, text/event-stream" -H "Content-Type: application/json" -d \'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"example-agent","version":"0.1.0"}}}\'',
+  },
+  {
+    id: 'tools-list-curl',
+    label: 'List contribution tools',
+    format: 'bash',
+    value:
+      'curl -sS https://agent.bittrees.org/mcp -H "Accept: application/json, text/event-stream" -H "Content-Type: application/json" -H "MCP-Protocol-Version: 2025-06-18" -d \'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\'',
+  },
+];
+
+const MCP_REVIEW_QUEUE = {
+  registrations: new Map(),
+  claims: new Map(),
+  submissions: new Map(),
+  feedbackResponses: new Map(),
+  attestations: new Map(),
+};
+
+const SECRET_FIELD_PATTERN = /(?:private|secret|mnemonic|seed|bearer|oauth|token|cookie|recovery)/i;
+
+function textSchema(description, minLength = 1) {
+  return { type: 'string', minLength, description };
+}
+
+function stringArraySchema(description, minItems = 1) {
+  return {
+    type: 'array',
+    minItems,
+    items: { type: 'string', minLength: 1 },
+    description,
+  };
+}
+
+function objectInputSchema(required, properties) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required,
+    properties,
+  };
+}
+
+const MCP_COMMON_OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: true,
+  required: ['status', 'reviewGate'],
+  properties: {
+    status: { type: 'string' },
+    reviewGate: { type: 'object', additionalProperties: true },
+  },
+};
+
+function toolDefinition({ name, title, description, inputSchema, readOnly }) {
+  return {
+    name,
+    title,
+    description,
+    inputSchema,
+    outputSchema: MCP_COMMON_OUTPUT_SCHEMA,
+    annotations: {
+      readOnlyHint: readOnly,
+      destructiveHint: false,
+      idempotentHint: readOnly,
+      openWorldHint: !readOnly,
+    },
+  };
+}
+
+export const MCP_CONTRIBUTION_TOOLS = [
+  toolDefinition({
+    name: 'list_contribution_opportunities',
+    title: 'List Contribution Opportunities',
+    description:
+      'Return Bittrees-relevant contribution opportunities with owner, priority, review, and evidence requirements.',
+    readOnly: true,
+    inputSchema: objectInputSchema([], {
+      lane: {
+        type: 'string',
+        enum: CONTRIBUTION_LANES.map((lane) => lane.id),
+        description: 'Optional lane filter.',
+      },
+      priority: {
+        type: 'string',
+        enum: ['high', 'medium', 'low'],
+        description: 'Optional priority filter.',
+      },
+      status: textSchema('Optional exact status filter.', 1),
+      includeReviewRequirements: {
+        type: 'boolean',
+        default: true,
+        description: 'Include review and evidence requirements in each result.',
+      },
+    }),
+  }),
+  toolDefinition({
+    name: 'get_contribution_brief',
+    title: 'Get Contribution Brief',
+    description:
+      'Return a dispatch-ready brief for one contribution opportunity, including sources, acceptance criteria, and review path.',
+    readOnly: true,
+    inputSchema: objectInputSchema(['opportunityId'], {
+      opportunityId: textSchema('Opportunity id from list_contribution_opportunities.'),
+    }),
+  }),
+  toolDefinition({
+    name: 'get_bittrees_context',
+    title: 'Get Bittrees Context',
+    description:
+      'Return approved Bittrees scope, source registry, claim caveats, excluded claims, and identity/authority policy for contribution drafting.',
+    readOnly: true,
+    inputSchema: objectInputSchema([], {
+      lane: {
+        type: 'string',
+        enum: CONTRIBUTION_LANES.map((lane) => lane.id),
+        description: 'Optional lane-specific context filter.',
+      },
+      includeSources: {
+        type: 'boolean',
+        default: true,
+        description: 'Include source registry entries.',
+      },
+      includeExcludedClaims: {
+        type: 'boolean',
+        default: true,
+        description: 'Include excluded public-claim guardrails.',
+      },
+      includeIdentityPolicy: {
+        type: 'boolean',
+        default: true,
+        description: 'Include agent identity, reputation, and authority caveats.',
+      },
+    }),
+  }),
+  toolDefinition({
+    name: 'register_external_agent',
+    title: 'Register External Agent',
+    description:
+      'Queue an external agent profile for review before public registry inclusion. This does not grant authority.',
+    readOnly: false,
+    inputSchema: objectInputSchema(['agentId', 'displayName', 'operator', 'contact', 'capabilities', 'evidencePolicy'], {
+      agentId: textSchema('Stable external agent identifier.'),
+      displayName: textSchema('Human-readable agent name.'),
+      operator: textSchema('Team, organization, or controller responsible for the agent.'),
+      contact: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'value'],
+        properties: {
+          kind: { type: 'string', enum: ['url', 'email', 'ens', 'xmtp', 'github', 'internal-route'] },
+          value: textSchema('Contact route.'),
+        },
+      },
+      lanes: {
+        type: 'array',
+        items: { type: 'string', enum: CONTRIBUTION_LANES.map((lane) => lane.id) },
+        default: ['discovery'],
+      },
+      capabilities: stringArraySchema('Agent capabilities relevant to Bittrees contribution work.'),
+      evidencePolicy: textSchema('How the agent cites sources, handles stale facts, and separates evidence from authority.'),
+      identityProof: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Optional public proof metadata such as ENS, controller, manifest URL, or fingerprint.',
+      },
+    }),
+  }),
+  toolDefinition({
+    name: 'claim_contribution',
+    title: 'Claim Contribution',
+    description:
+      'Queue a claim request for owner review. The opportunity is not assigned until a reviewer accepts the claim.',
+    readOnly: false,
+    inputSchema: objectInputSchema(['agentId', 'opportunityId', 'contributionSummary', 'evidencePlan'], {
+      agentId: textSchema('Agent id requesting the contribution.'),
+      opportunityId: textSchema('Opportunity id being claimed.'),
+      contributionSummary: textSchema('Short summary of the intended contribution.'),
+      evidencePlan: stringArraySchema('Sources, checks, or validation evidence the agent will provide.'),
+      expectedOutput: textSchema('Expected artifact or deliverable.', 0),
+    }),
+  }),
+  toolDefinition({
+    name: 'submit_contribution',
+    title: 'Submit Contribution',
+    description:
+      'Queue a contribution artifact for review. The gateway records status only and does not publish or mutate production state.',
+    readOnly: false,
+    inputSchema: objectInputSchema(['agentId', 'opportunityId', 'title', 'artifact', 'evidence'], {
+      agentId: textSchema('Submitting agent id.'),
+      opportunityId: textSchema('Related opportunity id.'),
+      claimId: textSchema('Optional claim id returned by claim_contribution.', 0),
+      title: textSchema('Contribution title.'),
+      artifact: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'value'],
+        properties: {
+          kind: { type: 'string', enum: ['markdown', 'json', 'url', 'git-ref', 'artifact-route'] },
+          value: textSchema('Submitted content, route, or reference.'),
+        },
+      },
+      evidence: stringArraySchema('Evidence routes, source ids, URLs, or verification notes.'),
+      requestedReviewers: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional requested reviewer ids or roles.',
+      },
+    }),
+  }),
+  toolDefinition({
+    name: 'check_contribution_status',
+    title: 'Check Contribution Status',
+    description:
+      'Check opportunity, registration, claim, submission, feedback, or attestation review status by id.',
+    readOnly: true,
+    inputSchema: objectInputSchema(['id'], {
+      id: textSchema('Record id, opportunity id, claim id, submission id, feedback id, or attestation id.'),
+      kind: {
+        type: 'string',
+        enum: ['opportunity', 'registration', 'claim', 'submission', 'feedback', 'attestation', 'any'],
+        default: 'any',
+      },
+    }),
+  }),
+  toolDefinition({
+    name: 'respond_to_review_feedback',
+    title: 'Respond To Review Feedback',
+    description:
+      'Queue a response to reviewer feedback on a contribution submission. The response awaits reviewer acceptance.',
+    readOnly: false,
+    inputSchema: objectInputSchema(['submissionId', 'response'], {
+      submissionId: textSchema('Submission id being updated.'),
+      response: textSchema('Response to reviewer feedback.'),
+      changes: stringArraySchema('Changes made since the prior submission.', 0),
+      evidence: stringArraySchema('Additional evidence or verification notes.', 0),
+    }),
+  }),
+  toolDefinition({
+    name: 'get_agent_reputation',
+    title: 'Get Agent Reputation',
+    description:
+      'Return reviewed profile evidence and reputation caveats for an agent. Reputation is evidence, not authorization.',
+    readOnly: true,
+    inputSchema: objectInputSchema(['agentId'], {
+      agentId: textSchema('Agent id to inspect.'),
+    }),
+  }),
+  toolDefinition({
+    name: 'lookup_contribution_attestation',
+    title: 'Lookup Contribution Attestation',
+    description:
+      'Lookup contribution attestation status by attestation id or contribution id. Pending review is not a public attestation.',
+    readOnly: true,
+    inputSchema: objectInputSchema([], {
+      attestationId: textSchema('Attestation id returned by submit_contribution.', 0),
+      contributionId: textSchema('Submission, claim, or contribution id to inspect.', 0),
+    }),
+  }),
+];
+
+const MCP_TOOL_BY_NAME = new Map(MCP_CONTRIBUTION_TOOLS.map((tool) => [tool.name, tool]));
+
+function reviewGateRecord() {
+  return {
+    productionMutationAllowed: MCP_GATEWAY.productionMutationAllowed,
+    persistenceMode: MCP_GATEWAY.persistenceMode,
+    status: 'review_required_before_publication_or_assignment',
+    reviewers: ['owning lead', 'default/coder for implementation work', 'default/researcher for evidence and claims'],
+    policy: MCP_GATEWAY.reviewGate,
+  };
+}
+
+function invalidToolInput(message) {
+  const error = new Error(message);
+  error.jsonRpcCode = -32602;
+  return error;
+}
+
+function requireText(args, field) {
+  const value = args?.[field];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw invalidToolInput(`${field} is required.`);
+  }
+
+  return value.trim();
+}
+
+function optionalText(args, field) {
+  const value = args?.[field];
+  return typeof value === 'string' ? value.trim() : undefined;
+}
+
+function assertNoSecretFields(value, path = 'arguments') {
+  if (!value || typeof value !== 'object') return;
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    const fieldPath = `${path}.${key}`;
+    if (SECRET_FIELD_PATTERN.test(key)) {
+      throw invalidToolInput(`${fieldPath} looks like private credential material and cannot be submitted here.`);
+    }
+    if (nestedValue && typeof nestedValue === 'object') {
+      assertNoSecretFields(nestedValue, fieldPath);
+    }
+  }
+}
+
+function findOpportunity(opportunityId) {
+  return OPPORTUNITIES.find((opportunity) => opportunity.id === opportunityId);
+}
+
+function summarizeOpportunity(opportunity, includeReviewRequirements = true) {
+  return {
+    id: opportunity.id,
+    title: opportunity.title,
+    lane: opportunity.lane,
+    priority: opportunity.priority,
+    priorityReason: opportunity.priorityReason,
+    owner: opportunity.owner,
+    status: opportunity.status,
+    opportunityType: opportunity.opportunityType,
+    nextAction: opportunity.nextAction,
+    summary: opportunity.summary,
+    reviewRequired: true,
+    acceptanceCriteria: includeReviewRequirements ? opportunity.acceptanceCriteria : undefined,
+  };
+}
+
+function buildContributionBrief(opportunity) {
+  const lane = CONTRIBUTION_LANES.find((item) => item.id === opportunity.lane);
+  const template = CONTRIBUTION_TEMPLATES.find((item) => item.lane === opportunity.lane) ?? CONTRIBUTION_TEMPLATES[1];
+
+  return {
+    status: 'brief-ready',
+    reviewGate: reviewGateRecord(),
+    opportunity: summarizeOpportunity(opportunity),
+    lane,
+    template,
+    sourceRulesRoute: '/sources.json',
+    contextTool: 'get_bittrees_context',
+    claimTool: 'claim_contribution',
+    submissionTool: 'submit_contribution',
+    validationPath: 'owning lead review before production use; default coder/researcher validation for substantial work',
+    outOfScope: [
+      'Direct production mutation by external agents',
+      'Unsupported Bittrees claims',
+      'Wallet, signer, treasury, governance, or Safe execution',
+    ],
+  };
+}
+
+function createReviewRecord(collectionName, prefix, payload) {
+  const now = new Date().toISOString();
+  const id = `${prefix}_${randomUUID()}`;
+  const record = {
+    id,
+    status: 'queued_for_review',
+    createdAt: now,
+    updatedAt: now,
+    reviewGate: reviewGateRecord(),
+    ...payload,
+  };
+
+  MCP_REVIEW_QUEUE[collectionName].set(id, record);
+  return record;
+}
+
+function createPendingAttestation(contributionId, payload) {
+  return createReviewRecord('attestations', 'att', {
+    contributionId,
+    attestationStatus: 'review_pending_not_publicly_attested',
+    publicAttestation: false,
+    ...payload,
+  });
+}
+
+function getQueueCollection(kind) {
+  return {
+    registration: MCP_REVIEW_QUEUE.registrations,
+    claim: MCP_REVIEW_QUEUE.claims,
+    submission: MCP_REVIEW_QUEUE.submissions,
+    feedback: MCP_REVIEW_QUEUE.feedbackResponses,
+    attestation: MCP_REVIEW_QUEUE.attestations,
+  }[kind];
+}
+
+function findQueuedRecord(id, preferredKind = 'any') {
+  if (preferredKind && preferredKind !== 'any') {
+    const collection = getQueueCollection(preferredKind);
+    const record = collection?.get(id);
+    if (record) return { kind: preferredKind, record };
+  }
+
+  for (const [kind, collection] of [
+    ['registration', MCP_REVIEW_QUEUE.registrations],
+    ['claim', MCP_REVIEW_QUEUE.claims],
+    ['submission', MCP_REVIEW_QUEUE.submissions],
+    ['feedback', MCP_REVIEW_QUEUE.feedbackResponses],
+    ['attestation', MCP_REVIEW_QUEUE.attestations],
+  ]) {
+    const record = collection.get(id);
+    if (record) return { kind, record };
+  }
+
+  const opportunity = findOpportunity(id);
+  if (opportunity) return { kind: 'opportunity', record: summarizeOpportunity(opportunity) };
+
+  return null;
+}
+
+function callContributionTool(name, args = {}) {
+  switch (name) {
+    case 'list_contribution_opportunities': {
+      const includeReviewRequirements = args.includeReviewRequirements !== false;
+      const opportunities = OPPORTUNITIES.filter((opportunity) => {
+        if (args.lane && opportunity.lane !== args.lane) return false;
+        if (args.priority && opportunity.priority !== args.priority) return false;
+        if (args.status && opportunity.status !== args.status) return false;
+        return true;
+      }).map((opportunity) => summarizeOpportunity(opportunity, includeReviewRequirements));
+
+      return {
+        status: 'ready-for-triage',
+        reviewGate: reviewGateRecord(),
+        count: opportunities.length,
+        opportunities,
+      };
+    }
+
+    case 'get_contribution_brief': {
+      const opportunityId = requireText(args, 'opportunityId');
+      const opportunity = findOpportunity(opportunityId);
+      if (!opportunity) {
+        return {
+          status: 'not_found',
+          reviewGate: reviewGateRecord(),
+          opportunityId,
+          message: 'No contribution opportunity exists with that id.',
+          availableOpportunityIds: OPPORTUNITIES.map((item) => item.id),
+        };
+      }
+
+      return buildContributionBrief(opportunity);
+    }
+
+    case 'get_bittrees_context': {
+      const lane = optionalText(args, 'lane');
+      const laneContext = lane ? CONTRIBUTION_LANES.find((item) => item.id === lane) : undefined;
+      if (lane && !laneContext) throw invalidToolInput(`Unsupported lane: ${lane}`);
+
+      return {
+        status: 'source-grounded-context-ready',
+        reviewGate: reviewGateRecord(),
+        launchStatus: LAUNCH_STATUS,
+        sourceScope: laneContext ? SOURCE_SCOPE.filter((source) => source.lane === lane) : SOURCE_SCOPE,
+        contributionLane: laneContext,
+        approvedClaims: APPROVED_CLAIMS,
+        sources: args.includeSources === false ? undefined : SOURCE_REGISTRY,
+        excludedClaims: args.includeExcludedClaims === false ? undefined : EXCLUDED_CLAIMS,
+        identityPolicy: args.includeIdentityPolicy === false
+          ? undefined
+          : {
+              registryManagement: LIVE_AGENT_REGISTRY,
+              identityKeys: IDENTITY_KEYS_PUBLIC_CONTRACT,
+              reputationCaveat: 'Identity, trust evidence, endorsements, and reputation are evidence signals, not authority.',
+            },
+      };
+    }
+
+    case 'register_external_agent': {
+      assertNoSecretFields(args);
+      const agentId = requireText(args, 'agentId');
+      const record = createReviewRecord('registrations', 'reg', {
+        agentId,
+        displayName: requireText(args, 'displayName'),
+        operator: requireText(args, 'operator'),
+        contact: args.contact,
+        lanes: Array.isArray(args.lanes) && args.lanes.length > 0 ? args.lanes : ['discovery'],
+        capabilities: args.capabilities,
+        evidencePolicy: requireText(args, 'evidencePolicy'),
+        identityProof: args.identityProof ?? null,
+        publicRegistryMutation: 'blocked_until_approved',
+      });
+
+      return {
+        status: 'queued_for_review',
+        reviewGate: record.reviewGate,
+        registration: record,
+        nextAction: 'A registry owner must verify identity proof, evidence policy, contact route, and lane fit before inclusion.',
+      };
+    }
+
+    case 'claim_contribution': {
+      assertNoSecretFields(args);
+      const opportunityId = requireText(args, 'opportunityId');
+      const opportunity = findOpportunity(opportunityId);
+      if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
+
+      const record = createReviewRecord('claims', 'claim', {
+        agentId: requireText(args, 'agentId'),
+        opportunityId,
+        contributionSummary: requireText(args, 'contributionSummary'),
+        expectedOutput: optionalText(args, 'expectedOutput') ?? null,
+        evidencePlan: Array.isArray(args.evidencePlan) ? args.evidencePlan : [],
+        assignmentMutation: 'blocked_until_owner_review',
+        opportunityOwner: opportunity.owner,
+      });
+
+      return {
+        status: 'claim_pending_owner_review',
+        reviewGate: record.reviewGate,
+        claim: record,
+        opportunity: summarizeOpportunity(opportunity),
+      };
+    }
+
+    case 'submit_contribution': {
+      assertNoSecretFields(args);
+      const opportunityId = requireText(args, 'opportunityId');
+      const opportunity = findOpportunity(opportunityId);
+      if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
+
+      const record = createReviewRecord('submissions', 'sub', {
+        agentId: requireText(args, 'agentId'),
+        opportunityId,
+        claimId: optionalText(args, 'claimId') ?? null,
+        title: requireText(args, 'title'),
+        artifact: args.artifact,
+        evidence: Array.isArray(args.evidence) ? args.evidence : [],
+        requestedReviewers: Array.isArray(args.requestedReviewers) ? args.requestedReviewers : [opportunity.owner],
+        publicationMutation: 'blocked_until_review_acceptance',
+      });
+      const attestation = createPendingAttestation(record.id, {
+        opportunityId,
+        agentId: record.agentId,
+        submissionId: record.id,
+      });
+
+      return {
+        status: 'submission_queued_for_review',
+        reviewGate: record.reviewGate,
+        submission: record,
+        attestation,
+        nextAction: 'Reviewer acceptance is required before publication, assignment, reputation credit, or attestation.',
+      };
+    }
+
+    case 'check_contribution_status': {
+      const id = requireText(args, 'id');
+      const kind = optionalText(args, 'kind') ?? 'any';
+      const found = findQueuedRecord(id, kind);
+
+      return {
+        status: found ? 'status_found' : 'not_found',
+        reviewGate: reviewGateRecord(),
+        query: { id, kind },
+        result: found,
+      };
+    }
+
+    case 'respond_to_review_feedback': {
+      assertNoSecretFields(args);
+      const submissionId = requireText(args, 'submissionId');
+      const record = createReviewRecord('feedbackResponses', 'fb', {
+        submissionId,
+        response: requireText(args, 'response'),
+        changes: Array.isArray(args.changes) ? args.changes : [],
+        evidence: Array.isArray(args.evidence) ? args.evidence : [],
+        reviewerAcceptance: 'pending',
+      });
+
+      return {
+        status: 'feedback_response_queued_for_review',
+        reviewGate: record.reviewGate,
+        feedbackResponse: record,
+        submissionKnown: MCP_REVIEW_QUEUE.submissions.has(submissionId),
+      };
+    }
+
+    case 'get_agent_reputation': {
+      const agentId = requireText(args, 'agentId');
+      const approvedProfile = APPROVED_AGENT_PROFILES.find((profile) => profile.id === agentId);
+      const pendingRegistration = [...MCP_REVIEW_QUEUE.registrations.values()].find((record) => record.agentId === agentId);
+      const submissions = [...MCP_REVIEW_QUEUE.submissions.values()].filter((record) => record.agentId === agentId);
+
+      return {
+        status: approvedProfile ? 'reviewed_profile_found' : pendingRegistration ? 'pending_review_profile_found' : 'not_found',
+        reviewGate: reviewGateRecord(),
+        agentId,
+        reputation: {
+          score: approvedProfile ? 70 : pendingRegistration ? 10 : 0,
+          status: approvedProfile ? 'operator-reviewed-evidence' : pendingRegistration ? 'unreviewed-pending' : 'unknown',
+          caveat: 'Reputation is an evidence signal and does not authorize execution, spending, registry mutation, or public claim expansion.',
+        },
+        approvedProfile,
+        pendingRegistration,
+        queuedSubmissionCount: submissions.length,
+      };
+    }
+
+    case 'lookup_contribution_attestation': {
+      const attestationId = optionalText(args, 'attestationId');
+      const contributionId = optionalText(args, 'contributionId');
+      if (!attestationId && !contributionId) {
+        throw invalidToolInput('attestationId or contributionId is required.');
+      }
+
+      const attestation = attestationId
+        ? MCP_REVIEW_QUEUE.attestations.get(attestationId)
+        : [...MCP_REVIEW_QUEUE.attestations.values()].find((record) => record.contributionId === contributionId);
+
+      return {
+        status: attestation ? 'attestation_status_found' : 'not_found',
+        reviewGate: reviewGateRecord(),
+        attestation: attestation ?? null,
+        caveat: 'Pending review records are not public attestations and must not be presented as accepted Bittrees work.',
+      };
+    }
+
+    default:
+      throw invalidToolInput(`Unknown tool: ${name}`);
+  }
+}
+
+export function callMcpTool(name, args = {}) {
+  if (!MCP_TOOL_BY_NAME.has(name)) throw invalidToolInput(`Unknown tool: ${name}`);
+  const data = callContributionTool(name, args);
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: `${name} returned ${data.status}. Production mutation allowed: ${data.reviewGate?.productionMutationAllowed === true}.`,
+      },
+    ],
+    structuredContent: data,
+    isError: false,
+  };
+}
+
+export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) {
+  return {
+    status: MCP_GATEWAY.status,
+    generatedAt,
+    gateway: MCP_GATEWAY,
+    tools: MCP_CONTRIBUTION_TOOLS,
+    importSnippets: MCP_IMPORT_SNIPPETS,
+    reviewGate: reviewGateRecord(),
+    jsonRpcMethods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call'],
+  };
+}
 
 const JSON_ROUTES = [
   {
@@ -1421,6 +2129,20 @@ const JSON_ROUTES = [
     },
   },
   {
+    path: '/mcp.json',
+    label: 'MCP gateway contract',
+    description: 'Streamable HTTP MCP endpoint metadata, contribution tool schemas, review gates, and import snippets.',
+    status: MCP_GATEWAY.status,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org MCP gateway response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'gateway', 'tools', 'reviewGate'],
+    },
+    data: buildMcpGatewayContract,
+  },
+  {
     path: '/idacc/releases.json',
     label: 'IDACC releases',
     description: 'Dated IDACC release snapshot and current publication policy for IDACC-related updates.',
@@ -1491,6 +2213,13 @@ export const ROUTE_DEFINITIONS = [
     kind: 'text',
     status: 'ready',
   },
+  {
+    path: MCP_GATEWAY.path,
+    label: 'MCP Streamable HTTP',
+    description: 'JSON-RPC endpoint for contribution tools. POST to call MCP methods; browser GET returns endpoint documentation.',
+    kind: 'html',
+    status: MCP_GATEWAY.status,
+  },
   ...JSON_ROUTES.map((route) => ({ ...route, kind: 'json' })),
 ];
 
@@ -1560,6 +2289,31 @@ function renderWorkflowItems() {
       </li>
     `,
   ).join('');
+}
+
+function renderMcpToolRows() {
+  return MCP_CONTRIBUTION_TOOLS.map(
+    (tool) => `
+      <tr>
+        <td><code>${escapeHtml(tool.name)}</code></td>
+        <td>${escapeHtml(tool.annotations.readOnlyHint ? 'read' : 'review queue')}</td>
+        <td>${escapeHtml(tool.description)}</td>
+      </tr>
+    `,
+  ).join('');
+}
+
+function renderMcpSnippetBlocks() {
+  return MCP_IMPORT_SNIPPETS.map((snippet) => {
+    const value = typeof snippet.value === 'string' ? snippet.value : JSON.stringify(snippet.value, null, 2);
+    return `
+      <article class="snippet">
+        <h3>${escapeHtml(snippet.label)}</h3>
+        <p>${escapeHtml(snippet.format)}</p>
+        <pre><code>${escapeHtml(value)}</code></pre>
+      </article>
+    `;
+  }).join('');
 }
 
 function renderSelectOptions(options, selectedValue) {
@@ -2250,18 +3004,32 @@ function readRequestBody(req, maxBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
+    let settled = false;
+
+    function rejectOnce(error) {
+      if (settled) return;
+      settled = true;
+      chunks.length = 0;
+      reject(error);
+    }
+
     req.on('data', (chunk) => {
+      if (settled) return;
+
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       totalBytes += buffer.byteLength;
       if (totalBytes > maxBytes) {
-        reject(Object.assign(new Error('Request body exceeds the 1 MiB limit.'), { statusCode: 413 }));
-        req.destroy?.();
+        rejectOnce(Object.assign(new Error('Request body exceeds the 1 MiB limit.'), { statusCode: 413 }));
         return;
       }
       chunks.push(buffer);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+    req.on('error', rejectOnce);
   });
 }
 
@@ -2411,6 +3179,9 @@ export function buildLlmsTxt() {
   const executionReadiness = IDENTITY_KEYS_PUBLIC_CONTRACT.onchainExecutionReadiness
     .map((level) => `- ${level.level}: ${level.automation}. ${level.description}`)
     .join('\n');
+  const mcpTools = MCP_CONTRIBUTION_TOOLS.map(
+    (tool) => `- ${tool.name}: ${tool.description} Mode: ${tool.annotations.readOnlyHint ? 'read' : 'review queue'}.`,
+  ).join('\n');
 
   return `# agent.bittrees.org
 
@@ -2434,6 +3205,16 @@ Registry mode: ${LIVE_AGENT_REGISTRY.mode}
 Registry state: ${LIVE_AGENT_REGISTRY.currentState}
 Identity and keys route: ${LIVE_AGENT_REGISTRY.identityKeysRoute}
 Routine signed heartbeats can refresh live state, but authority-changing updates require explicit approval and controller proof.
+
+## MCP Streamable HTTP Gateway
+
+Endpoint: ${MCP_GATEWAY.path}
+Protocol version: ${MCP_GATEWAY.protocolVersion}
+Persistence: ${MCP_GATEWAY.persistenceMode}
+Review gate: ${MCP_GATEWAY.reviewGate}
+
+Tools:
+${mcpTools}
 
 ## Contribution Workflow
 
@@ -2904,6 +3685,145 @@ export function renderLandingPage() {
 </html>`;
 }
 
+export function renderMcpGatewayPage() {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>MCP gateway - agent.bittrees.org</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f2;
+        --ink: #17201c;
+        --muted: #5e6963;
+        --line: #cfd7d0;
+        --panel: #ffffff;
+        --green: #1f6b4f;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+      }
+      main {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+      .topline, .hero, .band {
+        border-bottom: 1px solid var(--line);
+        padding: 22px 0;
+      }
+      .topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .brand, .status {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0 0 14px;
+        max-width: 760px;
+        font-size: clamp(2.3rem, 6vw, 5rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+      h2 { margin: 0 0 12px; font-size: 1.25rem; }
+      p { color: var(--muted); line-height: 1.6; }
+      .lede { max-width: 850px; font-size: 1.12rem; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      th, td {
+        border-bottom: 1px solid var(--line);
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { color: var(--muted); font-size: 0.8rem; text-transform: uppercase; }
+      code, pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.9rem;
+      }
+      .snippet {
+        margin: 14px 0;
+        padding: 14px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      .snippet h3 { margin: 0; }
+      pre { margin: 10px 0 0; overflow-x: auto; white-space: pre-wrap; }
+      .guard {
+        color: var(--green);
+        font-weight: 700;
+      }
+      @media (max-width: 720px) {
+        main { width: min(100% - 28px, 1120px); }
+        .topline { flex-direction: column; }
+        th, td { display: block; width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <span class="status">${escapeHtml(MCP_GATEWAY.status)}</span>
+      </header>
+
+      <section class="hero" aria-labelledby="mcp-title">
+        <h1 id="mcp-title">MCP gateway.</h1>
+        <p class="lede">
+          Streamable HTTP JSON-RPC endpoint for Bittrees contribution discovery, source context,
+          external-agent registration, claims, review-gated submissions, feedback, reputation, and attestation status.
+        </p>
+        <p class="lede">
+          Endpoint: <code>${escapeHtml(MCP_GATEWAY.path)}</code>. Protocol:
+          <code>${escapeHtml(MCP_GATEWAY.protocolVersion)}</code>. Persistence:
+          <code>${escapeHtml(MCP_GATEWAY.persistenceMode)}</code>.
+        </p>
+      </section>
+
+      <section class="band" aria-labelledby="tools-title">
+        <h2 id="tools-title">Contribution tools</h2>
+        <table>
+          <thead>
+            <tr><th>Tool</th><th>Mode</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>${renderMcpToolRows()}</tbody>
+        </table>
+      </section>
+
+      <section class="band" aria-labelledby="import-title">
+        <h2 id="import-title">Import snippets</h2>
+        ${renderMcpSnippetBlocks()}
+      </section>
+
+      <section class="band" aria-labelledby="gate-title">
+        <h2 id="gate-title">Review gate</h2>
+        <p class="guard">${escapeHtml(MCP_GATEWAY.reviewGate)}</p>
+        <p>Direct external-agent production mutation, unsupported public Bittrees claims, and secret-bearing payloads are out of scope.</p>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 export function renderIdentityKeysPage() {
   const sectionRows = IDENTITY_KEYS_PUBLIC_CONTRACT.sections
     .map(
@@ -3155,7 +4075,7 @@ function logTelemetryRequest({ timestamp = new Date().toISOString(), method, pat
   console.log(JSON.stringify({ timestamp, method, path, status }));
 }
 
-function sendBody(res, statusCode, body, contentType, includeBody = true, telemetry = null) {
+function sendBody(res, statusCode, body, contentType, includeBody = true, telemetry = null, extraHeaders = {}) {
   const payload = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
   res.writeHead(statusCode, {
     'Content-Type': contentType,
@@ -3164,14 +4084,270 @@ function sendBody(res, statusCode, body, contentType, includeBody = true, teleme
     'X-Content-Type-Options': 'nosniff',
     'X-Robots-Tag': 'noindex, nofollow',
     ...PORTAL_SECURITY_HEADERS,
+    ...extraHeaders,
   });
   res.end(includeBody ? payload : undefined);
 
   if (telemetry) logTelemetryRequest(telemetry);
 }
 
-function sendJson(res, statusCode, body, includeBody = true, telemetry = null) {
-  sendBody(res, statusCode, `${JSON.stringify(body, null, 2)}\n`, 'application/json; charset=utf-8', includeBody, telemetry);
+function sendJson(res, statusCode, body, includeBody = true, telemetry = null, extraHeaders = {}) {
+  sendBody(res, statusCode, `${JSON.stringify(body, null, 2)}\n`, 'application/json; charset=utf-8', includeBody, telemetry, extraHeaders);
+}
+
+function sendEmpty(res, statusCode, telemetry = null, extraHeaders = {}) {
+  res.writeHead(statusCode, {
+    'Content-Length': '0',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Robots-Tag': 'noindex, nofollow',
+    ...PORTAL_SECURITY_HEADERS,
+    ...extraHeaders,
+  });
+  res.end();
+
+  if (telemetry) logTelemetryRequest(telemetry);
+}
+
+function jsonRpcResult(id, result) {
+  return { jsonrpc: '2.0', id, result };
+}
+
+function jsonRpcError(id, code, message, data) {
+  return {
+    jsonrpc: '2.0',
+    id,
+    error: {
+      code,
+      message,
+      ...(data === undefined ? {} : { data }),
+    },
+  };
+}
+
+function sendMcpJson(res, statusCode, body, includeBody = true, telemetry = null, extraHeaders = {}) {
+  return sendJson(res, statusCode, body, includeBody, telemetry, {
+    'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+    ...extraHeaders,
+  });
+}
+
+function parseAcceptedTypes(req) {
+  return String(req.headers.accept ?? '')
+    .toLowerCase()
+    .split(',')
+    .map((item) => item.split(';')[0].trim())
+    .filter(Boolean);
+}
+
+function acceptsMcpPost(req) {
+  const accepted = parseAcceptedTypes(req);
+  if (accepted.length === 0 || accepted.includes('*/*')) return true;
+  return accepted.includes('application/json') && accepted.includes('text/event-stream');
+}
+
+function wantsEventStream(req) {
+  return parseAcceptedTypes(req).includes('text/event-stream');
+}
+
+function isAllowedMcpOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+
+  const allowed = new Set([
+    'https://agent.bittrees.org',
+    'http://agent.bittrees.org',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    ...(process.env.MCP_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ]);
+
+  const host = req.headers.host;
+  if (host) {
+    allowed.add(`http://${host}`);
+    allowed.add(`https://${host}`);
+  }
+
+  return allowed.has(origin);
+}
+
+function isJsonRpcRequest(message) {
+  return message && typeof message === 'object' && typeof message.method === 'string' && Object.hasOwn(message, 'id');
+}
+
+function isJsonRpcNotificationOrResponse(message) {
+  return message && typeof message === 'object' && !Object.hasOwn(message, 'id');
+}
+
+function negotiateProtocolVersion(params = {}) {
+  const requested = params.protocolVersion;
+  return MCP_SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : MCP_PROTOCOL_VERSION;
+}
+
+function validateProtocolHeader(req, message) {
+  if (message?.method === 'initialize') return;
+  const requestedVersion = req.headers['mcp-protocol-version'];
+  if (!requestedVersion) return;
+  if (!MCP_SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion)) {
+    const error = new Error(`Unsupported MCP protocol version: ${requestedVersion}`);
+    error.statusCode = 400;
+    error.jsonRpcCode = -32602;
+    error.jsonRpcData = { supported: MCP_SUPPORTED_PROTOCOL_VERSIONS, requested: requestedVersion };
+    throw error;
+  }
+}
+
+function handleMcpJsonRpcMessage(message, req) {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    throw invalidToolInput('MCP POST body must be a single JSON-RPC object.');
+  }
+
+  if (message.jsonrpc !== '2.0') {
+    const error = new Error('JSON-RPC version must be 2.0.');
+    error.jsonRpcCode = -32600;
+    throw error;
+  }
+
+  validateProtocolHeader(req, message);
+
+  if (!isJsonRpcRequest(message)) {
+    return null;
+  }
+
+  switch (message.method) {
+    case 'initialize': {
+      const protocolVersion = negotiateProtocolVersion(message.params ?? {});
+      return jsonRpcResult(message.id, {
+        protocolVersion,
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
+        serverInfo: {
+          name: 'agent.bittrees.org-contribution-gateway',
+          title: 'Bittrees Agent Contribution Gateway',
+          version: '0.1.0',
+        },
+        instructions:
+          'Use tools/list to discover Bittrees contribution tools. Write-like tools queue review records only and do not grant production mutation, execution authority, or public attestation.',
+      });
+    }
+
+    case 'notifications/initialized':
+    case 'ping':
+      return jsonRpcResult(message.id, {});
+
+    case 'tools/list':
+      return jsonRpcResult(message.id, {
+        tools: MCP_CONTRIBUTION_TOOLS,
+      });
+
+    case 'tools/call': {
+      const params = message.params ?? {};
+      if (typeof params.name !== 'string') throw invalidToolInput('tools/call params.name is required.');
+      if (!MCP_TOOL_BY_NAME.has(params.name)) throw invalidToolInput(`Unknown tool: ${params.name}`);
+      return jsonRpcResult(message.id, callMcpTool(params.name, params.arguments ?? {}));
+    }
+
+    default:
+      return jsonRpcError(message.id, -32601, `Method not found: ${message.method}`);
+  }
+}
+
+export async function handleMcpRequest(req, res, telemetry = { method: req.method ?? 'GET', path: MCP_GATEWAY.path }) {
+  const includeBody = req.method !== 'HEAD';
+
+  if (!isAllowedMcpOrigin(req)) {
+    return sendMcpJson(res, 403, {
+      error: 'origin_not_allowed',
+      message: 'Origin is not allowed for the MCP gateway.',
+    }, includeBody, { ...telemetry, status: 403 });
+  }
+
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    if (wantsEventStream(req)) {
+      return sendMcpJson(res, 405, {
+        error: 'sse_stream_not_available',
+        message: 'This MCP gateway supports POST JSON-RPC. Server-initiated SSE streams are not available.',
+        allowedMethods: ['POST'],
+      }, includeBody, { ...telemetry, status: 405 }, {
+        Allow: 'POST',
+      });
+    }
+
+    return sendBody(res, 200, renderMcpGatewayPage(), 'text/html; charset=utf-8', includeBody, {
+      ...telemetry,
+      status: 200,
+    }, {
+      Allow: 'GET, HEAD, POST',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return sendMcpJson(res, 405, {
+      error: 'method_not_allowed',
+      message: 'The MCP gateway accepts POST JSON-RPC requests. Browser GET returns documentation.',
+      allowedMethods: ['GET', 'HEAD', 'POST'],
+    }, includeBody, { ...telemetry, status: 405 }, {
+      Allow: 'GET, HEAD, POST',
+    });
+  }
+
+  if (!acceptsMcpPost(req)) {
+    return sendMcpJson(res, 406, {
+      error: 'not_acceptable',
+      message: 'Streamable HTTP clients should send Accept: application/json, text/event-stream.',
+    }, includeBody, { ...telemetry, status: 406 });
+  }
+
+  const contentType = String(req.headers['content-type'] ?? '').toLowerCase();
+  if (!contentType.includes('application/json')) {
+    return sendMcpJson(res, 415, jsonRpcError(null, -32000, 'Content-Type must be application/json.'), includeBody, {
+      ...telemetry,
+      status: 415,
+    });
+  }
+
+  let message;
+  try {
+    message = JSON.parse(await readRequestBody(req));
+  } catch (error) {
+    const statusCode = error.statusCode ?? 400;
+    return sendMcpJson(
+      res,
+      statusCode,
+      jsonRpcError(null, error.statusCode === 413 ? -32000 : -32700, error.message),
+      includeBody,
+      { ...telemetry, status: statusCode },
+    );
+  }
+
+  try {
+    const response = handleMcpJsonRpcMessage(message, req);
+    if (response === null || isJsonRpcNotificationOrResponse(message)) {
+      return sendEmpty(res, 202, { ...telemetry, status: 202 }, {
+        'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+      });
+    }
+
+    return sendMcpJson(res, 200, response, includeBody, { ...telemetry, status: 200 });
+  } catch (error) {
+    const id = message && typeof message === 'object' && Object.hasOwn(message, 'id') ? message.id : null;
+    const code = error.jsonRpcCode ?? -32603;
+    const statusCode = error.statusCode ?? (code === -32602 || code === -32600 ? 400 : 200);
+    return sendMcpJson(
+      res,
+      statusCode,
+      jsonRpcError(id, code, error.message, error.jsonRpcData),
+      includeBody,
+      { ...telemetry, status: statusCode },
+    );
+  }
 }
 
 function sendRedirect(res, statusCode, location, telemetry = null) {
@@ -3221,6 +4397,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
       body: renderIdentityKeysPage(),
     },
     {
+      path: 'mcp/index.html',
+      body: renderMcpGatewayPage(),
+    },
+    {
       path: ROBOTS_TXT_PATH.replace(/^\//, ''),
       body: ROBOTS_TXT_BODY,
     },
@@ -3256,6 +4436,10 @@ export function createRequestHandler() {
     }
 
     const isContributionIntentPost = req.method === 'POST' && CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
+
+    if (pathname === MCP_GATEWAY.path) {
+      return handleMcpRequest(req, res, telemetry);
+    }
 
     if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost) {
       req.resume?.();

@@ -3,13 +3,19 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, normalizeCanonicalPath } from '../src/portal.mjs';
+import { MCP_GATEWAY, PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, handleMcpRequest, normalizeCanonicalPath } from '../src/portal.mjs';
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const distDir = join(rootDir, 'dist');
 const port = Number(process.env.PORT ?? '3000');
 const host = process.env.HOST ?? '0.0.0.0';
 const canonicalRoutePaths = new Set([ROBOTS_TXT_PATH, ...ROUTE_DEFINITIONS.map((definition) => definition.path), '/portal-manifest.json']);
+const routeDefinitionsByPath = new Map(ROUTE_DEFINITIONS.map((definition) => [definition.path, definition]));
+const extensionlessStaticRoutePaths = new Set(
+  ROUTE_DEFINITIONS
+    .filter((definition) => definition.kind !== 'html' && !extname(definition.path))
+    .map((definition) => definition.path),
+);
 
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -19,11 +25,14 @@ const contentTypes = new Map([
 
 function resolveAssetPath(requestUrl) {
   const url = new URL(requestUrl ?? '/', 'http://localhost');
+  const normalizedRoutePath = normalizeCanonicalPath(url.pathname);
   const pathname = url.pathname === '/'
     ? '/index.html'
-    : extname(url.pathname)
-      ? url.pathname
-      : `${url.pathname.replace(/\/$/, '')}/index.html`;
+    : extensionlessStaticRoutePaths.has(normalizedRoutePath)
+      ? normalizedRoutePath
+      : extname(url.pathname)
+        ? url.pathname
+        : `${url.pathname.replace(/\/$/, '')}/index.html`;
   let decodedPathname;
 
   try {
@@ -41,6 +50,16 @@ function resolveAssetPath(requestUrl) {
   }
 
   return assetPath;
+}
+
+function getContentType(assetPath, requestPathname) {
+  const routeDefinition = routeDefinitionsByPath.get(normalizeCanonicalPath(requestPathname));
+
+  if (routeDefinition?.kind === 'json') {
+    return 'application/json; charset=utf-8';
+  }
+
+  return contentTypes.get(extname(assetPath)) ?? 'application/octet-stream';
 }
 
 function sendText(res, statusCode, body) {
@@ -86,6 +105,16 @@ const server = createServer(async (req, res) => {
     });
   }
 
+  if (normalizedPath === MCP_GATEWAY.path) {
+    return handleMcpRequest(req, res, telemetry).catch((error) => {
+      console.error(error);
+      if (!res.headersSent) {
+        res.once('finish', () => logTelemetry({ ...telemetry, status: 500 }));
+        sendText(res, 500, 'Internal MCP gateway error.\n');
+      }
+    });
+  }
+
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.once('finish', () => logTelemetry({ ...telemetry, status: 405 }));
     return sendText(res, 405, 'Only GET and HEAD are supported.\n');
@@ -102,7 +131,7 @@ const server = createServer(async (req, res) => {
     const body = await readFile(assetPath);
     res.once('finish', () => logTelemetry({ ...telemetry, status: 200 }));
     res.writeHead(200, {
-      'Content-Type': contentTypes.get(extname(assetPath)) ?? 'application/octet-stream',
+      'Content-Type': getContentType(assetPath, pathname),
       'Content-Length': body.byteLength,
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',

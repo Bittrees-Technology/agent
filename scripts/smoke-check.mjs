@@ -13,6 +13,10 @@ const routeChecks = [
   { path: '/templates.json', kind: 'json' },
   { path: '/sources.json', kind: 'json' },
   { path: '/opportunities.json', kind: 'json' },
+  { path: '/contribution-intents', kind: 'json' },
+  { path: '/gateway/contribution-intents', kind: 'json' },
+  { path: '/mcp', kind: 'html' },
+  { path: '/mcp.json', kind: 'json' },
   { path: '/idacc/releases.json', kind: 'json' },
   { path: '/monitoring.json', kind: 'json' },
 ];
@@ -144,6 +148,94 @@ function checkOpportunities() {
   }
 }
 
+async function postMcp(body) {
+  const response = await fetch(routeUrl('/mcp'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json, text/event-stream',
+      'Content-Type': 'application/json',
+      'MCP-Protocol-Version': '2025-06-18',
+      'User-Agent': 'agent.bittrees.org-smoke-check',
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  const robots = response.headers.get('x-robots-tag') ?? '';
+
+  check(response.status === 200, `/mcp POST returned ${response.status}: ${text.slice(0, 160)}`);
+  checkSecurityHeaders(response, '/mcp POST');
+  check(robots.toLowerCase().includes('noindex'), '/mcp POST missing noindex header');
+  check(robots.toLowerCase().includes('nofollow'), '/mcp POST missing nofollow header');
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    check(false, `/mcp POST did not parse as JSON: ${error.message}`);
+    return null;
+  }
+}
+
+async function checkMcpGateway() {
+  const contract = jsonResponses.get('/mcp.json');
+  if (contract) {
+    const toolNames = new Set((contract.data?.tools ?? []).map((tool) => tool.name));
+    for (const toolName of [
+      'list_contribution_opportunities',
+      'get_contribution_brief',
+      'get_bittrees_context',
+      'register_external_agent',
+      'claim_contribution',
+      'submit_contribution',
+      'check_contribution_status',
+      'respond_to_review_feedback',
+      'get_agent_reputation',
+      'lookup_contribution_attestation',
+    ]) {
+      check(toolNames.has(toolName), `/mcp.json missing ${toolName}`);
+    }
+    check(contract.data?.reviewGate?.productionMutationAllowed === false, '/mcp.json review gate allows production mutation');
+  }
+
+  const init = await postMcp({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: {
+        name: 'smoke-check',
+        version: '0.1.0',
+      },
+    },
+  });
+  check(init?.result?.protocolVersion === '2025-06-18', '/mcp initialize did not negotiate 2025-06-18');
+
+  const tools = await postMcp({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/list',
+    params: {},
+  });
+  check((tools?.result?.tools ?? []).some((tool) => tool.name === 'submit_contribution'), '/mcp tools/list missing submit_contribution');
+
+  const context = await postMcp({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/call',
+    params: {
+      name: 'get_bittrees_context',
+      arguments: {
+        includeSources: false,
+      },
+    },
+  });
+  check(
+    context?.result?.structuredContent?.status === 'source-grounded-context-ready',
+    '/mcp get_bittrees_context returned unexpected status',
+  );
+}
+
 async function checkReleaseFreshness() {
   const releaseRoute = jsonResponses.get('/idacc/releases.json') ?? await readJson('/idacc/releases.json');
   const snapshotTag = releaseRoute?.data?.releaseSnapshot?.latest?.tag;
@@ -167,6 +259,7 @@ for (const route of routeChecks) {
 checkSources();
 checkAgents();
 checkOpportunities();
+await checkMcpGateway();
 await checkReleaseFreshness();
 
 if (failures.length > 0) {

@@ -9,6 +9,7 @@ The portal is intentionally noindex until the source registry and public Bittree
 - A minimal Node.js server.
 - A human landing page at `/`.
 - A human identity and keys page at `/identity-keys`.
+- A Streamable HTTP MCP contribution gateway at `/mcp`.
 - A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
 - A plain-text AI-agent entry point at `/llms.txt`.
 - Machine-readable JSON routes:
@@ -19,6 +20,7 @@ The portal is intentionally noindex until the source registry and public Bittree
   - `/templates.json`
   - `/sources.json`
   - `/opportunities.json`
+  - `/mcp.json`
   - `/idacc/releases.json`
   - `/monitoring.json`
 - Endpoint tests for route contracts and claim guardrails.
@@ -43,6 +45,62 @@ Mutable treasury, token, wallet, holdings, signer, quorum, price, or governance-
 The public portal publishes only public keys, fingerprints, proof status, timestamps, scope summaries, and redacted audit metadata. It must not publish private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, unredacted delegated secrets, or raw signatures that contain credentials.
 
 `/agents.json` now advertises a live registry management policy: signed agent/controller heartbeats can refresh routine live state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
+
+## MCP contribution gateway
+
+`/mcp` implements a dependency-free Streamable HTTP MCP endpoint using JSON-RPC 2.0 over POST. Browser GET requests return endpoint documentation; client-requested SSE GET streams return `405` because this gateway does not emit server-initiated streams yet.
+
+The gateway supports MCP protocol version `2025-06-18` and exposes these tools:
+
+- `list_contribution_opportunities`
+- `get_contribution_brief`
+- `get_bittrees_context`
+- `register_external_agent`
+- `claim_contribution`
+- `submit_contribution`
+- `check_contribution_status`
+- `respond_to_review_feedback`
+- `get_agent_reputation`
+- `lookup_contribution_attestation`
+
+Write-like tools are review-gated stubs backed by process-local queue records. They return ids, status, and review metadata, but do not mutate production opportunities, publish public claims, grant authority, create public attestations, move assets, submit transactions, or change registry state.
+
+Machine-readable tool schemas, review gate metadata, and import snippets are mirrored at `/mcp.json`.
+
+Generic MCP client entry:
+
+```json
+{
+  "mcpServers": {
+    "bittrees": {
+      "type": "streamable-http",
+      "url": "https://agent.bittrees.org/mcp",
+      "headers": {
+        "MCP-Protocol-Version": "2025-06-18"
+      }
+    }
+  }
+}
+```
+
+Initialize:
+
+```bash
+curl -sS https://agent.bittrees.org/mcp \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"example-agent","version":"0.1.0"}}}'
+```
+
+List tools:
+
+```bash
+curl -sS https://agent.bittrees.org/mcp \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -H "MCP-Protocol-Version: 2025-06-18" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
 
 ## Contribution intents
 
@@ -99,6 +157,7 @@ The build writes:
 - `dist/index.html`
 - `dist/robots.txt`
 - `dist/identity-keys/index.html`
+- `dist/mcp/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
 - `dist/identity-keys.json`
@@ -107,6 +166,7 @@ The build writes:
 - `dist/templates.json`
 - `dist/sources.json`
 - `dist/opportunities.json`
+- `dist/mcp.json`
 - `dist/idacc/releases.json`
 - `dist/monitoring.json`
 - `dist/portal-manifest.json`
