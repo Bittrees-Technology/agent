@@ -19,7 +19,11 @@ const contentTypes = new Map([
 
 function resolveAssetPath(requestUrl) {
   const url = new URL(requestUrl ?? '/', 'http://localhost');
-  const pathname = url.pathname === '/' ? '/index.html' : url.pathname;
+  const pathname = url.pathname === '/'
+    ? '/index.html'
+    : extname(url.pathname)
+      ? url.pathname
+      : `${url.pathname.replace(/\/$/, '')}/index.html`;
   let decodedPathname;
 
   try {

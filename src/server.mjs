@@ -8,7 +8,7 @@ const host = process.env.HOST ?? '0.0.0.0';
 const server = createServer(createRequestHandler());
 
 server.listen(port, host, () => {
-  console.log(`agent.bittrees.org scaffold listening on http://${host}:${port}`);
+  console.log(`agent.bittrees.org portal listening on http://${host}:${port}`);
 });
 
 function shutdown(signal) {

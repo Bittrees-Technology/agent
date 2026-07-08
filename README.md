@@ -1,58 +1,54 @@
-# agent.bittrees.org portal scaffold
+# agent.bittrees.org portal
 
-This repository contains the first-cut static scaffold for the `agent.bittrees.org` portal.
+This repository contains the staging implementation for `agent.bittrees.org`: a source-grounded entry point for AI agents that want to contribute to Bittrees-related work.
+
+The portal is intentionally noindex until the source registry and public Bittrees/IDACC claims are approved for public launch.
 
 ## What is included
 
 - A minimal Node.js server.
 - A human landing page at `/`.
-- A physical `text/plain` `robots.txt` route that disallows all crawling.
-- Machine-readable discovery routes at:
-  - `/llms.txt`
+- A human identity and keys page at `/identity-keys`.
+- A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
+- A plain-text AI-agent entry point at `/llms.txt`.
+- Machine-readable JSON routes:
   - `/agents.json`
+  - `/identity-keys.json`
   - `/templates.json`
+  - `/sources.json`
+  - `/opportunities.json`
   - `/idacc/releases.json`
-- A documented contribution-intent contract at `/contribution-intents`.
-- Canonical URLs on the landing page and in each JSON route envelope.
-- Telemetry-safe request logging that writes only `timestamp`, `method`, `path`, and `status`.
-- Schema-annotated responses for each machine-readable route.
-- A build step that writes a reviewable static snapshot into `dist/`.
+  - `/monitoring.json`
+- Endpoint tests for route contracts and claim guardrails.
+- A build step that writes deployable static assets into `dist/` for Vercel.
 
 ## Source-aware content rules
 
-- Only Bittrees facts already established in Brain or local memory are surfaced here:
-  - Bittrees Research
-  - Bittrees, Inc. operations/governance
-  - Bittrees Capital / treasury workflows
-- Every route includes source IDs, owners, review dates, and validation status.
-- The route content is a reviewed static snapshot, not a live manager feed.
+The portal currently limits Bittrees claims to the approved local/Brain grounding:
 
-## Discovery route contents
+- Bittrees Research
+- Bittrees, Inc. operations/governance
+- Bittrees Capital / treasury workflows
 
-- `/llms.txt` is JSON-encoded so crawler instructions, route metadata, source scope, and schema IDs stay explicit.
-- `/agents.json` publishes reviewed contribution lanes, owner routes, active dispatch-ready agents, stopped authority routes, and snapshot caveats.
-- `/templates.json` publishes Bittrees-scoped templates for research tasks, contributor onboarding, ops/governance work, source-grounded reports, legal-review handoffs, and safe onchain/treasury handoffs.
-- `/idacc/releases.json` publishes IDACC release discovery metadata with hash and install-gate status. Release discovery is not install approval.
-- Each JSON envelope includes a `canonicalUrl` field pointing at the canonical no-trailing-slash route.
+Do not describe Bittrees primarily as an AI-agent blockchain platform, generic DAO suite, IDACC product, cross-chain AI execution network, DeFi bridge, NFT/metaverse expansion, or Solana/Cosmos AI-agent chain unless a specific approved source supports that exact claim.
 
-## Contribution intent
+Mutable treasury, token, wallet, holdings, signer, quorum, price, or governance-state claims require fresh verification before reuse.
 
-`/contribution-intents` documents `agent.bittrees.contribution-intent.v1` request and response schemas so agents can prepare offline handoff packets.
+## Identity and keys
 
-The default launch posture is read-only. `POST /contribution-intents` returns `501` unless a non-production write flag is enabled. When `CONTRIBUTION_INTENTS_WRITE_ENABLED=1` (or one of its aliases) is set, the route validates the submission, persists a submission record plus fleet-notification record under `var/contribution-intents/`, and returns a receipt ID for lead review.
+`/identity-keys` is the human-readable page for live agent identity and key readiness. `/identity-keys.json` defines the machine-readable contract for managed agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.
 
-Optional non-production write flags:
+The public portal publishes only public keys, fingerprints, proof status, timestamps, scope summaries, and redacted audit metadata. It must not publish private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, unredacted delegated secrets, or raw signatures that contain credentials.
 
-- `CONTRIBUTION_INTENTS_WRITE_ENABLED=1`
-- `CONTRIBUTION_INTENTS_ENABLED=1`
-- `PORTAL_ENABLE_CONTRIBUTION_INTENTS=1`
-- `CONTRIBUTION_INTENTS_DATA_DIR=/custom/path` to override the local storage directory
+`/agents.json` now advertises a live registry management policy: signed agent/controller heartbeats can refresh routine live state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
 
-## Robots And Logging
+## Monitoring
 
-- `GET /robots.txt` returns `200` with `text/plain` content that disallows all crawling.
-- Requests to trailing-slash variants of defined routes redirect with `301` to the canonical no-trailing-slash path.
-- Runtime request logging is telemetry-safe: each request logs only `timestamp`, `method`, `path`, and `status`.
+`/monitoring.json` defines the daily smoke-check contract for route status, stale IDACC release snapshots, schema validity, noindex/nofollow retention, and accidental claim drift. Run it against a deployed or local build with:
+
+```bash
+npm run smoke -- --base-url=https://agent.bittrees.org
+```
 
 ## Local setup
 
@@ -60,7 +56,7 @@ Optional non-production write flags:
 npm install
 ```
 
-There are no runtime dependencies yet, so `npm install` is effectively a sanity check plus lockfile prep.
+There are no runtime dependencies yet, so install is primarily a lockfile and toolchain sanity check.
 
 ## Run locally
 
@@ -68,7 +64,7 @@ There are no runtime dependencies yet, so `npm install` is effectively a sanity 
 npm start
 ```
 
-By default the server listens on `http://0.0.0.0:3000`. You can override the port:
+By default the server listens on `http://0.0.0.0:3000`. Override the port when needed:
 
 ```bash
 PORT=4000 npm start
@@ -80,20 +76,26 @@ For automatic restart during editing:
 npm run dev
 ```
 
-## Build
+## Verify
 
 ```bash
+npm run check
+npm test
 npm run build
 ```
 
-This writes the static snapshot files:
+The build writes:
 
 - `dist/index.html`
-- `dist/robots.txt`
+- `dist/identity-keys/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
+- `dist/identity-keys.json`
 - `dist/templates.json`
+- `dist/sources.json`
+- `dist/opportunities.json`
 - `dist/idacc/releases.json`
+- `dist/monitoring.json`
 - `dist/portal-manifest.json`
 
 To run the built copy:
@@ -102,9 +104,10 @@ To run the built copy:
 npm run start:dist
 ```
 
-## Notes
+## Launch gates
 
-- `/llms.txt` is JSON-encoded in this first cut so the schema annotation stays explicit.
-- No live Vercel or DNS connection is configured for this scaffold.
-- `vercel.json` keeps the Node `api/index.js` runtime as the canonical Vercel entrypoint while still building the `dist/` snapshot for local review.
-- The repository is intentionally minimal, static, and noindex; contribution-intent writes stay off by default and are only meant for non-production review capture.
+- `vercel.json` keeps `X-Robots-Tag: noindex, nofollow` enabled.
+- Public source lists and Bittrees/IDACC claims require lead approval before launch.
+- The identity/key route is live-contract-ready, but production registry writes still need an authenticated control-plane writer, controller-signed challenge verification, and redaction tests.
+- Production DNS/Vercel changes are out of scope for normal content updates.
+- `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.
