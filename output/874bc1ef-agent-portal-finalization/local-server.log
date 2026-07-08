@@ -1,0 +1,33 @@
+
+> agent-bittrees-portal@0.1.0 start:dist
+> node scripts/serve-dist.mjs
+
+serving dist/ on http://127.0.0.1:41783
+{"timestamp":"2026-07-08T17:54:04.777Z","method":"GET","path":"/identity-keys.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.966Z","method":"GET","path":"/","status":200}
+{"timestamp":"2026-07-08T17:54:04.971Z","method":"GET","path":"/identity-keys","status":200}
+{"timestamp":"2026-07-08T17:54:04.972Z","method":"GET","path":"/llms.txt","status":200}
+{"timestamp":"2026-07-08T17:54:04.974Z","method":"GET","path":"/agents.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.975Z","method":"GET","path":"/identity-keys.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.975Z","method":"GET","path":"/templates.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.976Z","method":"GET","path":"/sources.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.977Z","method":"GET","path":"/opportunities.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.978Z","method":"GET","path":"/contribution-intents","status":200}
+{"timestamp":"2026-07-08T17:54:04.979Z","method":"GET","path":"/gateway/contribution-intents","status":200}
+{"timestamp":"2026-07-08T17:54:04.981Z","method":"GET","path":"/mcp","status":200}
+{"timestamp":"2026-07-08T17:54:04.981Z","method":"GET","path":"/mcp.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.982Z","method":"GET","path":"/idacc/releases.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.983Z","method":"GET","path":"/monitoring.json","status":200}
+{"timestamp":"2026-07-08T17:54:04.985Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-08T17:54:04.987Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-08T17:54:04.987Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-08T17:55:56.703Z","method":"GET","path":"/identity-keys.json","status":200}
+{"timestamp":"2026-07-08T17:55:56.703Z","method":"GET","path":"/identity-keys","status":200}
+{"timestamp":"2026-07-08T17:55:56.703Z","method":"GET","path":"/","status":200}
+{"timestamp":"2026-07-08T17:55:56.703Z","method":"GET","path":"/gateway/contribution-intents","status":200}
+{"timestamp":"2026-07-08T17:56:16.468Z","method":"GET","path":"/agents.json","status":200}
+{"timestamp":"2026-07-08T17:56:16.494Z","method":"GET","path":"/contribution-intents","status":200}
+{"timestamp":"2026-07-08T17:56:17.466Z","method":"GET","path":"/agents.json","status":200}
+{"timestamp":"2026-07-08T17:56:17.466Z","method":"GET","path":"/contribution-intents","status":200}
+{"timestamp":"2026-07-08T17:57:05.367Z","method":"GET","path":"/","status":200}
+received SIGINT, stopped cleanly

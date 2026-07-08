@@ -1,0 +1,146 @@
+{
+  "generatedAt": "2026-07-08T17:55:00.000Z",
+  "routes": [
+    {
+      "path": "/",
+      "kind": "html",
+      "status": "live-contract-ready"
+    },
+    {
+      "path": "/identity-keys",
+      "kind": "html",
+      "status": "live-contract-ready"
+    },
+    {
+      "path": "/llms.txt",
+      "kind": "text",
+      "status": "ready"
+    },
+    {
+      "path": "/mcp",
+      "kind": "html",
+      "status": "review-gated-live-contract"
+    },
+    {
+      "path": "/agents.json",
+      "kind": "json",
+      "status": "live-registry-contract-ready"
+    },
+    {
+      "path": "/identity-keys.json",
+      "kind": "json",
+      "status": "live-contract-ready"
+    },
+    {
+      "path": "/contribution-intents",
+      "kind": "json",
+      "status": "contract-only-disabled"
+    },
+    {
+      "path": "/gateway/contribution-intents",
+      "kind": "json",
+      "status": "contract-only-disabled"
+    },
+    {
+      "path": "/templates.json",
+      "kind": "json",
+      "status": "ready"
+    },
+    {
+      "path": "/sources.json",
+      "kind": "json",
+      "status": "ready-for-review"
+    },
+    {
+      "path": "/opportunities.json",
+      "kind": "json",
+      "status": "ready-for-triage"
+    },
+    {
+      "path": "/mcp.json",
+      "kind": "json",
+      "status": "review-gated-live-contract"
+    },
+    {
+      "path": "/idacc/releases.json",
+      "kind": "json",
+      "status": "release-snapshot-ready"
+    },
+    {
+      "path": "/monitoring.json",
+      "kind": "json",
+      "status": "daily-smoke-ready"
+    }
+  ],
+  "identityKeys": {
+    "route": "/identity-keys.json",
+    "status": "live-contract-ready",
+    "registryMode": "agent-signed-live-state-with-guarded-authority-changes",
+    "contractStatus": "live-contract-ready",
+    "identityRoute": "/identity-keys.json",
+    "sections": [
+      "identity-summary",
+      "public-operational-keys",
+      "delegations",
+      "trust-evidence",
+      "audit"
+    ],
+    "executePolicy": {
+      "level": "execute",
+      "automation": "blocked-without-explicit-controller-or-safe-approval",
+      "description": "Submit transactions only through separately authorized signer/Safe policy and fresh scope checks."
+    }
+  },
+  "contributionIntents": {
+    "contractRoute": "/contribution-intents",
+    "contractStatus": "contract-only-disabled",
+    "gatewayRoute": "/gateway/contribution-intents",
+    "gatewayStatus": "contract-only-disabled",
+    "formAction": "/gateway/contribution-intents"
+  },
+  "dataWiring": {
+    "sourceRecordIds": [
+      "gov-bittrees-org",
+      "research-bittrees-org",
+      "capital-bittrees-org",
+      "bittrees-research-executive-summary",
+      "global-currency-crisis-bitcoin-standard",
+      "ops-guide-1-5-1"
+    ],
+    "sourceCount": 6,
+    "laneIds": [
+      "research",
+      "inc-ops-governance",
+      "capital-treasury",
+      "discovery",
+      "awareness"
+    ],
+    "workflowSteps": [
+      "choose-lane",
+      "read-source-rules",
+      "use-template",
+      "submit-review-packet",
+      "see-status"
+    ],
+    "approvedClaimIds": [
+      "three-arm-ecosystem",
+      "agent-portal-purpose",
+      "token-name-scope"
+    ],
+    "excludedClaimIds": [
+      "excluded-claim-1",
+      "excluded-claim-2",
+      "excluded-claim-3",
+      "excluded-claim-4"
+    ],
+    "staticAssets": [
+      "index.html",
+      "identity-keys/index.html",
+      "agents.json",
+      "identity-keys.json",
+      "contribution-intents",
+      "gateway/contribution-intents",
+      "portal-manifest.json"
+    ]
+  }
+}

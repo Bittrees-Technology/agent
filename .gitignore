@@ -3,3 +3,6 @@ node_modules/
 .env
 .env.*
 var/
+.vercel
+output/874bc1ef-agent-portal-finalization/.npm-cache/
+output/874bc1ef-agent-portal-finalization/ms-playwright/

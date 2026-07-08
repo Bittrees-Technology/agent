@@ -1,0 +1,34 @@
+
+> agent-bittrees-portal@0.1.0 test
+> node --test
+
+✔ llms.txt is a plain-text agent entry point (0.897ms)
+✔ json routes are not placeholder success payloads (0.792ms)
+✔ source guardrails include approved and excluded Bittrees claims (0.0705ms)
+✔ static build includes all advertised routes (1.756208ms)
+✔ portal security headers enforce browser launch gate (0.056666ms)
+✔ vercel catch-all headers mirror the portal launch gate (0.388042ms)
+✔ identity and keys page renders the live-readiness contract (0.116792ms)
+✔ identity and keys route exposes public contract without secret fields (0.093709ms)
+✔ agents route advertises live registry management rather than manual-only intake (0.082666ms)
+✔ source registry is review-ready with citation and freshness metadata (0.176167ms)
+✔ opportunities are actionable work items (0.117167ms)
+✔ homepage and monitoring expose contribution workflow (0.423875ms)
+✔ mcp gateway contract exposes required contribution tools (0.063292ms)
+✔ mcp tool calls are review-gated and structured (0.451167ms)
+{"timestamp":"2026-07-08T17:53:28.738Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-08T17:53:28.742Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-08T17:53:28.743Z","method":"POST","path":"/mcp","status":200}
+✔ mcp streamable http endpoint initializes and serves tools (22.122667ms)
+{"timestamp":"2026-07-08T17:53:28.749Z","method":"POST","path":"/mcp","status":403}
+{"timestamp":"2026-07-08T17:53:28.750Z","method":"GET","path":"/mcp","status":405}
+✔ mcp endpoint rejects browser-origin mismatch and server-initiated sse get (5.388375ms)
+✔ idacc release snapshot includes verifiable download metadata (0.129333ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 149.466667

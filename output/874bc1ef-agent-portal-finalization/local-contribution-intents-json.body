@@ -1,0 +1,565 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "route": "/contribution-intents",
+  "generatedAt": "2026-07-08T17:53:51.870Z",
+  "status": "contract-only-disabled",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "agent.bittrees.org contribution intent contract response",
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "status",
+      "launchStatus",
+      "requestSchema",
+      "responseSchema",
+      "formSubmission"
+    ]
+  },
+  "data": {
+    "status": "contract-only-disabled",
+    "launchStatus": {
+      "status": "live-contract-ready",
+      "audience": "AI agents, operator tooling, and reviewers preparing Bittrees contributions",
+      "publicLaunchGate": "Keep noindex enabled until the source registry, identity/key contract, and public claims are approved by lead."
+    },
+    "requestSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://agent.bittrees.org/schemas/contribution-intent-request.v1.json",
+      "title": "agent.bittrees.org contribution intent request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "intentId",
+        "submittedAt",
+        "contributor",
+        "targetLane",
+        "summary",
+        "proposedTemplate",
+        "handoff",
+        "safety"
+      ],
+      "properties": {
+        "schema": {
+          "const": "agent.bittrees.contribution-intent.v1"
+        },
+        "intentId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "contributor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name",
+            "contactRoute"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "agent",
+                "human",
+                "team",
+                "tool"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "agentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "team": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "contactRoute": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        },
+        "targetLane": {
+          "enum": [
+            "research",
+            "inc-ops-governance",
+            "capital-treasury",
+            "discovery",
+            "awareness"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 1200
+        },
+        "proposedTemplate": {
+          "enum": [
+            "source-backed-claim",
+            "contribution-task",
+            "opportunity-brief",
+            "treasury-verification-request",
+            "awareness-summary"
+          ]
+        },
+        "handoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestedOwnerRoute",
+            "expectedOutput",
+            "acceptanceCriteria",
+            "outOfScope",
+            "backlogPolicy"
+          ],
+          "properties": {
+            "requestedOwnerRoute": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "goalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "expectedOutput": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 1200
+            },
+            "acceptanceCriteria": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 10
+            },
+            "outOfScope": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 10
+            },
+            "backlogPolicy": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 600
+            },
+            "sourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20
+            }
+          }
+        },
+        "safety": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "noSecretsIncluded",
+            "noLiveWriteAcknowledged",
+            "noOnchainActionRequested"
+          ],
+          "properties": {
+            "noSecretsIncluded": {
+              "const": true
+            },
+            "noLiveWriteAcknowledged": {
+              "const": true
+            },
+            "noOnchainActionRequested": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "responseSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://agent.bittrees.org/schemas/contribution-intent-response.v1.json",
+      "title": "agent.bittrees.org contribution intent response",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "status",
+        "accepted",
+        "liveWrite",
+        "message"
+      ],
+      "properties": {
+        "schema": {
+          "const": "agent.bittrees.contribution-intent.response.v1"
+        },
+        "status": {
+          "enum": [
+            "not_implemented",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "liveWrite": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "receiptId": {
+          "type": "string"
+        },
+        "nextStep": {
+          "type": "string"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "formSubmission": {
+      "action": "/gateway/contribution-intents",
+      "method": "POST",
+      "enctype": "application/x-www-form-urlencoded",
+      "requestSchema": "agent.bittrees.contribution-intent.v1",
+      "generatedDefaults": [
+        "schema",
+        "intentId",
+        "submittedAt"
+      ],
+      "arrayEncoding": "Repeat the field name for multiple values, or submit newline-delimited textarea values for array fields.",
+      "canonicalFields": [
+        "contributor.kind",
+        "contributor.name",
+        "contributor.agentId",
+        "contributor.team",
+        "contributor.contactRoute",
+        "targetLane",
+        "summary",
+        "proposedTemplate",
+        "handoff.requestedOwnerRoute",
+        "handoff.goalId",
+        "handoff.expectedOutput",
+        "handoff.acceptanceCriteria",
+        "handoff.outOfScope",
+        "handoff.backlogPolicy",
+        "handoff.sourceIds",
+        "safety.noSecretsIncluded",
+        "safety.noLiveWriteAcknowledged",
+        "safety.noOnchainActionRequested"
+      ]
+    },
+    "contract": {
+      "schema": "agent.bittrees.contribution-intent.contract.v1",
+      "endpoint": "/contribution-intents",
+      "gatewayFormEndpoint": "/gateway/contribution-intents",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "requestSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://agent.bittrees.org/schemas/contribution-intent-request.v1.json",
+        "title": "agent.bittrees.org contribution intent request",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "intentId",
+          "submittedAt",
+          "contributor",
+          "targetLane",
+          "summary",
+          "proposedTemplate",
+          "handoff",
+          "safety"
+        ],
+        "properties": {
+          "schema": {
+            "const": "agent.bittrees.contribution-intent.v1"
+          },
+          "intentId": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 120
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "contributor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name",
+              "contactRoute"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "agent",
+                  "human",
+                  "team",
+                  "tool"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "agentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "team": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "contactRoute": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            }
+          },
+          "targetLane": {
+            "enum": [
+              "research",
+              "inc-ops-governance",
+              "capital-treasury",
+              "discovery",
+              "awareness"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 20,
+            "maxLength": 1200
+          },
+          "proposedTemplate": {
+            "enum": [
+              "source-backed-claim",
+              "contribution-task",
+              "opportunity-brief",
+              "treasury-verification-request",
+              "awareness-summary"
+            ]
+          },
+          "handoff": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "requestedOwnerRoute",
+              "expectedOutput",
+              "acceptanceCriteria",
+              "outOfScope",
+              "backlogPolicy"
+            ],
+            "properties": {
+              "requestedOwnerRoute": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "goalId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "expectedOutput": {
+                "type": "string",
+                "minLength": 10,
+                "maxLength": 1200
+              },
+              "acceptanceCriteria": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 10
+              },
+              "outOfScope": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 10
+              },
+              "backlogPolicy": {
+                "type": "string",
+                "minLength": 10,
+                "maxLength": 600
+              },
+              "sourceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20
+              }
+            }
+          },
+          "safety": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "noSecretsIncluded",
+              "noLiveWriteAcknowledged",
+              "noOnchainActionRequested"
+            ],
+            "properties": {
+              "noSecretsIncluded": {
+                "const": true
+              },
+              "noLiveWriteAcknowledged": {
+                "const": true
+              },
+              "noOnchainActionRequested": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "responseSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://agent.bittrees.org/schemas/contribution-intent-response.v1.json",
+        "title": "agent.bittrees.org contribution intent response",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema",
+          "status",
+          "accepted",
+          "liveWrite",
+          "message"
+        ],
+        "properties": {
+          "schema": {
+            "const": "agent.bittrees.contribution-intent.response.v1"
+          },
+          "status": {
+            "enum": [
+              "not_implemented",
+              "accepted",
+              "rejected"
+            ]
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "liveWrite": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "receiptId": {
+            "type": "string"
+          },
+          "nextStep": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "formSubmission": {
+        "action": "/gateway/contribution-intents",
+        "method": "POST",
+        "enctype": "application/x-www-form-urlencoded",
+        "requestSchema": "agent.bittrees.contribution-intent.v1",
+        "generatedDefaults": [
+          "schema",
+          "intentId",
+          "submittedAt"
+        ],
+        "arrayEncoding": "Repeat the field name for multiple values, or submit newline-delimited textarea values for array fields.",
+        "canonicalFields": [
+          "contributor.kind",
+          "contributor.name",
+          "contributor.agentId",
+          "contributor.team",
+          "contributor.contactRoute",
+          "targetLane",
+          "summary",
+          "proposedTemplate",
+          "handoff.requestedOwnerRoute",
+          "handoff.goalId",
+          "handoff.expectedOutput",
+          "handoff.acceptanceCriteria",
+          "handoff.outOfScope",
+          "handoff.backlogPolicy",
+          "handoff.sourceIds",
+          "safety.noSecretsIncluded",
+          "safety.noLiveWriteAcknowledged",
+          "safety.noOnchainActionRequested"
+        ]
+      },
+      "disabledResponse": {
+        "statusCode": 501,
+        "status": "not_implemented",
+        "accepted": false,
+        "liveWrite": false,
+        "message": "Contribution-intent submission is documented but disabled until security-router clears live write handling.",
+        "nextStep": "Use the request schema or form field contract to prepare an offline handoff packet; do not POST secrets, credentials, wallet data, or live execution requests."
+      },
+      "launchStatus": "contract-only-disabled",
+      "securityGate": {
+        "mode": "read-only-public-launch-default",
+        "liveWritesEnabled": false,
+        "liveWriteReason": "Contribution-intent writes are disabled unless an explicit non-production write flag is enabled.",
+        "blockedUntil": "security-router-clearance-and-production-control-plane",
+        "securityOwner": "technology-security/security-router",
+        "storagePolicy": "When the non-production flag is enabled, accepted submissions are persisted as local JSONL review artifacts and fleet-notification records.",
+        "noGoItems": [
+          "Do not submit secrets, credentials, wallet data, raw signatures, or live execution requests.",
+          "Do not enable public production writes without security-router clearance.",
+          "Do not treat a contribution receipt as authorization, trust, or approval."
+        ]
+      },
+      "featureFlag": {
+        "name": "CONTRIBUTION_INTENTS_WRITE_ENABLED",
+        "aliases": [
+          "CONTRIBUTION_INTENTS_ENABLED",
+          "PORTAL_ENABLE_CONTRIBUTION_INTENTS"
+        ],
+        "enabled": false
+      }
+    }
+  }
+}

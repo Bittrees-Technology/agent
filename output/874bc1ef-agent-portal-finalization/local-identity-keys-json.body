@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "route": "/identity-keys.json",
+  "generatedAt": "2026-07-08T17:53:51.870Z",
+  "status": "live-contract-ready",
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "agent.bittrees.org identity and keys response",
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "status",
+      "launchStatus",
+      "registryManagement",
+      "identityKeys"
+    ]
+  },
+  "data": {
+    "status": "live-contract-ready",
+    "launchStatus": {
+      "status": "live-contract-ready",
+      "audience": "AI agents, operator tooling, and reviewers preparing Bittrees contributions",
+      "publicLaunchGate": "Keep noindex enabled until the source registry, identity/key contract, and public claims are approved by lead."
+    },
+    "registryManagement": {
+      "status": "live-management-contract-ready",
+      "mode": "agent-signed-live-state-with-guarded-authority-changes",
+      "currentState": "Starter IDACC-managed agent profiles are published with private key material redacted. This route defines the live registration contract, proof gates, and automation boundaries for additional agents that will appear in /agents.json.",
+      "registryRoute": "/agents.json",
+      "identityKeysRoute": "/identity-keys.json",
+      "automatedManagement": {
+        "allowedWithoutHumanReview": [
+          "Refresh last_seen, last_verified_at, and health status from signed heartbeats.",
+          "Mark records stale when freshness windows expire.",
+          "Quarantine records when controller, resolver, manifest hash, or signature verification changes unexpectedly.",
+          "Accept schema-valid metadata updates that do not add authority, spend limits, execution scope, endpoints, or public Bittrees claims."
+        ],
+        "requiresExplicitApproval": [
+          "First public inclusion of a managed agent.",
+          "Controller, owner, signer, endpoint, or wallet binding changes.",
+          "Any delegated spending, transaction submission, governance execution, or Safe policy change.",
+          "Any public claim expansion about Bittrees, IDACC, treasury, tokens, holdings, or governance state."
+        ]
+      },
+      "requiredEvidence": [
+        "controller-signed challenge",
+        "agent manifest signature",
+        "public key fingerprint",
+        "source timestamp or freshness window",
+        "owner or update route",
+        "review_due or TTL for mutable state"
+      ],
+      "freshnessWindows": {
+        "identityResolution": "24h",
+        "manifestSignature": "7d",
+        "publicKeyHeartbeat": "7d",
+        "delegationScope": "24h",
+        "onchainExecutionReadiness": "before each operational use"
+      },
+      "safetyInvariants": [
+        "Identity, authority, reputation, trust evidence, and authorization are separate fields.",
+        "ENS names, trust badges, endorsements, reputation counts, and self-attested manifests are evidence, not authority.",
+        "The public portal displays public keys, fingerprints, proof status, and audit metadata only.",
+        "Private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, and raw delegated secrets are never published."
+      ]
+    },
+    "identityKeys": {
+      "status": "live-contract-ready",
+      "purpose": "Public contract for agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.",
+      "publicationPolicy": "Publish proof metadata and public-key material only. Keep signing, custody, API-key creation, reveal, export, rotation, and revocation inside authenticated control-plane tooling.",
+      "sections": [
+        {
+          "id": "identity-summary",
+          "requiredFields": [
+            "agent_id",
+            "ens_name",
+            "chain",
+            "registry",
+            "controller",
+            "manifest_url",
+            "manifest_hash",
+            "last_resolved_at",
+            "verification_status"
+          ]
+        },
+        {
+          "id": "public-operational-keys",
+          "requiredFields": [
+            "key_id",
+            "kind",
+            "public_key",
+            "fingerprint",
+            "storage_backend",
+            "created_at",
+            "expires_at",
+            "last_used_at",
+            "status"
+          ]
+        },
+        {
+          "id": "delegations",
+          "requiredFields": [
+            "scope",
+            "issuer",
+            "subject_key_id",
+            "chains",
+            "tools",
+            "endpoints",
+            "expires_at",
+            "max_uses",
+            "spend_limit",
+            "status"
+          ]
+        },
+        {
+          "id": "trust-evidence",
+          "requiredFields": [
+            "signal",
+            "source",
+            "proof_status",
+            "observed_at",
+            "last_verified_at",
+            "review_due",
+            "caveat"
+          ]
+        },
+        {
+          "id": "audit",
+          "requiredFields": [
+            "event_id",
+            "event_type",
+            "actor",
+            "subject",
+            "timestamp",
+            "redaction_status",
+            "source"
+          ]
+        }
+      ],
+      "proofStates": [
+        "verified",
+        "self-attested",
+        "stale",
+        "untrusted-gateway",
+        "not-checked"
+      ],
+      "onchainExecutionReadiness": [
+        {
+          "level": "observe",
+          "automation": "allowed",
+          "description": "Read public chain state, ENS records, registry status, and Safe metadata with freshness timestamps."
+        },
+        {
+          "level": "propose",
+          "automation": "allowed-after-schema-and-policy-validation",
+          "description": "Prepare unsigned contribution, governance, treasury, or registry proposals for review."
+        },
+        {
+          "level": "simulate",
+          "automation": "allowed-for-dry-run-only",
+          "description": "Run transaction simulation or trace analysis without submitting state-changing transactions."
+        },
+        {
+          "level": "execute",
+          "automation": "blocked-without-explicit-controller-or-safe-approval",
+          "description": "Submit transactions only through separately authorized signer/Safe policy and fresh scope checks."
+        }
+      ],
+      "redactionPolicy": {
+        "publicOnly": [
+          "public keys",
+          "fingerprints",
+          "proof hashes",
+          "timestamps",
+          "scope summaries",
+          "audit event ids"
+        ],
+        "neverExpose": [
+          "private keys",
+          "recovery phrases",
+          "bearer tokens",
+          "OAuth tokens",
+          "session cookies",
+          "unredacted delegated secrets",
+          "raw signatures that contain credentials"
+        ]
+      }
+    },
+    "launchGate": {
+      "currentState": "Contract is ready for live publication, but no private material, signing authority, or state-changing execution is exposed by this portal.",
+      "blockersBeforeFullyAutomatedRegistry": [
+        "Back a registry writer with authenticated control-plane tooling.",
+        "Verify controller-signed challenge flow end to end.",
+        "Add redaction tests around logs, telemetry, and audit export.",
+        "Connect optional onchain providers with least privilege, allowlists, and request logs."
+      ]
+    }
+  }
+}

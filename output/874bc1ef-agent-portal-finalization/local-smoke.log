@@ -1,0 +1,5 @@
+
+> agent-bittrees-portal@0.1.0 smoke
+> node scripts/smoke-check.mjs --base-url=http://127.0.0.1:41783
+
+Smoke check passed for http://127.0.0.1:41783/ (14 routes)
