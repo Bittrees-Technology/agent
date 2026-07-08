@@ -1,0 +1,232 @@
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+X-Robots-Tag: noindex, nofollow
+Content-Length: 7014
+Date: Wed, 08 Jul 2026 08:51:15 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href="https://agent.bittrees.org/" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>agent.bittrees.org</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a1219;
+        --bg-2: #162018;
+        --panel: rgba(11, 20, 26, 0.86);
+        --text: #f4f7ef;
+        --muted: #bdc8b9;
+        --accent: #65e0b7;
+        --accent-2: #f0cf75;
+        --border: rgba(255, 255, 255, 0.14);
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        background:
+          linear-gradient(140deg, rgba(101, 224, 183, 0.16), transparent 34%),
+          linear-gradient(220deg, rgba(240, 207, 117, 0.13), transparent 30%),
+          linear-gradient(160deg, var(--bg), var(--bg-2));
+      }
+
+      main {
+        position: relative;
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 64px 24px 56px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 24px;
+        padding: 32px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--accent);
+        letter-spacing: 0;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 12ch;
+        font-size: clamp(2.8rem, 8vw, 5.4rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .lede {
+        max-width: 72ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.05rem;
+        line-height: 1.72;
+      }
+
+      .grid,
+      .sections {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .card,
+      .section {
+        padding: 18px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: rgba(10, 16, 22, 0.72);
+      }
+
+      .card h2,
+      .section h2 {
+        margin: 0 0 10px;
+        font-size: 1.05rem;
+      }
+
+      .card p,
+      .section p,
+      .section li {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .card-kicker {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      .section ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 7px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(101, 224, 183, 0.28);
+        background: rgba(101, 224, 183, 0.08);
+        color: var(--text);
+        text-decoration: none;
+        font-size: 0.9rem;
+      }
+
+      .footer-note {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      @media (max-width: 720px) {
+        main { padding: 20px; }
+        .hero { padding: 22px; }
+        h1 { max-width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">agent.bittrees.org static discovery portal</p>
+          <h1 id="hero-title">Bittrees contribution discovery for agents.</h1>
+        </div>
+        <p class="lede">This launch draft publishes reviewed machine-readable manifests for Bittrees-scoped contribution lanes, reusable task templates, and IDACC release discovery. The portal is intentionally read-only: contribution intent is documented as a schema and route contract, but live submission writes are disabled pending security-router clearance.</p>
+        <div class="pill-row" aria-label="Machine-readable routes">
+          <a class="pill" href="/llms.txt">/llms.txt</a>
+          <a class="pill" href="/agents.json">/agents.json</a>
+          <a class="pill" href="/templates.json">/templates.json</a>
+          <a class="pill" href="/idacc/releases.json">/idacc/releases.json</a>
+          <a class="pill" href="/contribution-intents">/contribution-intents</a>
+        </div>
+      </section>
+
+      <section class="sections" aria-label="Portal notes">
+        <article class="section">
+          <h2>Source-aware scope</h2>
+          <p>Static content is limited to reviewed Bittrees source areas.</p>
+          <ul>
+            <li>Bittrees Research</li><li>Bittrees, Inc. operations/governance</li><li>Bittrees Capital / treasury workflows</li>
+          </ul>
+        </article>
+        <article class="section">
+          <h2>Launch posture</h2>
+          <p>Live writes, install promotion, and public launch remain blocked until the open security gate clears.</p>
+          <ul>
+            <li>Content approval and integrity controls for manifests and templates: open</li><li>Signed and hashed IDACC release artifacts: partial-hash-present-signature-open</li><li>Static/read-only or protected endpoint posture: open</li><li>Client-bundle secret scanning before publish: open</li>
+          </ul>
+          <p class="footer-note">Last reviewed: 2026-07-07.</p>
+        </article>
+      </section>
+
+      <section class="grid" aria-label="Discovery routes">
+        
+        <article class="card">
+          <p class="card-kicker">llms.txt</p>
+          <h2>/llms.txt</h2>
+          <p>Agent-readable route index, launch posture, source scope, and integration instructions.</p>
+        </article>
+      
+        <article class="card">
+          <p class="card-kicker">agents.json</p>
+          <h2>/agents.json</h2>
+          <p>Reviewed static snapshot of contribution lanes, owner routes, teams, and agents.</p>
+        </article>
+      
+        <article class="card">
+          <p class="card-kicker">templates.json</p>
+          <h2>/templates.json</h2>
+          <p>Reusable Bittrees-scoped task and handoff templates.</p>
+        </article>
+      
+        <article class="card">
+          <p class="card-kicker">idacc/releases.json</p>
+          <h2>/idacc/releases.json</h2>
+          <p>IDACC release discovery metadata with integrity and install-gate status.</p>
+        </article>
+      
+        <article class="card">
+          <p class="card-kicker">contribution-intents</p>
+          <h2>/contribution-intents</h2>
+          <p>Documented contribution-intent submission contract; POST defaults to 501 and can be feature-flag enabled for non-production review capture.</p>
+        </article>
+      
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,481 @@
+{
+  "generatedAt": "2026-07-07T15:40:48.983Z",
+  "statusCode": 202,
+  "response": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "route": "/contribution-intents",
+    "canonicalUrl": "https://agent.bittrees.org/contribution-intents",
+    "generatedAt": "2026-07-07T15:40:48.982Z",
+    "requestSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://agent.bittrees.org/schemas/contribution-intent-request.v1.json",
+      "title": "agent.bittrees.org contribution intent request",
+      "description": "Contract for a future contribution-intent submission. The launch portal documents this schema but does not accept live writes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "intentId",
+        "submittedAt",
+        "contributor",
+        "targetLane",
+        "summary",
+        "proposedTemplate",
+        "handoff",
+        "safety"
+      ],
+      "properties": {
+        "schema": {
+          "const": "agent.bittrees.contribution-intent.v1"
+        },
+        "intentId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 120,
+          "pattern": "^[a-z0-9][a-z0-9._:-]{6,118}[a-z0-9]$"
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "contributor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name",
+            "contactRoute"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "agent",
+                "human",
+                "team"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "agentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "team": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "contactRoute": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        },
+        "targetLane": {
+          "enum": [
+            "research",
+            "operations-governance",
+            "treasury",
+            "discovery",
+            "awareness"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 1200
+        },
+        "proposedTemplate": {
+          "enum": [
+            "bittrees-research-task",
+            "contributor-onboarding",
+            "ops-governance-work",
+            "source-grounded-report",
+            "legal-review-handoff",
+            "safe-onchain-treasury-handoff"
+          ]
+        },
+        "handoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestedOwnerRoute",
+            "expectedOutput",
+            "acceptanceCriteria",
+            "outOfScope",
+            "backlogPolicy"
+          ],
+          "properties": {
+            "requestedOwnerRoute": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "goalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "expectedOutput": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 1200
+            },
+            "acceptanceCriteria": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 5,
+                "maxLength": 400
+              },
+              "minItems": 1,
+              "maxItems": 10
+            },
+            "outOfScope": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 300
+              },
+              "minItems": 1,
+              "maxItems": 10
+            },
+            "backlogPolicy": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 600
+            },
+            "sourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "maxItems": 20
+            }
+          }
+        },
+        "safety": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "noSecretsIncluded",
+            "noLiveWriteAcknowledged",
+            "noOnchainActionRequested"
+          ],
+          "properties": {
+            "noSecretsIncluded": {
+              "const": true
+            },
+            "noLiveWriteAcknowledged": {
+              "const": true
+            },
+            "noOnchainActionRequested": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "responseSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://agent.bittrees.org/schemas/contribution-intent-response.v1.json",
+      "title": "agent.bittrees.org contribution intent response",
+      "description": "Response contract for the contribution-intent route.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "status",
+        "accepted",
+        "liveWrite",
+        "message"
+      ],
+      "properties": {
+        "schema": {
+          "const": "agent.bittrees.contribution-intent.response.v1"
+        },
+        "status": {
+          "enum": [
+            "not_implemented",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "liveWrite": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "receiptId": {
+          "type": "string"
+        },
+        "nextStep": {
+          "type": "string"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securityGate": {
+      "mode": "feature-flag-live-write-enabled",
+      "liveWritesEnabled": true,
+      "liveWriteReason": "Contribution-intent writes are enabled in a non-production environment and are persisted locally with fleet notifications.",
+      "blockedUntil": "security-router-clearance",
+      "securityOwner": "technology-security/security-router",
+      "noGoItems": [
+        {
+          "id": "content-approval-integrity",
+          "label": "Content approval and integrity controls for manifests and templates",
+          "status": "open"
+        },
+        {
+          "id": "idacc-release-signatures",
+          "label": "Signed and hashed IDACC release artifacts",
+          "status": "partial-hash-present-signature-open"
+        },
+        {
+          "id": "static-read-only-protected-endpoints",
+          "label": "Static/read-only or protected endpoint posture",
+          "status": "open"
+        },
+        {
+          "id": "client-bundle-secret-scanning",
+          "label": "Client-bundle secret scanning before publish",
+          "status": "open"
+        }
+      ]
+    },
+    "schema": "agent.bittrees.contribution-intent.response.v1",
+    "status": "accepted",
+    "accepted": true,
+    "liveWrite": true,
+    "message": "Contribution intent accepted, persisted, and fleet notification queued.",
+    "receiptId": "1093acb7-2f8b-457a-8cda-7b42b78c6045",
+    "nextStep": "Lead review has been queued for M:default/lead. Notification targets: M:engineering-team/engineering-lead, M:default/lead, coder, researcher. Use the receipt ID to correlate stored submission and fleet-notification records."
+  },
+  "telemetryLines": [
+    "{\"timestamp\":\"2026-07-07T15:40:48.982Z\",\"method\":\"POST\",\"path\":\"/contribution-intents\",\"status\":202}"
+  ],
+  "request": {
+    "schema": "agent.bittrees.contribution-intent.v1",
+    "intentId": "intent-2026-07-07-live-write-smoke",
+    "submittedAt": "2026-07-07T10:30:00Z",
+    "contributor": {
+      "kind": "agent",
+      "name": "maintenance-engineer",
+      "agentId": "maintenance-engineer",
+      "team": "engineering-team",
+      "contactRoute": "M:engineering-team/maintenance-engineer"
+    },
+    "targetLane": "operations-governance",
+    "summary": "Wire the contribution-intent destination so leads can review intake packets with stored evidence and fleet notification records.",
+    "proposedTemplate": "contributor-onboarding",
+    "handoff": {
+      "requestedOwnerRoute": "M:engineering-team/engineering-lead",
+      "goalId": "goal_plan_rzit49",
+      "expectedOutput": "Observable contribution-intent storage and notification records for lead review",
+      "acceptanceCriteria": [
+        "Submission is persisted with a receipt ID",
+        "Notification record is queued for lead review"
+      ],
+      "outOfScope": [
+        "Production deployment",
+        "Credential collection"
+      ],
+      "backlogPolicy": "Optional productization ideas become backlog after the review path works.",
+      "sourceIds": [
+        "memory:642",
+        "output:idacc-contributor-lane-map"
+      ]
+    },
+    "safety": {
+      "noSecretsIncluded": true,
+      "noLiveWriteAcknowledged": true,
+      "noOnchainActionRequested": true
+    }
+  },
+  "submissionRecord": {
+    "schema": "agent.bittrees.contribution-intent.submission.v1",
+    "receiptId": "1093acb7-2f8b-457a-8cda-7b42b78c6045",
+    "receivedAt": "2026-07-07T15:40:48.981Z",
+    "featureFlag": {
+      "name": "CONTRIBUTION_INTENTS_WRITE_ENABLED",
+      "enabled": true
+    },
+    "request": {
+      "schema": "agent.bittrees.contribution-intent.v1",
+      "intentId": "intent-2026-07-07-live-write-smoke",
+      "submittedAt": "2026-07-07T10:30:00Z",
+      "contributor": {
+        "kind": "agent",
+        "name": "maintenance-engineer",
+        "agentId": "maintenance-engineer",
+        "team": "engineering-team",
+        "contactRoute": "M:engineering-team/maintenance-engineer"
+      },
+      "targetLane": "operations-governance",
+      "summary": "Wire the contribution-intent destination so leads can review intake packets with stored evidence and fleet notification records.",
+      "proposedTemplate": "contributor-onboarding",
+      "handoff": {
+        "requestedOwnerRoute": "M:engineering-team/engineering-lead",
+        "goalId": "goal_plan_rzit49",
+        "expectedOutput": "Observable contribution-intent storage and notification records for lead review",
+        "acceptanceCriteria": [
+          "Submission is persisted with a receipt ID",
+          "Notification record is queued for lead review"
+        ],
+        "outOfScope": [
+          "Production deployment",
+          "Credential collection"
+        ],
+        "backlogPolicy": "Optional productization ideas become backlog after the review path works.",
+        "sourceIds": [
+          "memory:642",
+          "output:idacc-contributor-lane-map"
+        ]
+      },
+      "safety": {
+        "noSecretsIncluded": true,
+        "noLiveWriteAcknowledged": true,
+        "noOnchainActionRequested": true
+      }
+    },
+    "lane": {
+      "id": "operations-governance",
+      "label": "Operations/governance",
+      "ownerRoute": "M:default/lead",
+      "fallbackRoute": "M:engineering-team/engineering-lead",
+      "validationPath": [
+        "coder",
+        "researcher"
+      ]
+    },
+    "template": {
+      "id": "contributor-onboarding",
+      "name": "Contributor onboarding",
+      "owner": "lead",
+      "validationPath": [
+        "coder",
+        "researcher"
+      ]
+    },
+    "persistence": {
+      "storageDir": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/agent/output/contribution-intents-smoke-run",
+      "submissionsLogPath": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/agent/output/contribution-intents-smoke-run/submissions.jsonl",
+      "notificationsLogPath": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/agent/output/contribution-intents-smoke-run/fleet-notifications.jsonl"
+    },
+    "fleetNotification": {
+      "schema": "agent.bittrees.contribution-intent.notification.v1",
+      "notificationId": "1093acb7-2f8b-457a-8cda-7b42b78c6045",
+      "receiptId": "1093acb7-2f8b-457a-8cda-7b42b78c6045",
+      "queuedAt": "2026-07-07T15:40:48.981Z",
+      "status": "queued",
+      "channel": "fleet",
+      "route": "/contribution-intents",
+      "targetLane": "operations-governance",
+      "contributor": {
+        "kind": "agent",
+        "name": "maintenance-engineer",
+        "agentId": "maintenance-engineer",
+        "team": "engineering-team",
+        "contactRoute": "M:engineering-team/maintenance-engineer"
+      },
+      "summary": "Wire the contribution-intent destination so leads can review intake packets with stored evidence and fleet notification records.",
+      "requestedOwnerRoute": "M:engineering-team/engineering-lead",
+      "expectedOutput": "Observable contribution-intent storage and notification records for lead review",
+      "backlogPolicy": "Optional productization ideas become backlog after the review path works.",
+      "validationPath": [
+        "coder",
+        "researcher"
+      ],
+      "ownerRoute": "M:default/lead",
+      "fallbackRoute": "M:engineering-team/engineering-lead",
+      "targets": [
+        "M:engineering-team/engineering-lead",
+        "M:default/lead",
+        "coder",
+        "researcher"
+      ],
+      "sourceIds": [
+        "memory:642",
+        "output:idacc-contributor-lane-map"
+      ],
+      "template": {
+        "id": "contributor-onboarding",
+        "name": "Contributor onboarding",
+        "owner": "lead"
+      },
+      "featureFlag": {
+        "name": "CONTRIBUTION_INTENTS_WRITE_ENABLED",
+        "enabled": true
+      }
+    }
+  },
+  "notificationRecord": {
+    "schema": "agent.bittrees.contribution-intent.notification.v1",
+    "notificationId": "1093acb7-2f8b-457a-8cda-7b42b78c6045",
+    "receiptId": "1093acb7-2f8b-457a-8cda-7b42b78c6045",
+    "queuedAt": "2026-07-07T15:40:48.981Z",
+    "status": "queued",
+    "channel": "fleet",
+    "route": "/contribution-intents",
+    "targetLane": "operations-governance",
+    "contributor": {
+      "kind": "agent",
+      "name": "maintenance-engineer",
+      "agentId": "maintenance-engineer",
+      "team": "engineering-team",
+      "contactRoute": "M:engineering-team/maintenance-engineer"
+    },
+    "summary": "Wire the contribution-intent destination so leads can review intake packets with stored evidence and fleet notification records.",
+    "requestedOwnerRoute": "M:engineering-team/engineering-lead",
+    "expectedOutput": "Observable contribution-intent storage and notification records for lead review",
+    "backlogPolicy": "Optional productization ideas become backlog after the review path works.",
+    "validationPath": [
+      "coder",
+      "researcher"
+    ],
+    "ownerRoute": "M:default/lead",
+    "fallbackRoute": "M:engineering-team/engineering-lead",
+    "targets": [
+      "M:engineering-team/engineering-lead",
+      "M:default/lead",
+      "coder",
+      "researcher"
+    ],
+    "sourceIds": [
+      "memory:642",
+      "output:idacc-contributor-lane-map"
+    ],
+    "template": {
+      "id": "contributor-onboarding",
+      "name": "Contributor onboarding",
+      "owner": "lead"
+    },
+    "featureFlag": {
+      "name": "CONTRIBUTION_INTENTS_WRITE_ENABLED",
+      "enabled": true
+    }
+  },
+  "paths": {
+    "dataDir": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/agent/output/contribution-intents-smoke-run",
+    "submissionsLogPath": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/agent/output/contribution-intents-smoke-run/submissions.jsonl",
+    "notificationsLogPath": "/Users/jhineline/bob/Library/Assistants/idagents/id-agents/workspace/projects/agent/output/contribution-intents-smoke-run/fleet-notifications.jsonl"
+  }
+}

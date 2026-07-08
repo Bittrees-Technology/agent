@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+X-Robots-Tag: noindex, nofollow
+Content-Length: 26
+Date: Wed, 08 Jul 2026 08:51:15 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+User-agent: *
+Disallow: /

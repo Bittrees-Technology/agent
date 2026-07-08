@@ -1,0 +1,268 @@
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+X-Robots-Tag: noindex, nofollow
+Content-Length: 8526
+Date: Wed, 08 Jul 2026 08:51:15 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "route": "/idacc/releases.json",
+  "canonicalUrl": "https://agent.bittrees.org/idacc/releases.json",
+  "generatedAt": "2026-07-08T08:51:15.778Z",
+  "stub": false,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://agent.bittrees.org/schemas/idacc-releases.v1.json",
+    "title": "agent.bittrees.org IDACC releases data schema",
+    "description": "Schema for IDACC release discovery metadata.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema",
+      "status",
+      "review",
+      "sources",
+      "project",
+      "releases",
+      "installPolicy",
+      "securityGate"
+    ],
+    "properties": {
+      "schema": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "review": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewedAt",
+          "nextReviewDue",
+          "reviewOwner",
+          "validationStatus",
+          "goalId",
+          "sourceIds"
+        ],
+        "properties": {
+          "reviewedAt": {
+            "type": "string"
+          },
+          "nextReviewDue": {
+            "type": "string"
+          },
+          "reviewOwner": {
+            "type": "string"
+          },
+          "validationStatus": {
+            "type": "string"
+          },
+          "goalId": {
+            "type": "string"
+          },
+          "sourceIds": {
+            "type": "array",
+            "description": "Source IDs used for this reviewed route.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        }
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "label",
+            "owner",
+            "url",
+            "retrievedAt",
+            "notes"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "retrievedAt": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "array",
+              "description": "Source-specific notes.",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        "minItems": 1
+      },
+      "project": {
+        "type": "object"
+      },
+      "releases": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "minItems": 1
+      },
+      "installPolicy": {
+        "type": "object"
+      },
+      "securityGate": {
+        "type": "object"
+      }
+    }
+  },
+  "data": {
+    "schema": "agent.bittrees.idacc-releases.v1",
+    "status": "active-static-reviewed-install-gated",
+    "review": {
+      "reviewedAt": "2026-07-07",
+      "nextReviewDue": "2026-07-21",
+      "reviewOwner": "engineering-team/architecture-engineer",
+      "validationStatus": "static-launch-draft",
+      "goalId": "goal_plan_rzit49",
+      "sourceIds": [
+        "memory:642",
+        "memory:639",
+        "output:agent-bittrees-portal-repo-readiness",
+        "output:idacc-contributor-lane-map",
+        "manager:/agents-snapshot:2026-07-07",
+        "github:bobofbuilding/idacc/releases/latest:2026-07-07",
+        "output:agent-portal-identity-keys-readiness"
+      ]
+    },
+    "sources": [
+      {
+        "id": "memory:642",
+        "label": "Brain goal record for Plan 70",
+        "owner": "control-center",
+        "url": "brain://memory/642",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Plan 70 defines the agent.bittrees.org portal objective and sections 4 and 6.",
+          "Section 4 requires /llms.txt, /agents.json, /templates.json, /idacc/releases.json, timestamps, sources, owners, and validation status.",
+          "Section 6 requires templates for research, onboarding, ops/governance, source-grounded reports, legal handoffs, and safe onchain/treasury handoffs."
+        ]
+      },
+      {
+        "id": "output:agent-bittrees-portal-repo-readiness",
+        "label": "agent.bittrees.org portal repo readiness packet",
+        "owner": "architecture-engineer",
+        "url": "output/agent-bittrees-portal-repo-readiness.md",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Readiness packet identifies launch blockers and security-router NO-GO controls.",
+          "The repo must remain static/read-only until security gate controls clear."
+        ]
+      },
+      {
+        "id": "github:bobofbuilding/idacc/releases/latest:2026-07-07",
+        "label": "GitHub latest release API for bobofbuilding/idacc",
+        "owner": "engineering-lead",
+        "url": "https://api.github.com/repos/bobofbuilding/idacc/releases/latest",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Used for IDACC release version, publish time, asset name, and SHA-256 digest."
+        ]
+      }
+    ],
+    "project": {
+      "id": "idacc",
+      "name": "ID Agents Control Center",
+      "repository": "https://github.com/bobofbuilding/idacc",
+      "relationToIdAgents": "Control client for an id-agents manager; it observes and commands a running manager rather than owning manager state.",
+      "owner": "engineering-lead"
+    },
+    "releases": [
+      {
+        "version": "v0.1.619",
+        "status": "discoverable-not-install-approved",
+        "publishedAt": "2026-07-07T08:10:30Z",
+        "releaseUrl": "https://github.com/bobofbuilding/idacc/releases/tag/v0.1.619",
+        "sourceRepository": "https://github.com/bobofbuilding/idacc",
+        "sourceCommit": "d5d0d0a",
+        "notes": [
+          "Automated release of outstanding ID Agents Control Center code."
+        ],
+        "assets": [
+          {
+            "name": "ID-Agents-Control-Center-0.1.619-arm64.zip",
+            "platform": "darwin-arm64",
+            "contentType": "application/zip",
+            "sizeBytes": 102686415,
+            "sha256": "d25ae5fb0d4486d955e436a4ecd7a31f7e377cb031323124b7fb2e46ebca1ffb",
+            "downloadUrl": "https://github.com/bobofbuilding/idacc/releases/download/v0.1.619/ID-Agents-Control-Center-0.1.619-arm64.zip",
+            "installAllowedFromPortal": false,
+            "verificationStatus": "hash-present-signature-pending-security-review"
+          }
+        ],
+        "owner": "engineering-lead",
+        "reviewedAt": "2026-07-07",
+        "sourceIds": [
+          "github:bobofbuilding/idacc/releases/latest:2026-07-07"
+        ]
+      }
+    ],
+    "installPolicy": {
+      "portalInstallAllowed": false,
+      "reason": "Release is discoverable, but portal install/download promotion remains blocked until security-router clears release integrity and endpoint controls.",
+      "requiredBeforeInstallPromotion": [
+        "Signed release artifacts or an approved equivalent verification policy.",
+        "Hash manifest review against the published assets.",
+        "Security-router review of download and update UX.",
+        "Secret-scan and client-bundle review before public launch."
+      ]
+    },
+    "securityGate": {
+      "mode": "read-only-static-launch-draft",
+      "liveWritesEnabled": false,
+      "liveWriteReason": "Security-router clearance is still required before any public endpoint accepts or persists contribution intent.",
+      "blockedUntil": "security-router-clearance",
+      "securityOwner": "technology-security/security-router",
+      "noGoItems": [
+        {
+          "id": "content-approval-integrity",
+          "label": "Content approval and integrity controls for manifests and templates",
+          "status": "open"
+        },
+        {
+          "id": "idacc-release-signatures",
+          "label": "Signed and hashed IDACC release artifacts",
+          "status": "partial-hash-present-signature-open"
+        },
+        {
+          "id": "static-read-only-protected-endpoints",
+          "label": "Static/read-only or protected endpoint posture",
+          "status": "open"
+        },
+        {
+          "id": "client-bundle-secret-scanning",
+          "label": "Client-bundle secret scanning before publish",
+          "status": "open"
+        }
+      ]
+    }
+  }
+}

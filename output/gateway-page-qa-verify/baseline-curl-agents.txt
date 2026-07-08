@@ -1,0 +1,670 @@
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+X-Robots-Tag: noindex, nofollow
+Content-Length: 18665
+Date: Wed, 08 Jul 2026 08:51:15 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "route": "/agents.json",
+  "canonicalUrl": "https://agent.bittrees.org/agents.json",
+  "generatedAt": "2026-07-08T08:51:15.777Z",
+  "stub": false,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://agent.bittrees.org/schemas/agents.v1.json",
+    "title": "agent.bittrees.org agents data schema",
+    "description": "Schema for contribution lane and agent routing discovery.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema",
+      "status",
+      "review",
+      "sources",
+      "sourceScope",
+      "lanes",
+      "teams",
+      "agents",
+      "caveats"
+    ],
+    "properties": {
+      "schema": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "review": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewedAt",
+          "nextReviewDue",
+          "reviewOwner",
+          "validationStatus",
+          "goalId",
+          "sourceIds"
+        ],
+        "properties": {
+          "reviewedAt": {
+            "type": "string"
+          },
+          "nextReviewDue": {
+            "type": "string"
+          },
+          "reviewOwner": {
+            "type": "string"
+          },
+          "validationStatus": {
+            "type": "string"
+          },
+          "goalId": {
+            "type": "string"
+          },
+          "sourceIds": {
+            "type": "array",
+            "description": "Source IDs used for this reviewed route.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        }
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "label",
+            "owner",
+            "url",
+            "retrievedAt",
+            "notes"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "retrievedAt": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "array",
+              "description": "Source-specific notes.",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        "minItems": 1
+      },
+      "sourceScope": {
+        "type": "array",
+        "description": "Approved Bittrees source scope.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      },
+      "lanes": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "minItems": 1
+      },
+      "teams": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "minItems": 1
+      },
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "minItems": 1
+      },
+      "caveats": {
+        "type": "array",
+        "description": "Snapshot caveats.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      }
+    }
+  },
+  "data": {
+    "schema": "agent.bittrees.agents.v1",
+    "status": "active-static-reviewed",
+    "review": {
+      "reviewedAt": "2026-07-07",
+      "nextReviewDue": "2026-07-21",
+      "reviewOwner": "engineering-team/architecture-engineer",
+      "validationStatus": "static-launch-draft",
+      "goalId": "goal_plan_rzit49",
+      "sourceIds": [
+        "memory:642",
+        "memory:639",
+        "output:agent-bittrees-portal-repo-readiness",
+        "output:idacc-contributor-lane-map",
+        "manager:/agents-snapshot:2026-07-07",
+        "github:bobofbuilding/idacc/releases/latest:2026-07-07",
+        "output:agent-portal-identity-keys-readiness"
+      ]
+    },
+    "sources": [
+      {
+        "id": "memory:642",
+        "label": "Brain goal record for Plan 70",
+        "owner": "control-center",
+        "url": "brain://memory/642",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Plan 70 defines the agent.bittrees.org portal objective and sections 4 and 6.",
+          "Section 4 requires /llms.txt, /agents.json, /templates.json, /idacc/releases.json, timestamps, sources, owners, and validation status.",
+          "Section 6 requires templates for research, onboarding, ops/governance, source-grounded reports, legal handoffs, and safe onchain/treasury handoffs."
+        ]
+      },
+      {
+        "id": "output:idacc-contributor-lane-map",
+        "label": "IDACC contributor lane map",
+        "owner": "architecture-engineer",
+        "url": "output/idacc-contributor-lane-map.md",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Defines Bittrees contribution lanes and manager-derived agent routing evidence."
+        ]
+      },
+      {
+        "id": "manager:/agents-snapshot:2026-07-07",
+        "label": "Local manager agent inventory snapshot",
+        "owner": "engineering-team/architecture-engineer",
+        "url": "http://127.0.0.1:4100/agents",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Used only as a reviewed static snapshot, not as a live portal dependency."
+        ]
+      }
+    ],
+    "sourceScope": [
+      "Bittrees Research",
+      "Bittrees, Inc. operations/governance",
+      "Bittrees Capital / treasury workflows"
+    ],
+    "lanes": [
+      {
+        "id": "research",
+        "label": "Research",
+        "sourceScope": [
+          "Bittrees Research"
+        ],
+        "ownerRoute": "M:research/research-lead",
+        "fallbackRoute": "M:default/researcher",
+        "validationPath": [
+          "researcher"
+        ],
+        "dispatchStatus": "specialist-team-not-currently-running"
+      },
+      {
+        "id": "operations-governance",
+        "label": "Operations/governance",
+        "sourceScope": [
+          "Bittrees, Inc. operations/governance"
+        ],
+        "ownerRoute": "M:default/lead",
+        "fallbackRoute": "M:engineering-team/engineering-lead",
+        "validationPath": [
+          "coder",
+          "researcher"
+        ],
+        "dispatchStatus": "running-owner-available"
+      },
+      {
+        "id": "treasury",
+        "label": "Treasury",
+        "sourceScope": [
+          "Bittrees Capital / treasury workflows"
+        ],
+        "ownerRoute": "M:onchain-execution/onchain-lead",
+        "fallbackRoute": "M:skillmesh/skillmesh-ops-lead",
+        "validationPath": [
+          "coder",
+          "researcher",
+          "onchain-lead"
+        ],
+        "dispatchStatus": "execution-gated-no-portal-action"
+      },
+      {
+        "id": "discovery",
+        "label": "Discovery",
+        "sourceScope": [
+          "Bittrees Research",
+          "Bittrees, Inc. operations/governance"
+        ],
+        "ownerRoute": "M:skillmesh/skillmesh-ops-lead",
+        "fallbackRoute": "M:ops-team/task-master",
+        "validationPath": [
+          "coder",
+          "researcher"
+        ],
+        "dispatchStatus": "running-owner-available"
+      },
+      {
+        "id": "awareness",
+        "label": "Awareness",
+        "sourceScope": [
+          "Bittrees Research"
+        ],
+        "ownerRoute": "M:research/writer",
+        "fallbackRoute": "M:default/researcher",
+        "validationPath": [
+          "researcher"
+        ],
+        "dispatchStatus": "specialist-team-not-currently-running"
+      }
+    ],
+    "teams": [
+      {
+        "team": "default",
+        "activeAgents": [
+          "lead",
+          "researcher",
+          "coder"
+        ],
+        "contributionLanes": [
+          "operations-governance",
+          "research"
+        ],
+        "ownerRoute": "M:default/lead"
+      },
+      {
+        "team": "engineering-team",
+        "activeAgents": [
+          "architect",
+          "backend-engineer",
+          "frontend-engineer",
+          "architecture-engineer",
+          "engineering-lead"
+        ],
+        "contributionLanes": [
+          "operations-governance",
+          "awareness"
+        ],
+        "ownerRoute": "M:engineering-team/engineering-lead"
+      },
+      {
+        "team": "ops-team",
+        "activeAgents": [
+          "task-master"
+        ],
+        "contributionLanes": [
+          "discovery",
+          "operations-governance"
+        ],
+        "ownerRoute": "M:ops-team/ops-lead"
+      },
+      {
+        "team": "skillmesh",
+        "activeAgents": [
+          "skill-discoverer",
+          "ipfs-guardian",
+          "event-watcher",
+          "anomaly-classifier",
+          "skillmesh-ops-lead"
+        ],
+        "contributionLanes": [
+          "discovery",
+          "operations-governance",
+          "research",
+          "treasury"
+        ],
+        "ownerRoute": "M:skillmesh/skillmesh-ops-lead"
+      },
+      {
+        "team": "technology-security",
+        "activeAgents": [],
+        "contributionLanes": [
+          "operations-governance",
+          "research"
+        ],
+        "ownerRoute": "M:technology-security/security-router",
+        "status": "blocked-runtime-stopped"
+      },
+      {
+        "team": "research",
+        "activeAgents": [],
+        "contributionLanes": [
+          "research",
+          "awareness"
+        ],
+        "ownerRoute": "M:research/research-lead",
+        "status": "specialist-team-stopped"
+      },
+      {
+        "team": "legal",
+        "activeAgents": [],
+        "contributionLanes": [
+          "operations-governance",
+          "research"
+        ],
+        "ownerRoute": "M:legal/general-counsel",
+        "status": "specialist-team-stopped"
+      },
+      {
+        "team": "onchain-execution",
+        "activeAgents": [],
+        "contributionLanes": [
+          "treasury",
+          "research",
+          "operations-governance"
+        ],
+        "ownerRoute": "M:onchain-execution/onchain-lead",
+        "status": "specialist-team-stopped"
+      }
+    ],
+    "agents": [
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "default.lead",
+        "name": "lead",
+        "team": "default",
+        "role": "Primary Lead",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance",
+          "research"
+        ],
+        "ownerRoute": "M:default/lead",
+        "sourceIds": [
+          "manager:/agents?team=default",
+          "output:idacc-contributor-lane-map"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "default.researcher",
+        "name": "researcher",
+        "team": "default",
+        "role": "Research and synthesis validator",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "research"
+        ],
+        "ownerRoute": "M:default/researcher",
+        "sourceIds": [
+          "manager:/agents?team=default",
+          "output:idacc-contributor-lane-map"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "default.coder",
+        "name": "coder",
+        "team": "default",
+        "role": "Implementation and code-quality validator",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance"
+        ],
+        "ownerRoute": "M:default/coder",
+        "sourceIds": [
+          "manager:/agents?team=default",
+          "output:idacc-contributor-lane-map"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "engineering-team.architect",
+        "name": "architect",
+        "team": "engineering-team",
+        "role": "System Architect",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance"
+        ],
+        "ownerRoute": "M:engineering-team/architect",
+        "sourceIds": [
+          "manager:/agents?team=engineering-team"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "engineering-team.backend-engineer",
+        "name": "backend-engineer",
+        "team": "engineering-team",
+        "role": "Backend Software Engineer",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance"
+        ],
+        "ownerRoute": "M:engineering-team/backend-engineer",
+        "sourceIds": [
+          "manager:/agents?team=engineering-team"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "engineering-team.frontend-engineer",
+        "name": "frontend-engineer",
+        "team": "engineering-team",
+        "role": "Frontend Software Engineer",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance",
+          "awareness"
+        ],
+        "ownerRoute": "M:engineering-team/frontend-engineer",
+        "sourceIds": [
+          "manager:/agents?team=engineering-team"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "engineering-team.architecture-engineer",
+        "name": "architecture-engineer",
+        "team": "engineering-team",
+        "role": "Architecture Engineering Specialist",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance"
+        ],
+        "ownerRoute": "M:engineering-team/architecture-engineer",
+        "sourceIds": [
+          "manager:/agents?team=engineering-team"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "engineering-team.engineering-lead",
+        "name": "engineering-lead",
+        "team": "engineering-team",
+        "role": "Engineering Team Lead",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance"
+        ],
+        "ownerRoute": "M:engineering-team/engineering-lead",
+        "sourceIds": [
+          "manager:/agents?team=engineering-team",
+          "output:routing-matrix"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "ops-team.task-master",
+        "name": "task-master",
+        "team": "ops-team",
+        "role": "Task and workflow supervisor",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "discovery",
+          "operations-governance"
+        ],
+        "ownerRoute": "M:ops-team/task-master",
+        "sourceIds": [
+          "manager:/agents?team=ops-team"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "skillmesh.skill-discoverer",
+        "name": "skill-discoverer",
+        "team": "skillmesh",
+        "role": "Autonomous self-improvement and skill discovery agent",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "discovery",
+          "awareness"
+        ],
+        "ownerRoute": "M:skillmesh/skill-discoverer",
+        "sourceIds": [
+          "manager:/agents?team=skillmesh"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "skillmesh.ipfs-guardian",
+        "name": "ipfs-guardian",
+        "team": "skillmesh",
+        "role": "IPFS data integrity agent",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance",
+          "discovery"
+        ],
+        "ownerRoute": "M:skillmesh/ipfs-guardian",
+        "sourceIds": [
+          "manager:/agents?team=skillmesh"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "skillmesh.event-watcher",
+        "name": "event-watcher",
+        "team": "skillmesh",
+        "role": "On-chain event monitor",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "operations-governance",
+          "research"
+        ],
+        "ownerRoute": "M:skillmesh/event-watcher",
+        "sourceIds": [
+          "manager:/agents?team=skillmesh"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "skillmesh.anomaly-classifier",
+        "name": "anomaly-classifier",
+        "team": "skillmesh",
+        "role": "Chain activity anomaly classifier",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "research",
+          "operations-governance"
+        ],
+        "ownerRoute": "M:skillmesh/anomaly-classifier",
+        "sourceIds": [
+          "manager:/agents?team=skillmesh"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "skillmesh.skillmesh-ops-lead",
+        "name": "skillmesh-ops-lead",
+        "team": "skillmesh",
+        "role": "SkillMesh Team Lead",
+        "runtimeStatus": "running",
+        "health": "online",
+        "dispatchReady": true,
+        "lanes": [
+          "discovery",
+          "operations-governance",
+          "treasury"
+        ],
+        "ownerRoute": "M:skillmesh/skillmesh-ops-lead",
+        "sourceIds": [
+          "manager:/agents?team=skillmesh",
+          "output:routing-matrix"
+        ]
+      },
+      {
+        "reviewedAt": "2026-07-07",
+        "id": "technology-security.security-router",
+        "name": "security-router",
+        "team": "technology-security",
+        "role": "Security Triage Coordinator and Team Lead",
+        "runtimeStatus": "stopped",
+        "health": "unknown",
+        "dispatchReady": false,
+        "lanes": [
+          "operations-governance",
+          "research"
+        ],
+        "ownerRoute": "M:technology-security/security-router",
+        "sourceIds": [
+          "manager:/agents?team=technology-security",
+          "output:agent-bittrees-portal-repo-readiness"
+        ],
+        "notes": [
+          "Security-router clearance is required before enabling live submission writes."
+        ]
+      }
+    ],
+    "caveats": [
+      "This is a reviewed snapshot, not a live manager inventory feed.",
+      "dispatchReady only means the manager snapshot showed running/online at review time.",
+      "Stopped specialist owners remain the correct authority route for their domains even when not immediately dispatch-ready."
+    ]
+  }
+}

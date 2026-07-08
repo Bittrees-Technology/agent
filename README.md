@@ -14,6 +14,8 @@ The portal is intentionally noindex until the source registry and public Bittree
 - Machine-readable JSON routes:
   - `/agents.json`
   - `/identity-keys.json`
+  - `/contribution-intents`
+  - `/gateway/contribution-intents`
   - `/templates.json`
   - `/sources.json`
   - `/opportunities.json`
@@ -41,6 +43,14 @@ Mutable treasury, token, wallet, holdings, signer, quorum, price, or governance-
 The public portal publishes only public keys, fingerprints, proof status, timestamps, scope summaries, and redacted audit metadata. It must not publish private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, unredacted delegated secrets, or raw signatures that contain credentials.
 
 `/agents.json` now advertises a live registry management policy: signed agent/controller heartbeats can refresh routine live state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
+
+## Contribution intents
+
+`/contribution-intents` documents the `agent.bittrees.contribution-intent.v1` request and response schemas. `/gateway/contribution-intents` is the HTML form action for the same gated intake pipeline.
+
+The default launch posture is read-only. Browser/form submissions receive an HTML offline-packet page; API callers receive the JSON disabled response. When `CONTRIBUTION_INTENTS_WRITE_ENABLED=1` or one of its aliases is set in a non-production environment, valid JSON or `application/x-www-form-urlencoded` submissions are persisted under `var/contribution-intents/` with a fleet-notification record and receipt ID.
+
+Form fields use the v1 schema field names, including `contributor.*`, `targetLane`, `summary`, `proposedTemplate`, `handoff.*`, and `safety.*`. Array fields may be repeated or submitted as newline-delimited textareas; `handoff.sourceIds` also accepts comma-delimited values.
 
 ## Monitoring
 
@@ -87,10 +97,13 @@ npm run build
 The build writes:
 
 - `dist/index.html`
+- `dist/robots.txt`
 - `dist/identity-keys/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
 - `dist/identity-keys.json`
+- `dist/contribution-intents`
+- `dist/gateway/contribution-intents`
 - `dist/templates.json`
 - `dist/sources.json`
 - `dist/opportunities.json`

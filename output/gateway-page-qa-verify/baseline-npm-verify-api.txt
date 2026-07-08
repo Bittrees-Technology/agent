@@ -1,0 +1,17 @@
+
+> agent-bittrees-portal@0.1.0 verify:api
+> node scripts/verify-api-handler.mjs
+
+GET / -> 200 | <!doctype html> <html lang="en">   <head>     <meta charset="utf-8" />     <meta
+HEAD / -> 200 | 
+GET /robots.txt -> 200 | User-agent: * Disallow: / 
+GET /llms.txt -> 200 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/llms
+GET /llms.txt/ -> 301 | 
+GET /agents.json -> 200 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/agen
+GET /templates.json -> 200 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/temp
+GET /idacc/releases.json -> 200 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/idac
+GET /contribution-intents -> 200 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/cont
+POST /contribution-intents -> 501 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/cont
+GET /does-not-exist -> 404 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "error": "not_f
+POST /contribution-intents (write enabled) -> 202 | {   "$schema": "https://json-schema.org/draft/2020-12/schema",   "route": "/cont
+All api/index.js handler checks passed.

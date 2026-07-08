@@ -1,4 +1,24 @@
+import { randomUUID } from 'node:crypto';
+import { appendFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
+const PORTAL_BASE_URL = 'https://agent.bittrees.org';
+export const ROBOTS_TXT_PATH = '/robots.txt';
+const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
+const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
+  'CONTRIBUTION_INTENTS_WRITE_ENABLED',
+  'CONTRIBUTION_INTENTS_ENABLED',
+  'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
+];
+const CONTRIBUTION_INTENT_CONTRACT_PATH = '/contribution-intents';
+const GATEWAY_CONTRIBUTION_INTENT_PATH = '/gateway/contribution-intents';
+const CONTRIBUTION_INTENT_POST_PATHS = new Set([
+  CONTRIBUTION_INTENT_CONTRACT_PATH,
+  GATEWAY_CONTRIBUTION_INTENT_PATH,
+]);
 
 export const LAUNCH_STATUS = {
   status: 'live-contract-ready',
@@ -6,6 +26,66 @@ export const LAUNCH_STATUS = {
   publicLaunchGate:
     'Keep noindex enabled until the source registry, identity/key contract, and public claims are approved by lead.',
 };
+
+export const CONTRIBUTION_INTENT_LAUNCH_POSTURE = {
+  mode: 'read-only-public-launch-default',
+  liveWritesEnabled: false,
+  liveWriteReason:
+    'Contribution-intent writes are disabled unless an explicit non-production write flag is enabled.',
+  blockedUntil: 'security-router-clearance-and-production-control-plane',
+  securityOwner: 'technology-security/security-router',
+  storagePolicy:
+    'When the non-production flag is enabled, accepted submissions are persisted as local JSONL review artifacts and fleet-notification records.',
+  noGoItems: [
+    'Do not submit secrets, credentials, wallet data, raw signatures, or live execution requests.',
+    'Do not enable public production writes without security-router clearance.',
+    'Do not treat a contribution receipt as authorization, trust, or approval.',
+  ],
+};
+
+function isTruthyFlag(value) {
+  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function isContributionIntentsWriteEnabled() {
+  return CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES.some((flagName) => isTruthyFlag(process.env[flagName]));
+}
+
+function getContributionIntentStoragePaths() {
+  const storageDir = process.env.CONTRIBUTION_INTENTS_DATA_DIR ?? join(PROJECT_ROOT, 'var', 'contribution-intents');
+
+  return {
+    storageDir,
+    submissionsLogPath: join(storageDir, 'submissions.jsonl'),
+    notificationsLogPath: join(storageDir, 'fleet-notifications.jsonl'),
+  };
+}
+
+function buildContributionIntentSecurityGate() {
+  if (!isContributionIntentsWriteEnabled()) {
+    return CONTRIBUTION_INTENT_LAUNCH_POSTURE;
+  }
+
+  return {
+    ...CONTRIBUTION_INTENT_LAUNCH_POSTURE,
+    mode: 'feature-flag-non-production-write-enabled',
+    liveWritesEnabled: true,
+    liveWriteReason:
+      'A non-production write flag is enabled. Submissions are validated, persisted locally, and queued for fleet review.',
+    noGoItems: [
+      ...CONTRIBUTION_INTENT_LAUNCH_POSTURE.noGoItems,
+      'Keep the write flag off for public production traffic until explicit approval.',
+    ],
+  };
+}
+
+export function normalizeCanonicalPath(pathname) {
+  if (pathname !== '/' && pathname.endsWith('/')) {
+    return pathname.replace(/\/+$/, '') || '/';
+  }
+
+  return pathname;
+}
 
 export const SOURCE_SCOPE = [
   {
@@ -755,6 +835,186 @@ export const CONTRIBUTION_TEMPLATES = [
   },
 ];
 
+const CONTRIBUTION_INTENT_REQUEST_SCHEMA = {
+  $schema: SCHEMA_URL,
+  $id: `${PORTAL_BASE_URL}/schemas/contribution-intent-request.v1.json`,
+  title: 'agent.bittrees.org contribution intent request',
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'schema',
+    'intentId',
+    'submittedAt',
+    'contributor',
+    'targetLane',
+    'summary',
+    'proposedTemplate',
+    'handoff',
+    'safety',
+  ],
+  properties: {
+    schema: { const: 'agent.bittrees.contribution-intent.v1' },
+    intentId: { type: 'string', minLength: 8, maxLength: 120 },
+    submittedAt: { type: 'string', format: 'date-time' },
+    contributor: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'name', 'contactRoute'],
+      properties: {
+        kind: { enum: ['agent', 'human', 'team', 'tool'] },
+        name: { type: 'string', minLength: 1, maxLength: 120 },
+        agentId: { type: 'string', minLength: 1, maxLength: 160 },
+        team: { type: 'string', minLength: 1, maxLength: 120 },
+        contactRoute: { type: 'string', minLength: 1, maxLength: 300 },
+      },
+    },
+    targetLane: { enum: CONTRIBUTION_LANES.map((lane) => lane.id) },
+    summary: { type: 'string', minLength: 20, maxLength: 1200 },
+    proposedTemplate: { enum: CONTRIBUTION_TEMPLATES.map((template) => template.id) },
+    handoff: {
+      type: 'object',
+      additionalProperties: false,
+      required: [
+        'requestedOwnerRoute',
+        'expectedOutput',
+        'acceptanceCriteria',
+        'outOfScope',
+        'backlogPolicy',
+      ],
+      properties: {
+        requestedOwnerRoute: { type: 'string', minLength: 1, maxLength: 160 },
+        goalId: { type: 'string', minLength: 1, maxLength: 120 },
+        expectedOutput: { type: 'string', minLength: 10, maxLength: 1200 },
+        acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 10 },
+        outOfScope: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 10 },
+        backlogPolicy: { type: 'string', minLength: 10, maxLength: 600 },
+        sourceIds: { type: 'array', items: { type: 'string' }, maxItems: 20 },
+      },
+    },
+    safety: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['noSecretsIncluded', 'noLiveWriteAcknowledged', 'noOnchainActionRequested'],
+      properties: {
+        noSecretsIncluded: { const: true },
+        noLiveWriteAcknowledged: { const: true },
+        noOnchainActionRequested: { const: true },
+      },
+    },
+  },
+};
+
+const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
+  $schema: SCHEMA_URL,
+  $id: `${PORTAL_BASE_URL}/schemas/contribution-intent-response.v1.json`,
+  title: 'agent.bittrees.org contribution intent response',
+  type: 'object',
+  additionalProperties: false,
+  required: ['schema', 'status', 'accepted', 'liveWrite', 'message'],
+  properties: {
+    schema: { const: 'agent.bittrees.contribution-intent.response.v1' },
+    status: { enum: ['not_implemented', 'accepted', 'rejected'] },
+    accepted: { type: 'boolean' },
+    liveWrite: { type: 'boolean' },
+    message: { type: 'string' },
+    receiptId: { type: 'string' },
+    nextStep: { type: 'string' },
+    errors: { type: 'array', items: { type: 'string' } },
+  },
+};
+
+const CONTRIBUTION_INTENT_FORM_CONTRACT = {
+  action: GATEWAY_CONTRIBUTION_INTENT_PATH,
+  method: 'POST',
+  enctype: 'application/x-www-form-urlencoded',
+  requestSchema: 'agent.bittrees.contribution-intent.v1',
+  generatedDefaults: ['schema', 'intentId', 'submittedAt'],
+  arrayEncoding:
+    'Repeat the field name for multiple values, or submit newline-delimited textarea values for array fields.',
+  canonicalFields: [
+    'contributor.kind',
+    'contributor.name',
+    'contributor.agentId',
+    'contributor.team',
+    'contributor.contactRoute',
+    'targetLane',
+    'summary',
+    'proposedTemplate',
+    'handoff.requestedOwnerRoute',
+    'handoff.goalId',
+    'handoff.expectedOutput',
+    'handoff.acceptanceCriteria',
+    'handoff.outOfScope',
+    'handoff.backlogPolicy',
+    'handoff.sourceIds',
+    'safety.noSecretsIncluded',
+    'safety.noLiveWriteAcknowledged',
+    'safety.noOnchainActionRequested',
+  ],
+};
+
+const CONTRIBUTION_INTENT_CONTRACT = {
+  schema: 'agent.bittrees.contribution-intent.contract.v1',
+  endpoint: CONTRIBUTION_INTENT_CONTRACT_PATH,
+  gatewayFormEndpoint: GATEWAY_CONTRIBUTION_INTENT_PATH,
+  methods: ['GET', 'HEAD', 'POST'],
+  requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
+  responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
+  formSubmission: CONTRIBUTION_INTENT_FORM_CONTRACT,
+  disabledResponse: {
+    statusCode: 501,
+    status: 'not_implemented',
+    accepted: false,
+    liveWrite: false,
+    message:
+      'Contribution-intent submission is documented but disabled until security-router clears live write handling.',
+    nextStep:
+      'Use the request schema or form field contract to prepare an offline handoff packet; do not POST secrets, credentials, wallet data, or live execution requests.',
+  },
+};
+
+function getContributionIntentContractStatus() {
+  return isContributionIntentsWriteEnabled()
+    ? 'feature-flag-non-production-write-enabled'
+    : 'contract-only-disabled';
+}
+
+function buildContributionIntentContractData() {
+  const status = getContributionIntentContractStatus();
+
+  return {
+    status,
+    launchStatus: LAUNCH_STATUS,
+    requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
+    responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
+    formSubmission: CONTRIBUTION_INTENT_FORM_CONTRACT,
+    contract: {
+      ...CONTRIBUTION_INTENT_CONTRACT,
+      launchStatus: status,
+      securityGate: buildContributionIntentSecurityGate(),
+      featureFlag: {
+        name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0],
+        aliases: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES.slice(1),
+        enabled: isContributionIntentsWriteEnabled(),
+      },
+    },
+  };
+}
+
+function buildGatewayContributionIntentContractData() {
+  const data = buildContributionIntentContractData();
+
+  return {
+    ...data,
+    contract: {
+      ...data.contract,
+      schema: 'agent.bittrees.gateway-contribution-intent.contract.v1',
+      endpoint: GATEWAY_CONTRIBUTION_INTENT_PATH,
+      canonicalContractEndpoint: CONTRIBUTION_INTENT_CONTRACT_PATH,
+    },
+  };
+}
+
 export const CONTRIBUTION_WORKFLOW = [
   {
     id: 'choose-lane',
@@ -876,21 +1136,21 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-07T15:45:13Z',
+  checkedAt: '2026-07-08T09:33:50Z',
   latest: {
-    tag: 'v0.1.619',
-    name: 'v0.1.619',
-    publishedAt: '2026-07-07T08:10:30Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.619',
-    notes: ['Latest public GitHub release observed by the portal update on 2026-07-07.'],
+    tag: 'v0.1.621',
+    name: 'v0.1.621',
+    publishedAt: '2026-07-07T23:13:08Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.621',
+    notes: ['Latest public GitHub release observed by the portal update on 2026-07-08.'],
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.619-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.621-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.619/ID-Agents-Control-Center-0.1.619-arm64.zip',
-        sizeBytes: 102686415,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.621/ID-Agents-Control-Center-0.1.621-arm64.zip',
+        sizeBytes: 102689633,
         contentType: 'application/zip',
-        sha256: 'd25ae5fb0d4486d955e436a4ecd7a31f7e377cb031323124b7fb2e46ebca1ffb',
+        sha256: '01f15d30de696f43efbfae11f131d28b086de85949a386d584ee62a09fd151d6',
       },
     ],
   },
@@ -904,7 +1164,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.619-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.621-arm64.zip',
   },
 };
 
@@ -922,6 +1182,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/templates.json',
     '/sources.json',
     '/opportunities.json',
+    CONTRIBUTION_INTENT_CONTRACT_PATH,
     '/idacc/releases.json',
     '/monitoring.json',
   ],
@@ -940,6 +1201,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/templates.json',
       '/sources.json',
       '/opportunities.json',
+      CONTRIBUTION_INTENT_CONTRACT_PATH,
       '/idacc/releases.json',
       '/monitoring.json',
     ],
@@ -1030,6 +1292,36 @@ const JSON_ROUTES = [
         ],
       },
     },
+  },
+  {
+    path: CONTRIBUTION_INTENT_CONTRACT_PATH,
+    label: 'Contribution intents',
+    description:
+      'Machine-readable contribution-intent schema and gated POST contract for review-packet intake.',
+    status: getContributionIntentContractStatus,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org contribution intent contract response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'launchStatus', 'requestSchema', 'responseSchema', 'formSubmission'],
+    },
+    data: buildContributionIntentContractData,
+  },
+  {
+    path: GATEWAY_CONTRIBUTION_INTENT_PATH,
+    label: 'Gateway contribution-intent form action',
+    description:
+      'HTML-first form submission action that validates agent.bittrees.contribution-intent.v1 and shares the gated intake pipeline.',
+    status: getContributionIntentContractStatus,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org gateway contribution intent contract response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'launchStatus', 'requestSchema', 'responseSchema', 'formSubmission'],
+    },
+    data: buildGatewayContributionIntentContractData,
   },
   {
     path: '/templates.json',
@@ -1181,6 +1473,20 @@ export const ROUTE_DEFINITIONS = [
 ];
 
 export const JSON_ROUTE_MAP = new Map(JSON_ROUTES.map((definition) => [definition.path, definition]));
+const CANONICAL_ROUTE_PATHS = new Set([
+  ROBOTS_TXT_PATH,
+  ...ROUTE_DEFINITIONS.map((definition) => definition.path),
+  GATEWAY_CONTRIBUTION_INTENT_PATH,
+  '/portal-manifest.json',
+]);
+
+function getRouteStatus(definition) {
+  return typeof definition.status === 'function' ? definition.status() : definition.status;
+}
+
+function getRouteData(definition) {
+  return typeof definition.data === 'function' ? definition.data() : definition.data;
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -1212,7 +1518,7 @@ function renderRouteCards() {
             <p>${escapeHtml(definition.label)}</p>
             <h2><a href="${escapeHtml(definition.path)}">${escapeHtml(definition.path)}</a></h2>
           </div>
-          <span>${escapeHtml(definition.status)}</span>
+          <span>${escapeHtml(getRouteStatus(definition))}</span>
         </article>
       `,
     )
@@ -1234,9 +1540,840 @@ function renderWorkflowItems() {
   ).join('');
 }
 
+function renderSelectOptions(options, selectedValue) {
+  return options
+    .map((option) => {
+      const selected = option.value === selectedValue ? ' selected' : '';
+      return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+    })
+    .join('');
+}
+
+function renderContributionIntentForm(payload = {}) {
+  const values = buildContributionIntentFormValues(payload);
+  const laneOptions = CONTRIBUTION_LANES.map((lane) => ({
+    value: lane.id,
+    label: `${lane.label} - ${lane.bittreesArm}`,
+  }));
+  const templateOptions = CONTRIBUTION_TEMPLATES.map((template) => ({
+    value: template.id,
+    label: `${template.name} - ${template.lane}`,
+  }));
+  const contributorKindOptions = ['agent', 'human', 'team', 'tool'].map((kind) => ({
+    value: kind,
+    label: kind,
+  }));
+
+  return `<form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post">
+    <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
+    <div class="form-grid">
+      <label>
+        <span>Contributor type</span>
+        <select name="contributor.kind" required>
+          ${renderSelectOptions(contributorKindOptions, values['contributor.kind'] || 'agent')}
+        </select>
+      </label>
+      <label>
+        <span>Contributor name</span>
+        <input name="contributor.name" value="${escapeHtml(values['contributor.name'])}" required minlength="2" maxlength="120" autocomplete="name" />
+      </label>
+      <label>
+        <span>Agent ID</span>
+        <input name="contributor.agentId" value="${escapeHtml(values['contributor.agentId'])}" maxlength="120" autocomplete="off" />
+      </label>
+      <label>
+        <span>Team</span>
+        <input name="contributor.team" value="${escapeHtml(values['contributor.team'])}" maxlength="120" autocomplete="organization" />
+      </label>
+      <label class="wide">
+        <span>Contact route</span>
+        <input name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/agent-name" />
+      </label>
+      <label>
+        <span>Target lane</span>
+        <select name="targetLane" required>
+          ${renderSelectOptions(laneOptions, values.targetLane || 'inc-ops-governance')}
+        </select>
+      </label>
+      <label>
+        <span>Proposed template</span>
+        <select name="proposedTemplate" required>
+          ${renderSelectOptions(templateOptions, values.proposedTemplate || 'contribution-task')}
+        </select>
+      </label>
+      <label class="wide">
+        <span>Summary</span>
+        <textarea name="summary" required minlength="20" maxlength="2000" rows="4">${escapeHtml(values.summary)}</textarea>
+      </label>
+      <label>
+        <span>Requested owner route</span>
+        <input name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/engineering-lead" />
+      </label>
+      <label>
+        <span>Goal ID</span>
+        <input name="handoff.goalId" value="${escapeHtml(values['handoff.goalId'])}" maxlength="120" autocomplete="off" />
+      </label>
+      <label class="wide">
+        <span>Expected output</span>
+        <textarea name="handoff.expectedOutput" required minlength="10" maxlength="1200" rows="3">${escapeHtml(values['handoff.expectedOutput'])}</textarea>
+      </label>
+      <label class="wide">
+        <span>Acceptance criteria</span>
+        <textarea name="handoff.acceptanceCriteria" required minlength="5" rows="4">${escapeHtml(values['handoff.acceptanceCriteria'])}</textarea>
+      </label>
+      <label class="wide">
+        <span>Out of scope</span>
+        <textarea name="handoff.outOfScope" required minlength="3" rows="3">${escapeHtml(values['handoff.outOfScope'])}</textarea>
+      </label>
+      <label class="wide">
+        <span>Backlog policy</span>
+        <textarea name="handoff.backlogPolicy" required minlength="10" maxlength="700" rows="3">${escapeHtml(values['handoff.backlogPolicy'])}</textarea>
+      </label>
+      <label class="wide">
+        <span>Source IDs</span>
+        <textarea name="handoff.sourceIds" rows="2">${escapeHtml(values['handoff.sourceIds'])}</textarea>
+      </label>
+    </div>
+    <fieldset>
+      <legend>Safety acknowledgements</legend>
+      <label><input type="checkbox" name="safety.noSecretsIncluded" value="true" required${values['safety.noSecretsIncluded'] ? ' checked' : ''} /> No secrets, credentials, wallet data, or private material are included.</label>
+      <label><input type="checkbox" name="safety.noLiveWriteAcknowledged" value="true" required${values['safety.noLiveWriteAcknowledged'] ? ' checked' : ''} /> I understand live production writes remain disabled without approval.</label>
+      <label><input type="checkbox" name="safety.noOnchainActionRequested" value="true" required${values['safety.noOnchainActionRequested'] ? ' checked' : ''} /> This is not a request for onchain execution or asset movement.</label>
+    </fieldset>
+    <button type="submit">Submit contribution intent</button>
+  </form>`;
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getGeneratedIntentId(generatedAt = new Date()) {
+  return `intent-${generatedAt.toISOString().slice(0, 10)}-${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+}
+
+function stringifyFormArrayValue(value) {
+  return Array.isArray(value) ? value.join('\n') : String(value ?? '');
+}
+
+function buildContributionIntentFormValues(payload = {}) {
+  const generatedAt = new Date();
+  const contributor = isPlainObject(payload.contributor) ? payload.contributor : {};
+  const handoff = isPlainObject(payload.handoff) ? payload.handoff : {};
+  const safety = isPlainObject(payload.safety) ? payload.safety : {};
+
+  return {
+    schema: String(payload.schema ?? 'agent.bittrees.contribution-intent.v1'),
+    intentId: String(payload.intentId ?? getGeneratedIntentId(generatedAt)),
+    submittedAt: String(payload.submittedAt ?? generatedAt.toISOString()),
+    'contributor.kind': String(contributor.kind ?? ''),
+    'contributor.name': String(contributor.name ?? ''),
+    'contributor.agentId': String(contributor.agentId ?? ''),
+    'contributor.team': String(contributor.team ?? ''),
+    'contributor.contactRoute': String(contributor.contactRoute ?? ''),
+    targetLane: String(payload.targetLane ?? ''),
+    summary: String(payload.summary ?? ''),
+    proposedTemplate: String(payload.proposedTemplate ?? ''),
+    'handoff.requestedOwnerRoute': String(handoff.requestedOwnerRoute ?? ''),
+    'handoff.goalId': String(handoff.goalId ?? ''),
+    'handoff.expectedOutput': String(handoff.expectedOutput ?? ''),
+    'handoff.acceptanceCriteria': stringifyFormArrayValue(handoff.acceptanceCriteria),
+    'handoff.outOfScope': stringifyFormArrayValue(handoff.outOfScope),
+    'handoff.backlogPolicy': String(handoff.backlogPolicy ?? ''),
+    'handoff.sourceIds': stringifyFormArrayValue(handoff.sourceIds),
+    'safety.noSecretsIncluded': safety.noSecretsIncluded === true,
+    'safety.noLiveWriteAcknowledged': safety.noLiveWriteAcknowledged === true,
+    'safety.noOnchainActionRequested': safety.noOnchainActionRequested === true,
+  };
+}
+
+function getRequestHeader(req, headerName) {
+  const headers = req.headers ?? {};
+  const targetName = headerName.toLowerCase();
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === targetName) {
+      return Array.isArray(value) ? value.join(', ') : String(value ?? '');
+    }
+  }
+
+  return '';
+}
+
+function getRequestMediaType(req) {
+  return getRequestHeader(req, 'content-type').split(';', 1)[0].trim().toLowerCase();
+}
+
+function shouldRenderContributionIntentHtml(req) {
+  return getRequestMediaType(req) === 'application/x-www-form-urlencoded' ||
+    getRequestHeader(req, 'accept').toLowerCase().includes('text/html');
+}
+
+function appendFormBodyValue(params, key, value) {
+  if (value === undefined || value === null) return;
+  if (Array.isArray(value)) {
+    for (const item of value) appendFormBodyValue(params, key, item);
+    return;
+  }
+  if (isPlainObject(value)) {
+    for (const [nestedKey, nestedValue] of Object.entries(value)) {
+      appendFormBodyValue(params, `${key}.${nestedKey}`, nestedValue);
+    }
+    return;
+  }
+  params.append(key, String(value));
+}
+
+function buildUrlSearchParamsFromBody(rawBody) {
+  if (rawBody instanceof URLSearchParams) return rawBody;
+  if (Buffer.isBuffer(rawBody)) return new URLSearchParams(rawBody.toString('utf8'));
+  if (isPlainObject(rawBody)) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(rawBody)) appendFormBodyValue(params, key, value);
+    return params;
+  }
+  return new URLSearchParams(String(rawBody ?? ''));
+}
+
+const CONTRIBUTION_INTENT_FORM_FIELD_ALIASES = {
+  'contributor.kind': ['contributorKind', 'contributor_kind'],
+  'contributor.name': ['contributorName', 'contributor_name'],
+  'contributor.agentId': ['contributorAgentId', 'contributor_agent_id'],
+  'contributor.team': ['contributorTeam', 'contributor_team'],
+  'contributor.contactRoute': ['contributorContactRoute', 'contributor_contact_route'],
+  'handoff.requestedOwnerRoute': ['requestedOwnerRoute', 'requested_owner_route'],
+  'handoff.goalId': ['goalId', 'goal_id'],
+  'handoff.expectedOutput': ['expectedOutput', 'expected_output'],
+  'handoff.acceptanceCriteria': ['acceptanceCriteria', 'acceptance_criteria'],
+  'handoff.outOfScope': ['outOfScope', 'out_of_scope'],
+  'handoff.backlogPolicy': ['backlogPolicy', 'backlog_policy'],
+  'handoff.sourceIds': ['sourceIds', 'source_ids'],
+  'safety.noSecretsIncluded': ['noSecretsIncluded', 'no_secrets_included'],
+  'safety.noLiveWriteAcknowledged': ['noLiveWriteAcknowledged', 'no_live_write_acknowledged'],
+  'safety.noOnchainActionRequested': ['noOnchainActionRequested', 'no_onchain_action_requested'],
+};
+
+function getContributionIntentFormFieldNames(canonicalName) {
+  return [canonicalName, ...(CONTRIBUTION_INTENT_FORM_FIELD_ALIASES[canonicalName] ?? [])];
+}
+
+function normalizeFormString(value) {
+  return String(value ?? '').trim();
+}
+
+function getAllContributionIntentFormValues(params, canonicalName) {
+  return getContributionIntentFormFieldNames(canonicalName)
+    .flatMap((name) => params.getAll(name))
+    .map(normalizeFormString)
+    .filter((value) => value.length > 0);
+}
+
+function getContributionIntentFormValue(params, canonicalName, defaultValue = '') {
+  return getAllContributionIntentFormValues(params, canonicalName).at(-1) ?? defaultValue;
+}
+
+function getContributionIntentFormList(params, canonicalName, { splitCommas = false } = {}) {
+  const splitter = splitCommas ? /[\r\n,]+/ : /\r?\n/;
+  return getContributionIntentFormFieldNames(canonicalName)
+    .flatMap((name) => params.getAll(name))
+    .flatMap((value) => String(value ?? '').split(splitter))
+    .map(normalizeFormString)
+    .filter((value) => value.length > 0);
+}
+
+function getContributionIntentFormBoolean(params, canonicalName) {
+  const value = getAllContributionIntentFormValues(params, canonicalName).at(-1);
+  return value !== undefined && ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
+function setOptionalStringValue(target, key, value) {
+  if (typeof value === 'string' && value.length > 0) target[key] = value;
+}
+
+function buildContributionIntentPayloadFromForm(rawBody, generatedAt = new Date()) {
+  const params = buildUrlSearchParamsFromBody(rawBody);
+  const contributor = {
+    kind: getContributionIntentFormValue(params, 'contributor.kind'),
+    name: getContributionIntentFormValue(params, 'contributor.name'),
+    contactRoute: getContributionIntentFormValue(params, 'contributor.contactRoute'),
+  };
+  const handoff = {
+    requestedOwnerRoute: getContributionIntentFormValue(params, 'handoff.requestedOwnerRoute'),
+    expectedOutput: getContributionIntentFormValue(params, 'handoff.expectedOutput'),
+    acceptanceCriteria: getContributionIntentFormList(params, 'handoff.acceptanceCriteria'),
+    outOfScope: getContributionIntentFormList(params, 'handoff.outOfScope'),
+    backlogPolicy: getContributionIntentFormValue(params, 'handoff.backlogPolicy'),
+  };
+  const sourceIds = getContributionIntentFormList(params, 'handoff.sourceIds', { splitCommas: true });
+
+  setOptionalStringValue(contributor, 'agentId', getContributionIntentFormValue(params, 'contributor.agentId'));
+  setOptionalStringValue(contributor, 'team', getContributionIntentFormValue(params, 'contributor.team'));
+  setOptionalStringValue(handoff, 'goalId', getContributionIntentFormValue(params, 'handoff.goalId'));
+  if (sourceIds.length > 0) handoff.sourceIds = sourceIds;
+
+  return {
+    schema: getContributionIntentFormValue(params, 'schema', 'agent.bittrees.contribution-intent.v1'),
+    intentId: getContributionIntentFormValue(params, 'intentId', getGeneratedIntentId(generatedAt)),
+    submittedAt: getContributionIntentFormValue(params, 'submittedAt', generatedAt.toISOString()),
+    contributor,
+    targetLane: getContributionIntentFormValue(params, 'targetLane'),
+    summary: getContributionIntentFormValue(params, 'summary'),
+    proposedTemplate: getContributionIntentFormValue(params, 'proposedTemplate'),
+    handoff,
+    safety: {
+      noSecretsIncluded: getContributionIntentFormBoolean(params, 'safety.noSecretsIncluded'),
+      noLiveWriteAcknowledged: getContributionIntentFormBoolean(params, 'safety.noLiveWriteAcknowledged'),
+      noOnchainActionRequested: getContributionIntentFormBoolean(params, 'safety.noOnchainActionRequested'),
+    },
+  };
+}
+
+const CONTRIBUTION_INTENT_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{6,118}[a-z0-9]$/;
+
+function pushUnknownKeys(errors, value, allowedKeys, path) {
+  const allowed = new Set(allowedKeys);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) errors.push(`${path}.${key} is not allowed.`);
+  }
+}
+
+function validateStringField(
+  errors,
+  value,
+  path,
+  { minLength = 0, maxLength = Number.POSITIVE_INFINITY, pattern, allowedValues } = {},
+) {
+  if (typeof value !== 'string') {
+    errors.push(`${path} must be a string.`);
+    return false;
+  }
+  if (value.length < minLength) errors.push(`${path} must be at least ${minLength} characters.`);
+  if (value.length > maxLength) errors.push(`${path} must be at most ${maxLength} characters.`);
+  if (pattern && !pattern.test(value)) errors.push(`${path} has an invalid format.`);
+  if (allowedValues && !allowedValues.includes(value)) {
+    errors.push(`${path} must be one of: ${allowedValues.join(', ')}.`);
+  }
+  return true;
+}
+
+function validateStringArrayField(
+  errors,
+  value,
+  path,
+  { minItems = 0, maxItems = Number.POSITIVE_INFINITY, minLength = 1, maxLength = 400 } = {},
+) {
+  if (!Array.isArray(value)) {
+    errors.push(`${path} must be an array.`);
+    return false;
+  }
+  if (value.length < minItems) errors.push(`${path} must include at least ${minItems} item(s).`);
+  if (value.length > maxItems) errors.push(`${path} must include at most ${maxItems} item(s).`);
+  value.forEach((item, index) => validateStringField(errors, item, `${path}[${index}]`, { minLength, maxLength }));
+  return true;
+}
+
+function validateContributionIntentRequest(payload) {
+  const errors = [];
+  if (!isPlainObject(payload)) return { ok: false, errors: ['Request body must be a JSON object.'] };
+
+  pushUnknownKeys(
+    errors,
+    payload,
+    ['schema', 'intentId', 'submittedAt', 'contributor', 'targetLane', 'summary', 'proposedTemplate', 'handoff', 'safety'],
+    'body',
+  );
+  validateStringField(errors, payload.schema, 'body.schema', {
+    allowedValues: ['agent.bittrees.contribution-intent.v1'],
+  });
+  validateStringField(errors, payload.intentId, 'body.intentId', {
+    minLength: 8,
+    maxLength: 120,
+    pattern: CONTRIBUTION_INTENT_ID_PATTERN,
+  });
+  validateStringField(errors, payload.submittedAt, 'body.submittedAt', { minLength: 1, maxLength: 120 });
+  if (payload.submittedAt && Number.isNaN(Date.parse(payload.submittedAt))) {
+    errors.push('body.submittedAt must be an ISO-8601 date-time string.');
+  }
+
+  if (!isPlainObject(payload.contributor)) {
+    errors.push('body.contributor must be an object.');
+  } else {
+    pushUnknownKeys(errors, payload.contributor, ['kind', 'name', 'agentId', 'team', 'contactRoute'], 'body.contributor');
+    validateStringField(errors, payload.contributor.kind, 'body.contributor.kind', {
+      allowedValues: ['agent', 'human', 'team', 'tool'],
+    });
+    validateStringField(errors, payload.contributor.name, 'body.contributor.name', { minLength: 1, maxLength: 120 });
+    if (payload.contributor.agentId !== undefined) {
+      validateStringField(errors, payload.contributor.agentId, 'body.contributor.agentId', {
+        minLength: 1,
+        maxLength: 160,
+      });
+    }
+    if (payload.contributor.team !== undefined) {
+      validateStringField(errors, payload.contributor.team, 'body.contributor.team', {
+        minLength: 1,
+        maxLength: 120,
+      });
+    }
+    validateStringField(errors, payload.contributor.contactRoute, 'body.contributor.contactRoute', {
+      minLength: 1,
+      maxLength: 300,
+    });
+  }
+
+  validateStringField(errors, payload.targetLane, 'body.targetLane', {
+    allowedValues: CONTRIBUTION_LANES.map((lane) => lane.id),
+  });
+  validateStringField(errors, payload.summary, 'body.summary', { minLength: 20, maxLength: 1200 });
+  validateStringField(errors, payload.proposedTemplate, 'body.proposedTemplate', {
+    allowedValues: CONTRIBUTION_TEMPLATES.map((template) => template.id),
+  });
+
+  if (!isPlainObject(payload.handoff)) {
+    errors.push('body.handoff must be an object.');
+  } else {
+    pushUnknownKeys(
+      errors,
+      payload.handoff,
+      ['requestedOwnerRoute', 'goalId', 'expectedOutput', 'acceptanceCriteria', 'outOfScope', 'backlogPolicy', 'sourceIds'],
+      'body.handoff',
+    );
+    validateStringField(errors, payload.handoff.requestedOwnerRoute, 'body.handoff.requestedOwnerRoute', {
+      minLength: 1,
+      maxLength: 160,
+    });
+    if (payload.handoff.goalId !== undefined) {
+      validateStringField(errors, payload.handoff.goalId, 'body.handoff.goalId', { minLength: 1, maxLength: 120 });
+    }
+    validateStringField(errors, payload.handoff.expectedOutput, 'body.handoff.expectedOutput', {
+      minLength: 10,
+      maxLength: 1200,
+    });
+    validateStringArrayField(errors, payload.handoff.acceptanceCriteria, 'body.handoff.acceptanceCriteria', {
+      minItems: 1,
+      maxItems: 10,
+      minLength: 5,
+      maxLength: 400,
+    });
+    validateStringArrayField(errors, payload.handoff.outOfScope, 'body.handoff.outOfScope', {
+      minItems: 1,
+      maxItems: 10,
+      minLength: 3,
+      maxLength: 300,
+    });
+    validateStringField(errors, payload.handoff.backlogPolicy, 'body.handoff.backlogPolicy', {
+      minLength: 10,
+      maxLength: 600,
+    });
+    if (payload.handoff.sourceIds !== undefined) {
+      validateStringArrayField(errors, payload.handoff.sourceIds, 'body.handoff.sourceIds', {
+        minItems: 0,
+        maxItems: 20,
+        minLength: 1,
+        maxLength: 160,
+      });
+    }
+  }
+
+  if (!isPlainObject(payload.safety)) {
+    errors.push('body.safety must be an object.');
+  } else {
+    pushUnknownKeys(errors, payload.safety, ['noSecretsIncluded', 'noLiveWriteAcknowledged', 'noOnchainActionRequested'], 'body.safety');
+    if (payload.safety.noSecretsIncluded !== true) errors.push('body.safety.noSecretsIncluded must be true.');
+    if (payload.safety.noLiveWriteAcknowledged !== true) {
+      errors.push('body.safety.noLiveWriteAcknowledged must be true.');
+    }
+    if (payload.safety.noOnchainActionRequested !== true) {
+      errors.push('body.safety.noOnchainActionRequested must be true.');
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    laneDefinition: CONTRIBUTION_LANES.find((lane) => lane.id === payload.targetLane),
+    templateDefinition: CONTRIBUTION_TEMPLATES.find((template) => template.id === payload.proposedTemplate),
+    normalized: {
+      ...payload,
+      contributor: isPlainObject(payload.contributor) ? { ...payload.contributor } : payload.contributor,
+      handoff: isPlainObject(payload.handoff) ? { ...payload.handoff } : payload.handoff,
+      safety: isPlainObject(payload.safety) ? { ...payload.safety } : payload.safety,
+    },
+  };
+}
+
+function buildContributionIntentResponse({
+  route = CONTRIBUTION_INTENT_CONTRACT_PATH,
+  status,
+  accepted,
+  liveWrite,
+  message,
+  receiptId,
+  nextStep,
+  errors,
+  generatedAt = new Date().toISOString(),
+}) {
+  return {
+    $schema: SCHEMA_URL,
+    route,
+    canonicalUrl: new URL(route, PORTAL_BASE_URL).toString(),
+    generatedAt,
+    requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
+    responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
+    securityGate: buildContributionIntentSecurityGate(),
+    schema: 'agent.bittrees.contribution-intent.response.v1',
+    status,
+    accepted,
+    liveWrite,
+    message,
+    ...(receiptId ? { receiptId } : {}),
+    ...(nextStep ? { nextStep } : {}),
+    ...(Array.isArray(errors) && errors.length ? { errors } : {}),
+  };
+}
+
+function buildContributionIntentDisabledResponse(route = CONTRIBUTION_INTENT_CONTRACT_PATH) {
+  return buildContributionIntentResponse({
+    route,
+    status: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.status,
+    accepted: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.accepted,
+    liveWrite: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.liveWrite,
+    message: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.message,
+    nextStep: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.nextStep,
+  });
+}
+
+function buildContributionIntentAcceptedResponse(receiptId, nextStep, route = CONTRIBUTION_INTENT_CONTRACT_PATH) {
+  return buildContributionIntentResponse({
+    route,
+    status: 'accepted',
+    accepted: true,
+    liveWrite: true,
+    receiptId,
+    nextStep,
+    message: 'Contribution intent accepted, persisted, and fleet notification queued.',
+  });
+}
+
+function buildContributionIntentRejectedResponse(
+  message,
+  nextStep,
+  errors = [],
+  route = CONTRIBUTION_INTENT_CONTRACT_PATH,
+) {
+  return buildContributionIntentResponse({
+    route,
+    status: 'rejected',
+    accepted: false,
+    liveWrite: true,
+    message,
+    nextStep,
+    errors,
+  });
+}
+
+function buildOfflineContributionIntentPacket(generatedAt = new Date().toISOString()) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.v1',
+    intentId: `intent-${generatedAt.slice(0, 10)}-offline`,
+    submittedAt: generatedAt,
+    contributor: {
+      kind: 'agent',
+      name: '<agent-or-human-name>',
+      agentId: '<optional-agent-id>',
+      team: '<optional-team>',
+      contactRoute: '<manager-route-or-contact-channel>',
+    },
+    targetLane: 'inc-ops-governance',
+    summary: '<20-1200 character contribution summary>',
+    proposedTemplate: 'contribution-task',
+    handoff: {
+      requestedOwnerRoute: 'M:engineering-team/engineering-lead',
+      goalId: '<optional-goal-id>',
+      expectedOutput: '<requested review output>',
+      acceptanceCriteria: ['<criterion one>'],
+      outOfScope: ['<explicit non-goal or unsafe action>'],
+      backlogPolicy: '<when this should move to backlog>',
+      sourceIds: ['<optional-source-id>'],
+    },
+    safety: {
+      noSecretsIncluded: true,
+      noLiveWriteAcknowledged: true,
+      noOnchainActionRequested: true,
+    },
+  };
+}
+
+function renderContributionIntentPage({ title, heading, lead, body }) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>${escapeHtml(title)} - agent.bittrees.org</title>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">agent.bittrees.org</a></p>
+      <h1>${escapeHtml(heading)}</h1>
+      <p>${escapeHtml(lead)}</p>
+      ${body}
+    </main>
+  </body>
+</html>`;
+}
+
+function renderContributionIntentDisabledPage(response) {
+  const offlinePacket = buildOfflineContributionIntentPacket(response.generatedAt);
+  return renderContributionIntentPage({
+    title: 'Contribution intent offline packet',
+    heading: 'Submission writes are disabled',
+    lead: response.message,
+    body: `<h2>Offline packet template</h2>
+    <p>${escapeHtml(response.nextStep ?? '')}</p>
+    <pre>${escapeHtml(JSON.stringify(offlinePacket, null, 2))}</pre>`,
+  });
+}
+
+function renderContributionIntentReceiptPage(response) {
+  return renderContributionIntentPage({
+    title: 'Contribution intent receipt',
+    heading: 'Contribution intent received',
+    lead: response.message,
+    body: `<p><strong>Receipt ID:</strong> <code>${escapeHtml(response.receiptId ?? '')}</code></p>
+    <p>${escapeHtml(response.nextStep ?? '')}</p>`,
+  });
+}
+
+function renderContributionIntentValidationPage(response, payload = {}) {
+  const errors = Array.isArray(response.errors) ? response.errors : [];
+  const errorItems = errors.map((error) => `<li>${escapeHtml(error)}</li>`).join('');
+  return renderContributionIntentPage({
+    title: 'Contribution intent needs changes',
+    heading: 'Check the submission',
+    lead: response.message,
+    body: `<ul>${errorItems}</ul>${renderContributionIntentForm(payload)}`,
+  });
+}
+
+function buildContributionIntentAcceptanceNextStep(notificationRecord) {
+  return `Lead review has been queued for ${notificationRecord.requestedOwnerRoute}. Use the receipt ID to correlate stored submission and fleet-notification records.`;
+}
+
+function buildFleetNotificationRecord({ receiptId, receivedAt, requestBody, laneDefinition, templateDefinition }) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.notification.v1',
+    notificationId: receiptId,
+    receiptId,
+    queuedAt: receivedAt,
+    status: 'queued',
+    channel: 'fleet',
+    route: CONTRIBUTION_INTENT_CONTRACT.endpoint,
+    targetLane: requestBody.targetLane,
+    contributor: requestBody.contributor,
+    summary: requestBody.summary,
+    requestedOwnerRoute: requestBody.handoff.requestedOwnerRoute,
+    expectedOutput: requestBody.handoff.expectedOutput,
+    backlogPolicy: requestBody.handoff.backlogPolicy,
+    lane: laneDefinition
+      ? { id: laneDefinition.id, label: laneDefinition.label, bittreesArm: laneDefinition.bittreesArm }
+      : null,
+    targets: [requestBody.handoff.requestedOwnerRoute].filter(Boolean),
+    sourceIds: requestBody.handoff.sourceIds ?? [],
+    template: templateDefinition
+      ? { id: templateDefinition.id, name: templateDefinition.name, reviewPath: templateDefinition.reviewPath }
+      : null,
+    featureFlag: { name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0], enabled: true },
+  };
+}
+
+function buildContributionIntentSubmissionRecord({
+  receiptId,
+  receivedAt,
+  requestBody,
+  laneDefinition,
+  templateDefinition,
+  notificationRecord,
+  storagePaths,
+}) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.submission.v1',
+    receiptId,
+    receivedAt,
+    featureFlag: { name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0], enabled: true },
+    request: requestBody,
+    lane: laneDefinition,
+    template: templateDefinition,
+    persistence: {
+      storageDir: storagePaths.storageDir,
+      submissionsLogPath: storagePaths.submissionsLogPath,
+      notificationsLogPath: storagePaths.notificationsLogPath,
+    },
+    fleetNotification: notificationRecord,
+  };
+}
+
+async function persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord) {
+  await mkdir(storagePaths.storageDir, { recursive: true });
+  await appendFile(storagePaths.submissionsLogPath, `${JSON.stringify(submissionRecord)}\n`);
+  await appendFile(storagePaths.notificationsLogPath, `${JSON.stringify(notificationRecord)}\n`);
+}
+
+function readRequestBody(req, maxBytes = 1024 * 1024) {
+  if (typeof req.body === 'string') return Promise.resolve(req.body);
+  if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
+  if (req.body && typeof req.body === 'object') return Promise.resolve(req.body);
+
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+    req.on('data', (chunk) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.byteLength;
+      if (totalBytes > maxBytes) {
+        reject(Object.assign(new Error('Request body exceeds the 1 MiB limit.'), { statusCode: 413 }));
+        req.destroy?.();
+        return;
+      }
+      chunks.push(buffer);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+function parseContributionIntentRequestPayload(rawBody, req) {
+  if (getRequestMediaType(req) === 'application/x-www-form-urlencoded') {
+    return buildContributionIntentPayloadFromForm(rawBody);
+  }
+  if (isPlainObject(rawBody)) return rawBody;
+  return JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody ?? ''));
+}
+
+async function handleContributionIntentPost(
+  req,
+  res,
+  includeBody,
+  telemetry,
+  routePath = CONTRIBUTION_INTENT_CONTRACT_PATH,
+) {
+  const renderHtml = shouldRenderContributionIntentHtml(req);
+
+  if (!isContributionIntentsWriteEnabled()) {
+    req.resume?.();
+    const responseBody = buildContributionIntentDisabledResponse(routePath);
+    const responseTelemetry = { ...telemetry, status: 501 };
+    if (renderHtml) {
+      return sendBody(res, 501, renderContributionIntentDisabledPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, 501, responseBody, includeBody, responseTelemetry);
+  }
+
+  let rawBody = '';
+  try {
+    rawBody = await readRequestBody(req);
+  } catch (error) {
+    const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
+    const responseBody = buildContributionIntentRejectedResponse(
+      statusCode === 413
+        ? 'Contribution intent rejected because the request body exceeded the 1 MiB limit.'
+        : 'Contribution intent rejected because the request body could not be read.',
+      'Submit a valid contribution-intent request no larger than 1 MiB that matches the documented schema.',
+      [],
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: statusCode };
+    if (renderHtml) {
+      return sendBody(res, statusCode, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, statusCode, responseBody, includeBody, responseTelemetry);
+  }
+
+  let payload = null;
+  try {
+    payload = parseContributionIntentRequestPayload(rawBody, req);
+  } catch {
+    const responseBody = buildContributionIntentRejectedResponse(
+      'Contribution intent rejected because the request body was not valid JSON.',
+      'Submit a JSON object or application/x-www-form-urlencoded body that matches the documented request schema.',
+      ['Request body must be valid JSON unless it uses application/x-www-form-urlencoded form encoding.'],
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: 400 };
+    if (renderHtml) {
+      return sendBody(res, 400, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, 400, responseBody, includeBody, responseTelemetry);
+  }
+
+  const validation = validateContributionIntentRequest(payload);
+  if (!validation.ok) {
+    const responseBody = buildContributionIntentRejectedResponse(
+      'Contribution intent rejected because the request body did not match the documented schema.',
+      'Fix the validation errors and resubmit the contribution intent.',
+      validation.errors,
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: 400 };
+    if (renderHtml) {
+      return sendBody(res, 400, renderContributionIntentValidationPage(responseBody, payload), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, 400, responseBody, includeBody, responseTelemetry);
+  }
+
+  const receiptId = randomUUID();
+  const receivedAt = new Date().toISOString();
+  const storagePaths = getContributionIntentStoragePaths();
+  const notificationRecord = buildFleetNotificationRecord({
+    receiptId,
+    receivedAt,
+    requestBody: validation.normalized,
+    laneDefinition: validation.laneDefinition,
+    templateDefinition: validation.templateDefinition,
+  });
+  const submissionRecord = buildContributionIntentSubmissionRecord({
+    receiptId,
+    receivedAt,
+    requestBody: validation.normalized,
+    laneDefinition: validation.laneDefinition,
+    templateDefinition: validation.templateDefinition,
+    notificationRecord,
+    storagePaths,
+  });
+
+  try {
+    await persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord);
+  } catch {
+    console.error('Contribution intent persistence failed.');
+    const responseBody = buildContributionIntentRejectedResponse(
+      'Contribution intent could not be persisted for lead review.',
+      'Retry later or contact the owning lead if the error persists.',
+      [],
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: 500 };
+    if (renderHtml) {
+      return sendBody(res, 500, renderContributionIntentValidationPage(responseBody, payload), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, 500, responseBody, includeBody, responseTelemetry);
+  }
+
+  const responseBody = buildContributionIntentAcceptedResponse(
+    receiptId,
+    buildContributionIntentAcceptanceNextStep(notificationRecord),
+    routePath,
+  );
+  const responseTelemetry = { ...telemetry, status: 202 };
+  if (renderHtml) {
+    return sendBody(res, 202, renderContributionIntentReceiptPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+  }
+  return sendJson(res, 202, responseBody, includeBody, responseTelemetry);
+}
+
 export function buildLlmsTxt() {
   const endpoints = ROUTE_DEFINITIONS.filter((definition) => definition.path !== '/')
-    .map((definition) => `- ${definition.path}: ${definition.description} Status: ${definition.status}.`)
+    .map((definition) => `- ${definition.path}: ${definition.description} Status: ${getRouteStatus(definition)}.`)
     .join('\n');
 
   const lanes = CONTRIBUTION_LANES.map(
@@ -1565,6 +2702,88 @@ export function renderLandingPage() {
         letter-spacing: 0;
       }
 
+      .intent-form {
+        display: grid;
+        gap: 18px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .intent-form label,
+      .intent-form fieldset {
+        display: grid;
+        gap: 7px;
+        margin: 0;
+      }
+
+      .intent-form .wide,
+      .intent-form fieldset {
+        grid-column: 1 / -1;
+      }
+
+      .intent-form span,
+      .intent-form legend {
+        color: var(--ink);
+        font-size: 0.82rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      .intent-form input,
+      .intent-form select,
+      .intent-form textarea {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        padding: 9px 10px;
+      }
+
+      .intent-form textarea {
+        resize: vertical;
+        line-height: 1.55;
+      }
+
+      .intent-form fieldset {
+        border: 1px solid var(--line);
+        padding: 14px;
+      }
+
+      .intent-form fieldset label {
+        grid-template-columns: 18px 1fr;
+        align-items: start;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .intent-form input[type="checkbox"] {
+        width: 18px;
+        min-height: 18px;
+        margin: 2px 0 0;
+        padding: 0;
+      }
+
+      .intent-form button {
+        justify-self: start;
+        min-height: 44px;
+        border: 0;
+        background: var(--green);
+        color: #fff;
+        font: inherit;
+        font-weight: 800;
+        padding: 0 16px;
+      }
+
       @media (max-width: 820px) {
         main { width: min(100% - 28px, 1180px); padding-top: 18px; }
         .topline,
@@ -1573,7 +2792,8 @@ export function renderLandingPage() {
         .topline { align-items: flex-start; }
         h1 { max-width: 100%; }
         .route-card { align-items: flex-start; flex-direction: column; }
-        .workflow-list { grid-template-columns: 1fr; }
+        .workflow-list,
+        .form-grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -1609,6 +2829,17 @@ export function renderLandingPage() {
         <ol class="workflow-list">
           ${renderWorkflowItems()}
         </ol>
+      </section>
+
+      <section class="band" aria-labelledby="intent-title">
+        <div>
+          <h2 id="intent-title">Contribution intent</h2>
+          <p class="note">
+            Submit a source-aware packet for lead review. The public launch default returns offline guidance;
+            non-production write flags enable receipt and local review-record persistence.
+          </p>
+        </div>
+        ${renderContributionIntentForm()}
       </section>
 
       <section class="band" aria-labelledby="scope-title">
@@ -1886,17 +3117,23 @@ export function renderIdentityKeysPage() {
 }
 
 export function buildJsonResponse(routeDefinition, generatedAt = new Date().toISOString()) {
+  const routeData = typeof routeDefinition.data === 'function' ? routeDefinition.data() : routeDefinition.data;
+
   return {
     $schema: SCHEMA_URL,
     route: routeDefinition.path,
     generatedAt,
-    status: routeDefinition.status,
+    status: routeData?.status ?? routeDefinition.status,
     schema: routeDefinition.schema,
-    data: routeDefinition.data,
+    data: routeData,
   };
 }
 
-function sendBody(res, statusCode, body, contentType, includeBody = true) {
+function logTelemetryRequest({ timestamp = new Date().toISOString(), method, path, status }) {
+  console.log(JSON.stringify({ timestamp, method, path, status }));
+}
+
+function sendBody(res, statusCode, body, contentType, includeBody = true, telemetry = null) {
   const payload = Buffer.isBuffer(body) ? body : Buffer.from(String(body));
   res.writeHead(statusCode, {
     'Content-Type': contentType,
@@ -1906,10 +3143,26 @@ function sendBody(res, statusCode, body, contentType, includeBody = true) {
     'X-Robots-Tag': 'noindex, nofollow',
   });
   res.end(includeBody ? payload : undefined);
+
+  if (telemetry) logTelemetryRequest(telemetry);
 }
 
-function sendJson(res, statusCode, body, includeBody = true) {
-  sendBody(res, statusCode, `${JSON.stringify(body, null, 2)}\n`, 'application/json; charset=utf-8', includeBody);
+function sendJson(res, statusCode, body, includeBody = true, telemetry = null) {
+  sendBody(res, statusCode, `${JSON.stringify(body, null, 2)}\n`, 'application/json; charset=utf-8', includeBody, telemetry);
+}
+
+function sendRedirect(res, statusCode, location, telemetry = null) {
+  res.writeHead(statusCode, {
+    Location: location,
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Content-Length': '0',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Robots-Tag': 'noindex, nofollow',
+  });
+  res.end();
+
+  if (telemetry) logTelemetryRequest(telemetry);
 }
 
 export function buildPortalManifest(generatedAt = new Date().toISOString()) {
@@ -1923,7 +3176,7 @@ export function buildPortalManifest(generatedAt = new Date().toISOString()) {
       label: definition.label,
       description: definition.description,
       kind: definition.kind,
-      status: definition.status,
+      status: getRouteStatus(definition),
     })),
   };
 }
@@ -1944,8 +3197,16 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
       body: renderIdentityKeysPage(),
     },
     {
+      path: ROBOTS_TXT_PATH.replace(/^\//, ''),
+      body: ROBOTS_TXT_BODY,
+    },
+    {
       path: 'llms.txt',
       body: buildLlmsTxt(),
+    },
+    {
+      path: ROBOTS_TXT_PATH.replace(/^\//, ''),
+      body: ROBOTS_TXT_BODY,
     },
     ...routeAssets,
     {
@@ -1956,34 +3217,78 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
 }
 
 export function createRequestHandler() {
-  return function handleRequest(req, res) {
+  return async function handleRequest(req, res) {
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const includeBody = req.method !== 'HEAD';
+    const pathname = requestUrl.pathname;
+    const telemetry = { method: req.method ?? 'GET', path: pathname };
+    const normalizedPath = normalizeCanonicalPath(pathname);
+
+    if (pathname !== normalizedPath && CANONICAL_ROUTE_PATHS.has(normalizedPath)) {
+      return sendRedirect(res, 301, `${normalizedPath}${requestUrl.search}`, {
+        ...telemetry,
+        status: 301,
+      });
+    }
+
+    const isContributionIntentPost = req.method === 'POST' && CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
+
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost) {
+      req.resume?.();
+    }
+
+    if (pathname === ROBOTS_TXT_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendBody(res, 200, ROBOTS_TXT_BODY, 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (isContributionIntentPost) {
+      return handleContributionIntentPost(req, res, includeBody, telemetry, pathname);
+    }
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return sendJson(res, 405, {
         $schema: SCHEMA_URL,
         error: 'method_not_allowed',
-        message: 'Only GET and HEAD are supported by this portal.',
+        message:
+          'Only GET and HEAD are supported by this portal, except gated POST contribution-intent intake paths.',
         allowedMethods: ['GET', 'HEAD'],
-      }, includeBody);
+        contributionIntentPostPaths: Array.from(CONTRIBUTION_INTENT_POST_PATHS),
+      }, includeBody, {
+        ...telemetry,
+        status: 405,
+      });
     }
 
-    if (requestUrl.pathname === '/') {
-      return sendBody(res, 200, renderLandingPage(), 'text/html; charset=utf-8', includeBody);
+    if (pathname === '/') {
+      return sendBody(res, 200, renderLandingPage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
     }
 
-    if (requestUrl.pathname === '/identity-keys' || requestUrl.pathname === '/identity-keys/') {
-      return sendBody(res, 200, renderIdentityKeysPage(), 'text/html; charset=utf-8', includeBody);
+    if (pathname === '/identity-keys') {
+      return sendBody(res, 200, renderIdentityKeysPage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
     }
 
-    if (requestUrl.pathname === '/llms.txt') {
-      return sendBody(res, 200, buildLlmsTxt(), 'text/plain; charset=utf-8', includeBody);
+    if (pathname === '/llms.txt') {
+      return sendBody(res, 200, buildLlmsTxt(), 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
     }
 
-    const routeDefinition = JSON_ROUTE_MAP.get(requestUrl.pathname);
+    const routeDefinition = JSON_ROUTE_MAP.get(pathname);
     if (routeDefinition) {
-      return sendJson(res, 200, buildJsonResponse(routeDefinition), includeBody);
+      return sendJson(res, 200, buildJsonResponse(routeDefinition), includeBody, {
+        ...telemetry,
+        status: 200,
+      });
     }
 
     return sendJson(res, 404, {
@@ -1991,6 +3296,9 @@ export function createRequestHandler() {
       error: 'not_found',
       message: 'No portal route exists at this path.',
       availableRoutes: ROUTE_DEFINITIONS.map((definition) => definition.path),
-    }, includeBody);
+    }, includeBody, {
+      ...telemetry,
+      status: 404,
+    });
   };
 }

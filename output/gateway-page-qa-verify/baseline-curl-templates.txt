@@ -1,0 +1,484 @@
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+X-Robots-Tag: noindex, nofollow
+Content-Length: 15113
+Date: Wed, 08 Jul 2026 08:51:15 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "route": "/templates.json",
+  "canonicalUrl": "https://agent.bittrees.org/templates.json",
+  "generatedAt": "2026-07-08T08:51:15.777Z",
+  "stub": false,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://agent.bittrees.org/schemas/templates.v1.json",
+    "title": "agent.bittrees.org templates data schema",
+    "description": "Schema for reviewed template library metadata.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema",
+      "status",
+      "review",
+      "sources",
+      "sourceScope",
+      "templates",
+      "requiredTemplateFields",
+      "contributionIntentDefaults"
+    ],
+    "properties": {
+      "schema": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "review": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewedAt",
+          "nextReviewDue",
+          "reviewOwner",
+          "validationStatus",
+          "goalId",
+          "sourceIds"
+        ],
+        "properties": {
+          "reviewedAt": {
+            "type": "string"
+          },
+          "nextReviewDue": {
+            "type": "string"
+          },
+          "reviewOwner": {
+            "type": "string"
+          },
+          "validationStatus": {
+            "type": "string"
+          },
+          "goalId": {
+            "type": "string"
+          },
+          "sourceIds": {
+            "type": "array",
+            "description": "Source IDs used for this reviewed route.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        }
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "label",
+            "owner",
+            "url",
+            "retrievedAt",
+            "notes"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "retrievedAt": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "array",
+              "description": "Source-specific notes.",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        "minItems": 1
+      },
+      "sourceScope": {
+        "type": "array",
+        "description": "Approved Bittrees source scope.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      },
+      "templates": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "minItems": 1
+      },
+      "requiredTemplateFields": {
+        "type": "array",
+        "description": "Fields every template must expose.",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1
+      },
+      "contributionIntentDefaults": {
+        "type": "object"
+      }
+    }
+  },
+  "data": {
+    "schema": "agent.bittrees.templates.v1",
+    "status": "active-static-reviewed",
+    "review": {
+      "reviewedAt": "2026-07-07",
+      "nextReviewDue": "2026-07-21",
+      "reviewOwner": "engineering-team/architecture-engineer",
+      "validationStatus": "static-launch-draft",
+      "goalId": "goal_plan_rzit49",
+      "sourceIds": [
+        "memory:642",
+        "memory:639",
+        "output:agent-bittrees-portal-repo-readiness",
+        "output:idacc-contributor-lane-map",
+        "manager:/agents-snapshot:2026-07-07",
+        "github:bobofbuilding/idacc/releases/latest:2026-07-07",
+        "output:agent-portal-identity-keys-readiness"
+      ]
+    },
+    "sources": [
+      {
+        "id": "memory:642",
+        "label": "Brain goal record for Plan 70",
+        "owner": "control-center",
+        "url": "brain://memory/642",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Plan 70 defines the agent.bittrees.org portal objective and sections 4 and 6.",
+          "Section 4 requires /llms.txt, /agents.json, /templates.json, /idacc/releases.json, timestamps, sources, owners, and validation status.",
+          "Section 6 requires templates for research, onboarding, ops/governance, source-grounded reports, legal handoffs, and safe onchain/treasury handoffs."
+        ]
+      },
+      {
+        "id": "memory:639",
+        "label": "Brain draft plan source for Plan 70",
+        "owner": "control-center",
+        "url": "brain://memory/639",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Draft plan content mirrors the approved Plan 70 structure."
+        ]
+      },
+      {
+        "id": "output:agent-bittrees-portal-repo-readiness",
+        "label": "agent.bittrees.org portal repo readiness packet",
+        "owner": "architecture-engineer",
+        "url": "output/agent-bittrees-portal-repo-readiness.md",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Readiness packet identifies launch blockers and security-router NO-GO controls.",
+          "The repo must remain static/read-only until security gate controls clear."
+        ]
+      },
+      {
+        "id": "output:idacc-contributor-lane-map",
+        "label": "IDACC contributor lane map",
+        "owner": "architecture-engineer",
+        "url": "output/idacc-contributor-lane-map.md",
+        "retrievedAt": "2026-07-07",
+        "notes": [
+          "Defines Bittrees contribution lanes and manager-derived agent routing evidence."
+        ]
+      }
+    ],
+    "sourceScope": [
+      "Bittrees Research",
+      "Bittrees, Inc. operations/governance",
+      "Bittrees Capital / treasury workflows"
+    ],
+    "templates": [
+      {
+        "id": "bittrees-research-task",
+        "name": "Bittrees Research task",
+        "purpose": "Route source-grounded research, fact-checking, and synthesis work.",
+        "owner": "research-lead",
+        "sourceScope": [
+          "Bittrees Research"
+        ],
+        "bittreesRelevance": "high",
+        "defaultLane": "research",
+        "requiredFields": [
+          "goal_id",
+          "research_question",
+          "source_requirements",
+          "expected_output",
+          "acceptance_criteria",
+          "validation_path",
+          "out_of_scope",
+          "backlog_policy"
+        ],
+        "acceptanceCriteria": [
+          "Primary sources or explicit source gaps are listed.",
+          "Claims are scoped to Bittrees Research and cite source IDs.",
+          "Default researcher validation is required before publication-sensitive use."
+        ],
+        "validationPath": [
+          "researcher"
+        ],
+        "outOfScope": [
+          "Legal advice",
+          "onchain execution",
+          "unsupported public Bittrees claims"
+        ],
+        "backlogPolicy": "Non-essential reading lists or broad market scans become backlog candidates.",
+        "sourceIds": [
+          "memory:642",
+          "output:goal-aligned-task-brief-template"
+        ],
+        "reviewedAt": "2026-07-07"
+      },
+      {
+        "id": "contributor-onboarding",
+        "name": "Contributor onboarding",
+        "purpose": "Help a human or agent choose a Bittrees contribution lane and first task shape.",
+        "owner": "lead",
+        "sourceScope": [
+          "Bittrees Research",
+          "Bittrees, Inc. operations/governance"
+        ],
+        "bittreesRelevance": "high",
+        "defaultLane": "operations-governance",
+        "requiredFields": [
+          "contributor_type",
+          "skills_or_capabilities",
+          "desired_lane",
+          "available_time_window",
+          "expected_output",
+          "acceptance_criteria",
+          "validation_path",
+          "backlog_policy"
+        ],
+        "acceptanceCriteria": [
+          "The handoff names one primary lane and owner route.",
+          "The first task has concrete output and acceptance criteria.",
+          "Authority-sensitive work is gated to the relevant lead."
+        ],
+        "validationPath": [
+          "coder",
+          "researcher"
+        ],
+        "outOfScope": [
+          "Credential collection",
+          "wallet signing",
+          "employment or compensation commitments"
+        ],
+        "backlogPolicy": "Unscoped contributor interests remain discovery backlog until an owner accepts them.",
+        "sourceIds": [
+          "memory:642",
+          "output:idacc-contributor-lane-map"
+        ],
+        "reviewedAt": "2026-07-07"
+      },
+      {
+        "id": "ops-governance-work",
+        "name": "Operations/governance work",
+        "purpose": "Frame Bittrees, Inc. operations, governance, routing, or workflow improvements.",
+        "owner": "ops-lead",
+        "sourceScope": [
+          "Bittrees, Inc. operations/governance"
+        ],
+        "bittreesRelevance": "high",
+        "defaultLane": "operations-governance",
+        "requiredFields": [
+          "goal_id",
+          "operational_problem",
+          "owner_route",
+          "expected_output",
+          "acceptance_criteria",
+          "validation_path",
+          "out_of_scope",
+          "backlog_policy"
+        ],
+        "acceptanceCriteria": [
+          "The task reduces duplicated work, routing ambiguity, or validation loops.",
+          "Implementation and evidence responsibilities are separated when needed.",
+          "No production, credential, or destructive action is implied without approval."
+        ],
+        "validationPath": [
+          "coder",
+          "researcher"
+        ],
+        "outOfScope": [
+          "Production deploys",
+          "destructive manager actions",
+          "credential changes"
+        ],
+        "backlogPolicy": "Generic automation ideas without a goal or efficiency justification move to backlog.",
+        "sourceIds": [
+          "memory:296",
+          "output:routing-matrix"
+        ],
+        "reviewedAt": "2026-07-07"
+      },
+      {
+        "id": "source-grounded-report",
+        "name": "Source-grounded report",
+        "purpose": "Produce a report with source accounting, evidence quality notes, and residual risk.",
+        "owner": "researcher",
+        "sourceScope": [
+          "Bittrees Research",
+          "Bittrees, Inc. operations/governance"
+        ],
+        "bittreesRelevance": "medium",
+        "defaultLane": "research",
+        "requiredFields": [
+          "question",
+          "source_set",
+          "method",
+          "findings",
+          "limitations",
+          "used_source_ids",
+          "validation_path"
+        ],
+        "acceptanceCriteria": [
+          "Findings are separated from assumptions.",
+          "Every material claim has a source ID or explicit source-gap note.",
+          "Residual risk and validation status are explicit."
+        ],
+        "validationPath": [
+          "researcher"
+        ],
+        "outOfScope": [
+          "Unsourced claims",
+          "binding legal/financial advice",
+          "private or secret data"
+        ],
+        "backlogPolicy": "Nice-to-have appendix work stays backlog unless requested by a validator.",
+        "sourceIds": [
+          "memory:642",
+          "output:goal-aligned-task-brief-template"
+        ],
+        "reviewedAt": "2026-07-07"
+      },
+      {
+        "id": "legal-review-handoff",
+        "name": "Legal review handoff",
+        "purpose": "Prepare a scoped legal or compliance review request without giving legal advice.",
+        "owner": "general-counsel",
+        "sourceScope": [
+          "Bittrees, Inc. operations/governance"
+        ],
+        "bittreesRelevance": "high",
+        "defaultLane": "operations-governance",
+        "requiredFields": [
+          "review_question",
+          "jurisdiction_or_policy_scope",
+          "source_materials",
+          "requested_decision",
+          "acceptance_criteria",
+          "out_of_scope",
+          "validation_path"
+        ],
+        "acceptanceCriteria": [
+          "The request distinguishes facts, assumptions, and requested legal review.",
+          "No agent presents the handoff as binding legal advice.",
+          "Default researcher validation and legal lead review are both represented."
+        ],
+        "validationPath": [
+          "researcher",
+          "general-counsel"
+        ],
+        "outOfScope": [
+          "Binding legal advice by non-legal agents",
+          "external filings",
+          "signatures"
+        ],
+        "backlogPolicy": "Non-urgent legal research questions wait for legal owner acceptance.",
+        "sourceIds": [
+          "memory:45",
+          "output:routing-matrix"
+        ],
+        "reviewedAt": "2026-07-07"
+      },
+      {
+        "id": "safe-onchain-treasury-handoff",
+        "name": "Safe onchain/treasury handoff",
+        "purpose": "Route treasury, wallet, governance, or onchain work through explicit approval gates.",
+        "owner": "onchain-lead",
+        "sourceScope": [
+          "Bittrees Capital / treasury workflows"
+        ],
+        "bittreesRelevance": "high",
+        "defaultLane": "treasury",
+        "requiredFields": [
+          "chain_or_protocol",
+          "read_only_question_or_action_request",
+          "funds_or_signature_implications",
+          "expected_output",
+          "acceptance_criteria",
+          "operator_approval_requirement",
+          "validation_path",
+          "out_of_scope"
+        ],
+        "acceptanceCriteria": [
+          "Read-only analysis is separated from any execution request.",
+          "Any transfer, signature, deployment, or governance action requires explicit operator approval.",
+          "Coder, researcher, onchain, and security review requirements are named before execution."
+        ],
+        "validationPath": [
+          "coder",
+          "researcher",
+          "onchain-lead",
+          "security-router"
+        ],
+        "outOfScope": [
+          "Portal-triggered signing",
+          "wallet custody",
+          "transaction broadcast",
+          "credential handling"
+        ],
+        "backlogPolicy": "Speculative treasury ideas become backlog unless tied to an active approved objective.",
+        "sourceIds": [
+          "memory:45",
+          "output:routing-matrix",
+          "output:agent-bittrees-portal-repo-readiness"
+        ],
+        "reviewedAt": "2026-07-07"
+      }
+    ],
+    "requiredTemplateFields": [
+      "scope",
+      "acceptanceCriteria",
+      "bittreesRelevance",
+      "outOfScope",
+      "backlogPolicy",
+      "owner",
+      "validationPath",
+      "sourceIds",
+      "reviewedAt"
+    ],
+    "contributionIntentDefaults": {
+      "endpoint": "/contribution-intents",
+      "launchStatus": "contract-only-disabled",
+      "acceptedLiveSubmission": false,
+      "requestSchemaId": "https://agent.bittrees.org/schemas/contribution-intent-request.v1.json"
+    }
+  }
+}
