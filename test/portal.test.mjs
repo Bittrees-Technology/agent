@@ -211,7 +211,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('opportunities.json'));
   assert.equal(assetPaths.has('contribution-intents'), false);
   assert.equal(assetPaths.has('gateway/contribution-intents'), false);
-  assert.ok(assetPaths.has('mcp/index.html'));
+  assert.equal(assetPaths.has('mcp/index.html'), false);
   assert.ok(assetPaths.has('mcp-docs/index.html'));
   assert.ok(assetPaths.has('mcp.json'));
   assert.ok(assetPaths.has('submission-status.json'));
@@ -296,12 +296,13 @@ test('portal outputs do not emit old readiness or approved-profile labels', () =
   assert.doesNotMatch(serialized, new RegExp(`Starter IDACC-managed agent profiles are ${'published'}`));
 });
 
-test('contribution intent routes stay dynamic and return disabled JSON bodies for POST', async () => {
+test('post-capable routes stay dynamic and return disabled responses for POST', async () => {
   const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
   const assetPaths = new Set(assets.map((asset) => asset.path));
 
   assert.equal(assetPaths.has('contribution-intents'), false);
   assert.equal(assetPaths.has('gateway/contribution-intents'), false);
+  assert.equal(assetPaths.has('mcp/index.html'), false);
 
   await withPortalServer(async (baseUrl) => {
     for (const path of ['/contribution-intents', '/gateway/contribution-intents']) {
@@ -328,6 +329,35 @@ test('contribution intent routes stay dynamic and return disabled JSON bodies fo
       assert.equal(postBody.route, path);
       assert.match(postBody.message, /disabled/);
     }
+
+    const mcpGetResponse = await fetch(`${baseUrl}/mcp`);
+    const mcpGetBody = await mcpGetResponse.text();
+
+    assert.equal(mcpGetResponse.status, 200);
+    assert.match(mcpGetBody, /Streamable HTTP JSON-RPC endpoint/);
+
+    const mcpPostResponse = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': '2025-06-18',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'asset-shadow-smoke', version: '0.1.0' },
+        },
+      }),
+    });
+    const mcpPostBody = await mcpPostResponse.json();
+
+    assert.equal(mcpPostResponse.status, 200);
+    assert.equal(mcpPostBody.result?.protocolVersion, '2025-06-18');
   });
 });
 

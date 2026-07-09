@@ -2384,6 +2384,7 @@ export const ROUTE_DEFINITIONS = [
     description: 'JSON-RPC endpoint for contribution tools. POST to call MCP methods; browser GET returns endpoint documentation.',
     kind: 'html',
     status: MCP_GATEWAY.status,
+    staticAsset: false,
   },
   {
     path: '/mcp-docs',
@@ -5116,10 +5117,6 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     {
       path: 'reputation/index.html',
       body: renderReputationPage(),
-    },
-    {
-      path: 'mcp/index.html',
-      body: renderMcpGatewayPage(),
     },
     {
       path: 'mcp-docs/index.html',

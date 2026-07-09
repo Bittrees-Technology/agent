@@ -137,10 +137,10 @@ const CHECKS = [
 let failed = 0;
 
 const staticAssetPaths = new Set(buildStaticAssets().map((asset) => asset.path));
-for (const postCapablePath of ['contribution-intents', 'gateway/contribution-intents']) {
+for (const postCapablePath of ['contribution-intents', 'gateway/contribution-intents', 'mcp/index.html']) {
   if (staticAssetPaths.has(postCapablePath)) {
     failed += 1;
-    console.error(`  FAIL: dist build would emit ${postCapablePath}, shadowing the POST API handler on Vercel.`);
+    console.error(`  FAIL: dist build would emit ${postCapablePath}, shadowing a POST-capable API route on Vercel.`);
   }
 }
 

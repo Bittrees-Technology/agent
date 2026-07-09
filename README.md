@@ -191,6 +191,7 @@ npm run dev
 npm run check
 npm test
 npm run build
+npm run verify:api
 ```
 
 The build writes:
@@ -200,7 +201,6 @@ The build writes:
 - `dist/identity-keys/index.html`
 - `dist/submission-status/index.html`
 - `dist/reputation/index.html`
-- `dist/mcp/index.html`
 - `dist/mcp-docs/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
@@ -215,13 +215,71 @@ The build writes:
 - `dist/monitoring.json`
 - `dist/portal-manifest.json`
 
-`/contribution-intents` and `/gateway/contribution-intents` are intentionally excluded from static output so Vercel does not shadow their POST API handler with extensionless static files.
+`/mcp`, `/contribution-intents`, and `/gateway/contribution-intents` are intentionally excluded from static output so Vercel does not shadow their POST-capable API handlers with static files.
 
 To run the built copy:
 
 ```bash
 npm run start:dist
 ```
+
+## Vercel deployment runbook
+
+### Hosting and routing
+
+- Vercel serves the site from `dist/`, but every request is still routed through `api/index` via the catch-all rewrite in `vercel.json`.
+- Keep POST-capable routes dynamic. `dist/` must **not** contain static assets for `/mcp`, `/contribution-intents`, or `/gateway/contribution-intents`, or Vercel will serve the file instead of the API handler.
+- Canonical paths stay slashless. The application already issues `301` redirects for supported trailing-slash variants, so do not add overlapping redirect rules in Vercel unless they match the same canonical behavior.
+- The intended production alias is `https://agent.bittrees.org`. Preview and raw deployment aliases may be protected by Vercel SSO even when production is public.
+
+### Environment variables
+
+- No secret environment variable is required for the read-only portal launch path.
+- `CONTRIBUTION_INTENTS_WRITE_ENABLED`, `CONTRIBUTION_INTENTS_ENABLED`, and `PORTAL_ENABLE_CONTRIBUTION_INTENTS` all enable local write persistence for contribution-intent submissions.
+- `CONTRIBUTION_INTENTS_DATA_DIR` overrides the local persistence directory used only when writes are enabled.
+- `MCP_ALLOWED_ORIGINS` adds comma-delimited browser origins that may call `/mcp`.
+- `BASE_URL` is used by `npm run smoke` when `--base-url` is not supplied.
+- Leave all contribution-intent write flags unset in Vercel production. The current implementation writes to the local filesystem under `var/contribution-intents/`, which is acceptable for local and temporary non-production verification but is not a durable production storage path.
+
+### Monitoring, logging, and analytics
+
+- No client-side analytics SDK is configured. Keep it that way unless a reviewed privacy and retention policy exists first.
+- The API handler emits one JSON telemetry line per request with `timestamp`, `method`, `path`, and `status`. In Vercel, inspect that output with `vercel logs <deployment-url-or-id> --scope bittrees-tech`.
+- Use `npm run smoke -- --base-url=<url>` plus `/monitoring.json` as the release-readiness contract for route status, release freshness, schema validity, and noindex retention.
+- Verify the active production alias and deployment mapping with `vercel inspect https://agent.bittrees.org --scope bittrees-tech`.
+
+### Release and rollback steps
+
+1. Verify the reviewed checkout:
+   ```bash
+   npm run check
+   npm test
+   npm run build
+   npm run verify:api
+   ```
+2. Pull current Vercel project settings:
+   ```bash
+   vercel pull --yes --environment=production --scope bittrees-tech
+   ```
+3. Create a preview deployment and capture the returned URL:
+   ```bash
+   vercel deploy --scope bittrees-tech --yes
+   ```
+4. Verify the exact preview:
+   ```bash
+   vercel inspect <preview-url-or-id> --scope bittrees-tech
+   npm run smoke -- --base-url=<preview-url>
+   vercel logs <preview-url-or-id> --scope bittrees-tech
+   ```
+5. Promote only after operator approval for the reviewed artifact and launch-gate posture:
+   ```bash
+   vercel promote <deployment-url-or-id> --scope bittrees-tech --yes
+   ```
+6. If production regresses, roll back the exact deployment and re-run smoke:
+   ```bash
+   vercel rollback <deployment-url-or-id> --scope bittrees-tech --yes
+   npm run smoke -- --base-url=https://agent.bittrees.org
+   ```
 
 ## Launch gates
 
