@@ -1183,38 +1183,38 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-08T17:52:38Z',
+  checkedAt: '2026-07-09T14:21:30Z',
   latest: {
-    tag: 'v0.1.623',
-    name: 'v0.1.623',
-    publishedAt: '2026-07-08T15:45:34Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.623',
-    tagCommitSha: '063da5374dd79515af13d7ba803d923bc5187630',
+    tag: 'v0.1.627',
+    name: 'v0.1.627',
+    publishedAt: '2026-07-09T14:18:44Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.627',
+    tagCommitSha: 'fc181ae0a9672539da54d69508b6af12c43087a1',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-08T17:52:38Z.',
-      'Release notes: Add guarded ID Agents manager source installer.',
+      'Latest public GitHub release observed by the portal update on 2026-07-09T14:21:30Z.',
+      'Release notes: Automated release of outstanding ID Agents Control Center code.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.623 on 2026-07-08T17:52:38Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.627 on 2026-07-09T14:21:30Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.623 resolved refs/tags/v0.1.623 at 063da5374dd79515af13d7ba803d923bc5187630.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.623',
+        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.627 resolved refs/tags/v0.1.627 at fc181ae0a9672539da54d69508b6af12c43087a1.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.627',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.623-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.627-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.623/ID-Agents-Control-Center-0.1.623-arm64.zip',
-        sizeBytes: 102699416,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.627/ID-Agents-Control-Center-0.1.627-arm64.zip',
+        sizeBytes: 102707303,
         contentType: 'application/zip',
-        sha256: 'ecdbdcbc3fffe243d72d868586b0ef8cc9ae74cc2a0c2335b1c99ec91fb71262',
+        sha256: '28d9959bf3f8890af04a833dda0185328c3681dfc2b15f891c4d7ae3eb8cb59d',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:ecdbdcbc3fffe243d72d868586b0ef8cc9ae74cc2a0c2335b1c99ec91fb71262',
+            'sha256:28d9959bf3f8890af04a833dda0185328c3681dfc2b15f891c4d7ae3eb8cb59d',
           localVerification:
-            'GitHub Releases API asset digest field observed on 2026-07-08T17:52:38Z; no local zip download was performed during this snapshot refresh.',
+            'GitHub Releases API asset digest field observed on 2026-07-09T14:21:30Z; no local zip download was performed during this snapshot refresh.',
         },
       },
     ],
@@ -1229,7 +1229,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.621-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.627-arm64.zip',
   },
 };
 
