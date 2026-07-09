@@ -3523,7 +3523,11 @@ function parseContributionIntentRequestPayload(rawBody, req) {
   if (getRequestMediaType(req) === 'application/x-www-form-urlencoded') {
     return buildContributionIntentPayloadFromForm(rawBody);
   }
-  if (isPlainObject(rawBody)) return rawBody;
+  return parseJsonRequestBody(rawBody);
+}
+
+function parseJsonRequestBody(rawBody) {
+  if (isPlainObject(rawBody) || Array.isArray(rawBody)) return rawBody;
   return JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody ?? ''));
 }
 
@@ -5102,7 +5106,7 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
 
   let message;
   try {
-    message = JSON.parse(await readRequestBody(req));
+    message = parseJsonRequestBody(await readRequestBody(req));
   } catch (error) {
     const statusCode = error.statusCode ?? 400;
     return sendMcpJson(

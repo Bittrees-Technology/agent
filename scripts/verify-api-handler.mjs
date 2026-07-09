@@ -414,6 +414,56 @@ for (const check of [
   }
 }
 
+{
+  const req = mockRequest({
+    method: 'POST',
+    path: '/mcp',
+    headers: {
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'mcp-protocol-version': '2025-06-18',
+    },
+    body: {
+      jsonrpc: '2.0',
+      id: 'vercel-parsed-body',
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'verify-api-handler', version: '0.1.0' },
+      },
+    },
+  });
+  const res = mockResponse();
+
+  await handler(req, res);
+
+  console.log(`POST /mcp initialize (pre-parsed body) -> ${res.statusCode} | ${res.body.slice(0, 80).replace(/\n/g, ' ')}`);
+
+  if (res.statusCode !== 200) {
+    failed += 1;
+    console.error(`  FAIL: expected 200 for POST /mcp initialize (pre-parsed body), received ${res.statusCode}`);
+  }
+
+  try {
+    const parsedBody = JSON.parse(res.body);
+    if (parsedBody.result?.protocolVersion !== '2025-06-18') {
+      failed += 1;
+      console.error('  FAIL: POST /mcp initialize (pre-parsed body) did not negotiate protocol 2025-06-18.');
+    }
+  } catch (error) {
+    failed += 1;
+    console.error(`  FAIL: POST /mcp initialize (pre-parsed body) response was not valid JSON: ${error.message}`);
+  }
+
+  checkHardeningHeaders(res.headers, 'POST /mcp initialize (pre-parsed body)');
+
+  if (String(res.headers['MCP-Protocol-Version']) !== '2025-06-18') {
+    failed += 1;
+    console.error('  FAIL: POST /mcp initialize (pre-parsed body) missing MCP-Protocol-Version header.');
+  }
+}
+
 const savedDisabledFlags = new Map(WRITE_FLAG_NAMES.map((flagName) => [flagName, process.env[flagName]]));
 
 try {
