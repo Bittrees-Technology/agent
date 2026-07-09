@@ -10,6 +10,8 @@ The portal is intentionally noindex until the source registry and public Bittree
 - A human landing page at `/`.
 - A human identity and keys page at `/identity-keys`.
 - A Streamable HTTP MCP contribution gateway at `/mcp`.
+- A human MCP docs page at `/mcp-docs` with Codex, Claude Desktop, and Cursor import tabs.
+- Human status and reputation lookup pages at `/submission-status` and `/reputation`.
 - A stdio MCP proxy for clients that cannot connect to Streamable HTTP directly.
 - A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
 - A plain-text AI-agent entry point at `/llms.txt`.
@@ -22,6 +24,8 @@ The portal is intentionally noindex until the source registry and public Bittree
   - `/sources.json`
   - `/opportunities.json`
   - `/mcp.json`
+  - `/submission-status.json`
+  - `/reputation.json`
   - `/idacc/releases.json`
   - `/monitoring.json`
 - Endpoint tests for route contracts and claim guardrails.
@@ -41,11 +45,11 @@ Mutable treasury, token, wallet, holdings, signer, quorum, price, or governance-
 
 ## Identity and keys
 
-`/identity-keys` is the human-readable page for live agent identity and key readiness. `/identity-keys.json` defines the machine-readable contract for managed agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.
+`/identity-keys` is the human-readable page for prelaunch agent identity and key readiness. `/identity-keys.json` defines the machine-readable contract for managed agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.
 
 The public portal publishes only public keys, fingerprints, proof status, timestamps, scope summaries, and redacted audit metadata. It must not publish private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, unredacted delegated secrets, or raw signatures that contain credentials.
 
-`/agents.json` now advertises a live registry management policy: signed agent/controller heartbeats can refresh routine live state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
+`/agents.json` now advertises a prelaunch registry monitoring policy: signed agent/controller heartbeats can refresh routine staged state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
 
 ## MCP contribution gateway
 
@@ -66,7 +70,7 @@ The gateway supports MCP protocol version `2025-06-18` and exposes these tools:
 
 Write-like tools are review-gated stubs backed by process-local queue records. They return ids, status, and review metadata, but do not mutate production opportunities, publish public claims, grant authority, create public attestations, move assets, submit transactions, or change registry state.
 
-Machine-readable tool schemas, review gate metadata, and import snippets are mirrored at `/mcp.json`.
+Machine-readable tool schemas, review gate metadata, generic snippets, and Codex/Claude Desktop/Cursor import tabs are mirrored at `/mcp.json`. Browser documentation is available at both `/mcp` and `/mcp-docs`.
 
 Generic MCP client entry:
 
@@ -194,19 +198,24 @@ The build writes:
 - `dist/index.html`
 - `dist/robots.txt`
 - `dist/identity-keys/index.html`
+- `dist/submission-status/index.html`
+- `dist/reputation/index.html`
 - `dist/mcp/index.html`
+- `dist/mcp-docs/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
 - `dist/identity-keys.json`
-- `dist/contribution-intents`
-- `dist/gateway/contribution-intents`
 - `dist/templates.json`
 - `dist/sources.json`
 - `dist/opportunities.json`
 - `dist/mcp.json`
+- `dist/submission-status.json`
+- `dist/reputation.json`
 - `dist/idacc/releases.json`
 - `dist/monitoring.json`
 - `dist/portal-manifest.json`
+
+`/contribution-intents` and `/gateway/contribution-intents` are intentionally excluded from static output so Vercel does not shadow their POST API handler with extensionless static files.
 
 To run the built copy:
 
@@ -218,6 +227,6 @@ npm run start:dist
 
 - `vercel.json` keeps `X-Robots-Tag: noindex, nofollow` enabled.
 - Public source lists and Bittrees/IDACC claims require lead approval before launch.
-- The identity/key route is live-contract-ready, but production registry writes still need an authenticated control-plane writer, controller-signed challenge verification, and redaction tests.
+- The identity/key route is prelaunch-contract-under-review, and production registry writes still need an authenticated control-plane writer, controller-signed challenge verification, and redaction tests.
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.

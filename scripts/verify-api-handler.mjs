@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import handler from '../api/index.js';
-import { PORTAL_SECURITY_HEADERS } from '../src/portal.mjs';
+import { IDENTITY_KEYS_PUBLIC_CONTRACT, PORTAL_SECURITY_HEADERS, buildStaticAssets } from '../src/portal.mjs';
 
 const SAMPLE_CONTRIBUTION_INTENT = {
   schema: 'agent.bittrees.contribution-intent.v1',
-  intentId: 'intent-2026-07-07-live-write-smoke',
+  intentId: 'intent-2026-07-07-write-gate-smoke',
   submittedAt: '2026-07-07T10:30:00Z',
   contributor: {
     kind: 'agent',
@@ -109,6 +109,10 @@ const CHECKS = [
   { method: 'GET', path: '/robots.txt' },
   { method: 'GET', path: '/identity-keys' },
   { method: 'GET', path: '/identity-keys/', expectedStatus: 301 },
+  { method: 'GET', path: '/submission-status' },
+  { method: 'GET', path: '/submission-status/', expectedStatus: 301 },
+  { method: 'GET', path: '/reputation' },
+  { method: 'GET', path: '/reputation/', expectedStatus: 301 },
   { method: 'GET', path: '/identity-keys.json' },
   { method: 'GET', path: '/identity-keys.json/', expectedStatus: 301 },
   { method: 'GET', path: '/llms.txt' },
@@ -119,7 +123,10 @@ const CHECKS = [
   { method: 'GET', path: '/contribution-intents' },
   { method: 'GET', path: '/gateway/contribution-intents' },
   { method: 'GET', path: '/mcp' },
+  { method: 'GET', path: '/mcp-docs' },
   { method: 'GET', path: '/mcp.json' },
+  { method: 'GET', path: '/submission-status.json' },
+  { method: 'GET', path: '/reputation.json' },
   { method: 'POST', path: '/contribution-intents' },
   { method: 'POST', path: '/contribution-intents/', expectedStatus: 301 },
   { method: 'POST', path: '/gateway/contribution-intents' },
@@ -128,6 +135,14 @@ const CHECKS = [
 ];
 
 let failed = 0;
+
+const staticAssetPaths = new Set(buildStaticAssets().map((asset) => asset.path));
+for (const postCapablePath of ['contribution-intents', 'gateway/contribution-intents']) {
+  if (staticAssetPaths.has(postCapablePath)) {
+    failed += 1;
+    console.error(`  FAIL: dist build would emit ${postCapablePath}, shadowing the POST API handler on Vercel.`);
+  }
+}
 
 function checkTelemetryLine(telemetryLines, label, expectedStatus) {
   if (telemetryLines.length === 0) {
@@ -228,6 +243,27 @@ for (const check of CHECKS) {
     }
   }
 
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/submission-status') {
+    if (!res.body.includes('Submission status.') || !res.body.includes('check_contribution_status')) {
+      failed += 1;
+      console.error('  FAIL: /submission-status did not render the status lookup page.');
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/reputation') {
+    if (!res.body.includes('Agent reputation.') || !res.body.includes('get_agent_reputation')) {
+      failed += 1;
+      console.error('  FAIL: /reputation did not render the reputation lookup page.');
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/mcp-docs') {
+    if (!res.body.includes('Harness imports') || !res.body.includes('Claude Desktop')) {
+      failed += 1;
+      console.error('  FAIL: /mcp-docs did not render the MCP harness import docs.');
+    }
+  }
+
   if (res.statusCode === 200 && check.method === 'GET' && check.path === '/identity-keys.json') {
     try {
       const parsedBody = JSON.parse(res.body);
@@ -238,7 +274,7 @@ for (const check of CHECKS) {
         console.error(`  FAIL: /identity-keys.json route field mismatch: ${parsedBody.route}`);
       }
 
-      if (parsedBody.status !== 'live-contract-ready') {
+      if (parsedBody.status !== IDENTITY_KEYS_PUBLIC_CONTRACT.status) {
         failed += 1;
         console.error(`  FAIL: /identity-keys.json status mismatch: ${parsedBody.status}`);
       }

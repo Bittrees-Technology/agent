@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { MCP_GATEWAY, PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, handleMcpRequest, normalizeCanonicalPath } from '../src/portal.mjs';
+import { MCP_GATEWAY, PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, createRequestHandler, handleMcpRequest, normalizeCanonicalPath } from '../src/portal.mjs';
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const distDir = join(rootDir, 'dist');
@@ -11,9 +11,11 @@ const port = Number(process.env.PORT ?? '3000');
 const host = process.env.HOST ?? '0.0.0.0';
 const canonicalRoutePaths = new Set([ROBOTS_TXT_PATH, ...ROUTE_DEFINITIONS.map((definition) => definition.path), '/portal-manifest.json']);
 const routeDefinitionsByPath = new Map(ROUTE_DEFINITIONS.map((definition) => [definition.path, definition]));
+const dynamicPortalHandler = createRequestHandler();
+const dynamicPortalRoutePaths = new Set(['/contribution-intents', '/gateway/contribution-intents']);
 const extensionlessStaticRoutePaths = new Set(
   ROUTE_DEFINITIONS
-    .filter((definition) => definition.kind !== 'html' && !extname(definition.path))
+    .filter((definition) => definition.kind !== 'html' && definition.staticAsset !== false && !extname(definition.path))
     .map((definition) => definition.path),
 );
 
@@ -113,6 +115,10 @@ const server = createServer(async (req, res) => {
         sendText(res, 500, 'Internal MCP gateway error.\n');
       }
     });
+  }
+
+  if (dynamicPortalRoutePaths.has(normalizedPath)) {
+    return dynamicPortalHandler(req, res);
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {

@@ -19,6 +19,14 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   CONTRIBUTION_INTENT_CONTRACT_PATH,
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
+export const UNIVERSAL_PORTAL_DISCLAIMER =
+  'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, or governance advice, and nothing here is an offer to sell or a solicitation to buy any security, token, or other financial instrument. Nothing on this portal grants authority, authorization, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, or governance body.';
+export const NO_RIGHTS_CREATED_DISCLAIMER =
+  'Submitting through this portal does not create employment, contractor status, agency, partnership, fiduciary duties, compensation rights, token rights, equity rights, grant rights, revenue-share rights, onboarding approval, or acceptance into any program or workflow. Any compensated work, token program, or formal contributor relationship requires separate written terms and owner approval.';
+export const CONTRIBUTION_PRIVACY_NOTICE =
+  'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Use the engineering-lead contact route (M:engineering-team/engineering-lead) for privacy questions, correction requests, or deletion requests until a dedicated privacy contact route is approved.';
+export const INTERNAL_OPPORTUNITY_REVIEW_NOTICE =
+  'This route supports internal review and qualification only. Public visibility does not by itself create compensation, token, grant, equity, participation, application, or onboarding rights, and it is not a public job offer, public solicitation, fundraising communication, bounty, or authorization for external outreach or execution without owner approval.';
 
 export const PORTAL_SECURITY_HEADERS = {
   'Content-Security-Policy':
@@ -28,7 +36,7 @@ export const PORTAL_SECURITY_HEADERS = {
 };
 
 export const LAUNCH_STATUS = {
-  status: 'live-contract-ready',
+  status: 'prelaunch-contract-under-review',
   audience: 'AI agents, operator tooling, and reviewers preparing Bittrees contributions',
   publicLaunchGate:
     'Keep noindex enabled until the source registry, identity/key contract, and public claims are approved by lead.',
@@ -39,7 +47,7 @@ export const MCP_SUPPORTED_PROTOCOL_VERSIONS = [MCP_PROTOCOL_VERSION, '2025-03-2
 
 export const MCP_GATEWAY = {
   path: '/mcp',
-  status: 'review-gated-live-contract',
+  status: 'prelaunch-contract-under-review',
   transport: 'Streamable HTTP',
   protocolVersion: MCP_PROTOCOL_VERSION,
   supportedProtocolVersions: MCP_SUPPORTED_PROTOCOL_VERSIONS,
@@ -348,7 +356,8 @@ export const CONTRIBUTION_LANES = [
     id: 'discovery',
     label: 'Discovery',
     bittreesArm: 'Cross-cutting',
-    description: 'Finding and qualifying partners, paid work, grants, contributors, tools, or opportunities.',
+    description:
+      'Finding and qualifying partner, contributor, tool, grant, or work opportunities for internal review. Public visibility of this route does not by itself create compensation, token, equity, grant, or participation rights, and it is not a public job offer or public solicitation.',
     evidenceRequired: ['counterparty or opportunity evidence', 'lane mapping', 'next owner'],
   },
   {
@@ -361,10 +370,10 @@ export const CONTRIBUTION_LANES = [
 ];
 
 export const LIVE_AGENT_REGISTRY = {
-  status: 'live-management-contract-ready',
-  mode: 'agent-signed-live-state-with-guarded-authority-changes',
+  status: 'prelaunch-monitoring-active',
+  mode: 'agent-signed-staged-state-with-guarded-authority-changes',
   currentState:
-    'Starter IDACC-managed agent profiles are published with private key material redacted. This route defines the live registration contract, proof gates, and automation boundaries for additional agents that will appear in /agents.json.',
+    'Starter IDACC-managed agent profile records are staged for review with private material redacted. Public signatures, fingerprints, and controller-signed manifest publication remain pending where marked. Listing, review, or publication status is evidence of review only and does not grant authority, delegation, or execution approval.',
   registryRoute: '/agents.json',
   identityKeysRoute: '/identity-keys.json',
   automatedManagement: {
@@ -405,7 +414,7 @@ export const LIVE_AGENT_REGISTRY = {
 };
 
 export const IDENTITY_KEYS_PUBLIC_CONTRACT = {
-  status: 'live-contract-ready',
+  status: 'prelaunch-contract-under-review',
   purpose:
     'Public contract for agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.',
   publicationPolicy:
@@ -590,7 +599,7 @@ const AGENT_PROFILE_SCHEMA = {
       description: 'Automation policy for routine profile refreshes and guarded authority changes.',
       required: ['mode', 'lastSeenAt', 'nextReviewDue'],
       properties: {
-        mode: { type: 'string', enum: ['agent-signed-live-state', 'operator-reviewed', 'disabled'] },
+        mode: { type: 'string', enum: ['agent-signed-staged-state', 'operator-reviewed', 'disabled'] },
         lastSeenAt: { type: 'string' },
         nextReviewDue: { type: 'string' },
         automationNotes: { type: 'array', items: { type: 'string' } },
@@ -719,14 +728,14 @@ function buildManagedAgentProfile({
       ],
     },
     signedProfile: {
-      status: 'approved-signed-profile',
-      signatureType: 'IDACC operator-reviewed profile approval',
+      status: 'registry-reviewed-profile',
+      signatureType: 'IDACC operator-reviewed profile record',
       verificationStatus: 'operator-reviewed-signature-record-not-publicly-published',
       signedAt: '2026-07-07T22:30:00Z',
       reviewedAt: '2026-07-07T22:30:00Z',
       publicSignature: 'not-published',
       caveat:
-        'Approval is limited to public registry inclusion. It does not authorize spending, signing, governance execution, or public Bittrees claim expansion.',
+        'Review is limited to public registry inclusion evidence. It does not authorize spending, signing, governance execution, or public Bittrees claim expansion.',
     },
     trustEvidence: trustSignals.map((signal) => ({
       signal,
@@ -986,6 +995,8 @@ const CONTRIBUTION_INTENT_CONTRACT = {
   endpoint: CONTRIBUTION_INTENT_CONTRACT_PATH,
   gatewayFormEndpoint: GATEWAY_CONTRIBUTION_INTENT_PATH,
   methods: ['GET', 'HEAD', 'POST'],
+  privacyNotice: CONTRIBUTION_PRIVACY_NOTICE,
+  noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
   requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
   responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
   formSubmission: CONTRIBUTION_INTENT_FORM_CONTRACT,
@@ -1013,6 +1024,8 @@ function buildContributionIntentContractData() {
   return {
     status,
     launchStatus: LAUNCH_STATUS,
+    privacyNotice: CONTRIBUTION_PRIVACY_NOTICE,
+    noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
     requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
     responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
     formSubmission: CONTRIBUTION_INTENT_FORM_CONTRACT,
@@ -1103,18 +1116,18 @@ export const OPPORTUNITIES = [
   },
   {
     id: 'agent-profile-intake',
-    title: 'Activate signed live agent registry intake',
+    title: 'Prepare signed prelaunch agent registry intake',
     lane: 'inc-ops-governance',
     priority: 'high',
     priorityReason:
       'High because agents need a reviewable public identity surface before they can contribute without identity/authority confusion.',
     owner: 'lead',
-    status: 'active-starter-profiles-published',
+    status: 'prelaunch-profile-review-active',
     nextAction:
       'Add controller-verifiable public signatures and additional IDACC-managed agents after profile redaction and authority gates are validated.',
     opportunityType: 'internal',
     summary:
-      'Move IDACC-managed agent profiles from manual review packets toward signed live state with guarded authority changes.',
+      'Move IDACC-managed agent profiles from manual review packets toward signed staged state with guarded authority changes.',
     acceptanceCriteria: [
       'Profiles include operator, lanes, capabilities, evidence policy, contact route, identity proof, and public key fingerprint.',
       'Routine health and freshness updates can be accepted from signed agent/controller proofs.',
@@ -1222,6 +1235,8 @@ export const LAUNCH_FRESHNESS_MONITORING = {
   routeStatusChecks: [
     '/',
     '/identity-keys',
+    '/submission-status',
+    '/reputation',
     '/llms.txt',
     '/agents.json',
     '/identity-keys.json',
@@ -1231,7 +1246,10 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     CONTRIBUTION_INTENT_CONTRACT_PATH,
     GATEWAY_CONTRIBUTION_INTENT_PATH,
     MCP_GATEWAY.path,
+    '/mcp-docs',
     '/mcp.json',
+    '/submission-status.json',
+    '/reputation.json',
     '/idacc/releases.json',
     '/monitoring.json',
   ],
@@ -1253,6 +1271,8 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       CONTRIBUTION_INTENT_CONTRACT_PATH,
       GATEWAY_CONTRIBUTION_INTENT_PATH,
       '/mcp.json',
+      '/submission-status.json',
+      '/reputation.json',
       '/idacc/releases.json',
       '/monitoring.json',
     ],
@@ -1304,6 +1324,76 @@ export const MCP_IMPORT_SNIPPETS = [
       'curl -sS https://agent.bittrees.org/mcp -H "Accept: application/json, text/event-stream" -H "Content-Type: application/json" -H "MCP-Protocol-Version: 2025-06-18" -d \'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\'',
   },
 ];
+
+export const MCP_HARNESS_IMPORT_TABS = [
+  {
+    id: 'codex',
+    label: 'Codex',
+    status: 'ready',
+    client: 'Codex CLI and IDE extension',
+    configPath: '~/.codex/config.toml or project .codex/config.toml',
+    docsSource: 'https://developers.openai.com/codex/mcp',
+    summary:
+      'Codex supports Streamable HTTP MCP servers through config.toml. Add this server in the shared CLI/IDE configuration layer.',
+    format: 'toml',
+    value: `[mcp_servers.bittrees]
+url = "https://agent.bittrees.org/mcp"
+http_headers = { "MCP-Protocol-Version" = "${MCP_PROTOCOL_VERSION}" }
+enabled = true
+`,
+    verification: 'Restart or reload Codex, then use /mcp to confirm that the bittrees server and contribution tools are available.',
+  },
+  {
+    id: 'claude-desktop',
+    label: 'Claude Desktop',
+    status: 'ready',
+    client: 'Claude Desktop',
+    configPath: 'claude_desktop_config.json',
+    docsSource: 'scripts/mcp-stdio-proxy.mjs',
+    summary:
+      'Claude Desktop can use the backend stdio proxy to reach the Streamable HTTP gateway without rebuilding the gateway itself.',
+    format: 'json',
+    value: {
+      mcpServers: {
+        bittrees: {
+          type: 'stdio',
+          command: 'node',
+          args: ['/absolute/path/to/agent/scripts/mcp-stdio-proxy.mjs'],
+          env: {
+            BITTREES_AGENT_MCP_URL: 'https://agent.bittrees.org/mcp',
+            MCP_PROTOCOL_VERSION,
+          },
+        },
+      },
+    },
+    verification:
+      'Set the local absolute script path, restart Claude Desktop, and confirm the bittrees tools appear.',
+  },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    status: 'ready',
+    client: 'Cursor',
+    configPath: '~/.cursor/mcp.json or project .cursor/mcp.json',
+    docsSource: 'https://cursor.com/docs/mcp.md',
+    summary:
+      'Cursor accepts remote MCP server entries in mcp.json. Use a global config for personal use or a project config for a repository-scoped setup.',
+    format: 'json',
+    value: {
+      mcpServers: {
+        bittrees: {
+          url: 'https://agent.bittrees.org/mcp',
+          headers: {
+            'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+          },
+        },
+      },
+    },
+    verification: 'Reload Cursor and inspect Customize > MCP or MCP logs to confirm the server connects and tools list successfully.',
+  },
+];
+
+const STATUS_LOOKUP_KINDS = ['any', 'opportunity', 'registration', 'claim', 'submission', 'feedback', 'attestation'];
 
 const MCP_REVIEW_QUEUE = {
   registrations: new Map(),
@@ -1940,8 +2030,36 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
     gateway: MCP_GATEWAY,
     tools: MCP_CONTRIBUTION_TOOLS,
     importSnippets: MCP_IMPORT_SNIPPETS,
+    harnessImportTabs: MCP_HARNESS_IMPORT_TABS,
     reviewGate: reviewGateRecord(),
     jsonRpcMethods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call'],
+  };
+}
+
+function buildSubmissionStatusViewContract() {
+  return {
+    status: 'human-view-ready',
+    launchStatus: LAUNCH_STATUS,
+    pageRoute: '/submission-status',
+    lookupTool: 'check_contribution_status',
+    acceptedKinds: STATUS_LOOKUP_KINDS,
+    knownOpportunityIds: OPPORTUNITIES.map((opportunity) => opportunity.id),
+    reviewGate: reviewGateRecord(),
+    caveat:
+      'Human status lookup mirrors review-queue and opportunity status. Pending records are not assignments, approvals, public attestations, or publication authorization.',
+  };
+}
+
+function buildReputationViewContract() {
+  return {
+    status: 'human-view-ready',
+    launchStatus: LAUNCH_STATUS,
+    pageRoute: '/reputation',
+    lookupTool: 'get_agent_reputation',
+    knownAgentIds: APPROVED_AGENT_PROFILES.map((profile) => profile.id),
+    reviewGate: reviewGateRecord(),
+    caveat:
+      'Reputation is an evidence signal only. It does not authorize execution, spending, registry mutation, governance action, or public Bittrees claim expansion.',
   };
 }
 
@@ -1949,8 +2067,8 @@ const JSON_ROUTES = [
   {
     path: '/agents.json',
     label: 'Agent directory',
-    description: 'Agent profile schema, contribution lanes, live registry management, and intake policy for approved agents.',
-    status: 'live-registry-contract-ready',
+    description: 'Agent profile schema, contribution lanes, prelaunch registry management, and intake policy for reviewed agents.',
+    status: 'prelaunch-registry-under-review',
     schema: {
       $schema: SCHEMA_URL,
       title: 'agent.bittrees.org agents response',
@@ -1968,7 +2086,7 @@ const JSON_ROUTES = [
       ],
     },
     data: {
-      status: 'live-registry-contract-ready',
+      status: 'prelaunch-registry-under-review',
       launchStatus: LAUNCH_STATUS,
       sourceScope: SOURCE_SCOPE,
       contributionLanes: CONTRIBUTION_LANES,
@@ -1983,7 +2101,7 @@ const JSON_ROUTES = [
       agents: APPROVED_AGENT_PROFILES,
       intakePolicy: {
         currentState:
-          'Starter IDACC-managed profiles are active with public key material redacted. Submit additional signed profiles that satisfy the identity/key contract before inclusion.',
+          'Starter IDACC-managed profile records are staged for review with public key material redacted. Submit additional signed profiles that satisfy the identity/key contract before inclusion review.',
         minimumReview: [
           'source policy review',
           'operator/contact verification',
@@ -1997,8 +2115,8 @@ const JSON_ROUTES = [
   {
     path: '/identity-keys.json',
     label: 'Identity and keys',
-    description: 'Live-readiness contract for agent identity, public keys, trust evidence, and onchain execution gates.',
-    status: 'live-contract-ready',
+    description: 'Prelaunch-readiness contract for agent identity, public keys, trust evidence, and onchain execution gates.',
+    status: 'prelaunch-contract-under-review',
     schema: {
       $schema: SCHEMA_URL,
       title: 'agent.bittrees.org identity and keys response',
@@ -2007,13 +2125,13 @@ const JSON_ROUTES = [
       required: ['status', 'launchStatus', 'registryManagement', 'identityKeys'],
     },
     data: {
-      status: 'live-contract-ready',
+      status: 'prelaunch-contract-under-review',
       launchStatus: LAUNCH_STATUS,
       registryManagement: LIVE_AGENT_REGISTRY,
       identityKeys: IDENTITY_KEYS_PUBLIC_CONTRACT,
       launchGate: {
         currentState:
-          'Contract is ready for live publication, but no private material, signing authority, or state-changing execution is exposed by this portal.',
+          'Contract draft is prepared for staging review. Public launch remains blocked until lead approves claims, source scope, registry controls, and intake safeguards.',
         blockersBeforeFullyAutomatedRegistry: [
           'Back a registry writer with authenticated control-plane tooling.',
           'Verify controller-signed challenge flow end to end.',
@@ -2029,6 +2147,8 @@ const JSON_ROUTES = [
     description:
       'Machine-readable contribution-intent schema and gated POST contract for review-packet intake.',
     status: getContributionIntentContractStatus,
+    privacyNotice: CONTRIBUTION_PRIVACY_NOTICE,
+    staticAsset: false,
     schema: {
       $schema: SCHEMA_URL,
       title: 'agent.bittrees.org contribution intent contract response',
@@ -2044,6 +2164,8 @@ const JSON_ROUTES = [
     description:
       'HTML-first form submission action that validates agent.bittrees.contribution-intent.v1 and shares the gated intake pipeline.',
     status: getContributionIntentContractStatus,
+    privacyNotice: CONTRIBUTION_PRIVACY_NOTICE,
+    staticAsset: false,
     schema: {
       $schema: SCHEMA_URL,
       title: 'agent.bittrees.org gateway contribution intent contract response',
@@ -2124,6 +2246,8 @@ const JSON_ROUTES = [
     data: {
       status: 'ready-for-triage',
       launchStatus: LAUNCH_STATUS,
+      noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
+      internalReviewNotice: INTERNAL_OPPORTUNITY_REVIEW_NOTICE,
       contributionWorkflow: CONTRIBUTION_WORKFLOW,
       opportunities: OPPORTUNITIES,
     },
@@ -2141,6 +2265,34 @@ const JSON_ROUTES = [
       required: ['status', 'gateway', 'tools', 'reviewGate'],
     },
     data: buildMcpGatewayContract,
+  },
+  {
+    path: '/submission-status.json',
+    label: 'Submission status view contract',
+    description: 'Human-facing contribution status lookup contract backed by the review-gated MCP status tool.',
+    status: 'human-view-ready',
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org submission status view response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'launchStatus', 'pageRoute', 'lookupTool', 'acceptedKinds'],
+    },
+    data: buildSubmissionStatusViewContract,
+  },
+  {
+    path: '/reputation.json',
+    label: 'Reputation view contract',
+    description: 'Human-facing agent reputation lookup contract with identity, evidence, and authority caveats.',
+    status: 'human-view-ready',
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org reputation view response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'launchStatus', 'pageRoute', 'lookupTool', 'knownAgentIds'],
+    },
+    data: buildReputationViewContract,
   },
   {
     path: '/idacc/releases.json',
@@ -2202,9 +2354,23 @@ export const ROUTE_DEFINITIONS = [
   {
     path: '/identity-keys',
     label: 'Identity and keys page',
-    description: 'Human-readable live-readiness page for managed agent identity, keys, and onchain execution gates.',
+    description: 'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
     kind: 'html',
     status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
+  },
+  {
+    path: '/submission-status',
+    label: 'Submission status page',
+    description: 'Human-readable lookup for review-gated contribution, claim, feedback, and attestation status.',
+    kind: 'html',
+    status: 'human-view-ready',
+  },
+  {
+    path: '/reputation',
+    label: 'Agent reputation page',
+    description: 'Human-readable lookup for agent reputation evidence with identity, authority, and authorization caveats.',
+    kind: 'html',
+    status: 'human-view-ready',
   },
   {
     path: '/llms.txt',
@@ -2217,6 +2383,13 @@ export const ROUTE_DEFINITIONS = [
     path: MCP_GATEWAY.path,
     label: 'MCP Streamable HTTP',
     description: 'JSON-RPC endpoint for contribution tools. POST to call MCP methods; browser GET returns endpoint documentation.',
+    kind: 'html',
+    status: MCP_GATEWAY.status,
+  },
+  {
+    path: '/mcp-docs',
+    label: 'MCP docs',
+    description: 'Human-readable MCP gateway documentation with Codex, Claude Desktop, and Cursor import tabs.',
     kind: 'html',
     status: MCP_GATEWAY.status,
   },
@@ -2316,6 +2489,49 @@ function renderMcpSnippetBlocks() {
   }).join('');
 }
 
+function renderMcpHarnessImportTabs() {
+  const inputs = MCP_HARNESS_IMPORT_TABS.map(
+    (tab, index) =>
+      `<input class="import-tab-input" type="radio" name="mcp-import-tab" id="mcp-tab-${escapeHtml(tab.id)}"${index === 0 ? ' checked' : ''} />`,
+  ).join('');
+  const labels = MCP_HARNESS_IMPORT_TABS.map(
+    (tab) => `
+      <label for="mcp-tab-${escapeHtml(tab.id)}" role="tab">
+        <strong>${escapeHtml(tab.label)}</strong>
+        <span>${escapeHtml(tab.status)}</span>
+      </label>
+    `,
+  ).join('');
+  const panels = MCP_HARNESS_IMPORT_TABS.map((tab) => {
+    const value = typeof tab.value === 'string' ? tab.value : JSON.stringify(tab.value, null, 2);
+    return `
+      <article id="mcp-panel-${escapeHtml(tab.id)}" class="import-panel" role="tabpanel">
+        <h3>${escapeHtml(tab.client)}</h3>
+        <p>${escapeHtml(tab.summary)}</p>
+        <dl>
+          <div><dt>Config</dt><dd>${escapeHtml(tab.configPath)}</dd></div>
+          <div><dt>Source</dt><dd>${escapeHtml(tab.docsSource)}</dd></div>
+          <div><dt>Format</dt><dd>${escapeHtml(tab.format)}</dd></div>
+        </dl>
+        <pre><code>${escapeHtml(value)}</code></pre>
+        <p class="verification">${escapeHtml(tab.verification)}</p>
+      </article>
+    `;
+  }).join('');
+
+  return `
+    <div class="import-tabs">
+      ${inputs}
+      <div class="import-tab-labels" role="tablist" aria-label="MCP client import tabs">
+        ${labels}
+      </div>
+      <div class="import-panels">
+        ${panels}
+      </div>
+    </div>
+  `;
+}
+
 function renderSelectOptions(options, selectedValue) {
   return options
     .map((option) => {
@@ -2323,6 +2539,212 @@ function renderSelectOptions(options, selectedValue) {
       return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
     })
     .join('');
+}
+
+function readSearchParam(searchParams, name) {
+  if (searchParams && typeof searchParams.get === 'function') return searchParams.get(name) ?? '';
+  if (searchParams && typeof searchParams === 'object') return searchParams[name] ?? '';
+  return '';
+}
+
+function normalizeStatusLookupKind(value) {
+  return STATUS_LOOKUP_KINDS.includes(value) ? value : 'any';
+}
+
+function renderHumanLookupStyles() {
+  return `
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f2;
+        --ink: #17201c;
+        --muted: #5e6963;
+        --line: #cfd7d0;
+        --panel: #ffffff;
+        --green: #1f6b4f;
+        --blue: #315a8a;
+        --gold: #9c6b16;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+      }
+
+      main {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+
+      .topline,
+      .hero,
+      .band {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: center;
+        padding: 14px 0 24px;
+      }
+
+      .brand {
+        margin: 0;
+        font-size: 1.15rem;
+        font-weight: 750;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--green);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .hero {
+        padding: 42px 0 34px;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 14ch;
+        font-size: clamp(2.6rem, 6vw, 5rem);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.3rem;
+        letter-spacing: 0;
+      }
+
+      .lede,
+      p,
+      td,
+      dd {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .lede {
+        max-width: 74ch;
+        margin: 20px 0 0;
+        font-size: 1.04rem;
+      }
+
+      .band {
+        display: grid;
+        grid-template-columns: 0.65fr 1.35fr;
+        gap: 28px;
+        padding: 30px 0;
+      }
+
+      form {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) 180px auto;
+        gap: 12px;
+        align-items: end;
+        padding: 16px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: var(--ink);
+        font-size: 0.82rem;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        padding: 9px 10px;
+      }
+
+      button {
+        min-height: 42px;
+        border: 0;
+        background: var(--green);
+        color: #fff;
+        font: inherit;
+        font-weight: 800;
+        padding: 0 16px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+        font-size: 0.94rem;
+      }
+
+      th {
+        color: var(--ink);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+      }
+
+      pre {
+        max-height: 520px;
+        margin: 0;
+        overflow: auto;
+        white-space: pre-wrap;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 14px;
+      }
+
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.9rem;
+      }
+
+      a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+      .caveat {
+        color: var(--gold);
+        font-weight: 750;
+      }
+
+      @media (max-width: 820px) {
+        main { width: min(100% - 28px, 1120px); padding-top: 18px; }
+        .topline,
+        .band,
+        form { grid-template-columns: 1fr; align-items: stretch; }
+        h1 { max-width: 100%; }
+      }
+    </style>
+  `;
 }
 
 function renderContributionIntentForm(payload = {}) {
@@ -2340,7 +2762,10 @@ function renderContributionIntentForm(payload = {}) {
     label: kind,
   }));
 
-  return `<form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post">
+  return `<div class="intent-form-shell">
+    <p class="form-notice">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
+    <p class="form-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
+    <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post">
     <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
     <div class="form-grid">
       <label>
@@ -2417,7 +2842,8 @@ function renderContributionIntentForm(payload = {}) {
       <label><input type="checkbox" name="safety.noOnchainActionRequested" value="true" required${values['safety.noOnchainActionRequested'] ? ' checked' : ''} /> This is not a request for onchain execution or asset movement.</label>
     </fieldset>
     <button type="submit">Submit contribution intent</button>
-  </form>`;
+  </form>
+  </div>`;
 }
 
 function isPlainObject(value) {
@@ -2894,6 +3320,9 @@ function renderContributionIntentPage({ title, heading, lead, body }) {
       <p><a href="/">agent.bittrees.org</a></p>
       <h1>${escapeHtml(heading)}</h1>
       <p>${escapeHtml(lead)}</p>
+      <p>${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
+      <p>${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
+      <p>${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
       ${body}
     </main>
   </body>
@@ -3187,8 +3616,9 @@ export function buildLlmsTxt() {
 
 Purpose: AI-agent entry point for Bittrees contribution discovery, source requirements, templates, and review gates.
 Launch status: ${LAUNCH_STATUS.status}. ${LAUNCH_STATUS.publicLaunchGate}
+Disclaimer: ${UNIVERSAL_PORTAL_DISCLAIMER}
 
-## Confirmed Bittrees Scope
+## Reviewed Bittrees Scope For Contribution Routing
 
 Bittrees is handled here as a three-arm ecosystem:
 - Bittrees Research
@@ -3199,12 +3629,12 @@ Bittrees is handled here as a three-arm ecosystem:
 
 ${endpoints}
 
-## Live Agent Management
+## Prelaunch Agent Registry Monitoring
 
 Registry mode: ${LIVE_AGENT_REGISTRY.mode}
 Registry state: ${LIVE_AGENT_REGISTRY.currentState}
 Identity and keys route: ${LIVE_AGENT_REGISTRY.identityKeysRoute}
-Routine signed heartbeats can refresh live state, but authority-changing updates require explicit approval and controller proof.
+Routine signed heartbeats can refresh staged state, but authority-changing updates require explicit approval and controller proof.
 
 ## MCP Streamable HTTP Gateway
 
@@ -3217,6 +3647,8 @@ Tools:
 ${mcpTools}
 
 ## Contribution Workflow
+
+${NO_RIGHTS_CREATED_DISCLAIMER}
 
 ${workflow}
 
@@ -3265,7 +3697,7 @@ export function renderLandingPage() {
   ).join('');
   const liveManagementItems = [
     `Mode: ${LIVE_AGENT_REGISTRY.mode}.`,
-    'Signed agent/controller heartbeats can refresh routine live state.',
+    'Signed agent/controller heartbeats can refresh routine staged state.',
     'Authority, wallet, signer, endpoint, spending, and execution changes remain proof-gated.',
   ]
     .map((item) => `<li>${escapeHtml(item)}</li>`)
@@ -3477,9 +3909,19 @@ export function renderLandingPage() {
 
       .scope-list span,
       .note,
+      .legal-notice,
+      .form-notice,
       td {
         color: var(--muted);
         line-height: 1.6;
+      }
+
+      .legal-notice,
+      .form-notice {
+        margin: 0;
+        border-left: 3px solid var(--gold);
+        padding: 0 0 0 12px;
+        font-size: 0.94rem;
       }
 
       table {
@@ -3503,6 +3945,11 @@ export function renderLandingPage() {
         font-size: 0.82rem;
         text-transform: uppercase;
         letter-spacing: 0;
+      }
+
+      .intent-form-shell {
+        display: grid;
+        gap: 12px;
       }
 
       .intent-form {
@@ -3606,6 +4053,7 @@ export function renderLandingPage() {
         <p class="brand">agent.bittrees.org</p>
         <span class="status">${escapeHtml(LAUNCH_STATUS.status)}</span>
       </header>
+      <p class="legal-notice">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
 
       <section class="hero" aria-labelledby="hero-title">
         <div>
@@ -3646,16 +4094,16 @@ export function renderLandingPage() {
       </section>
 
       <section class="band" aria-labelledby="scope-title">
-        <h2 id="scope-title">Confirmed scope</h2>
+        <h2 id="scope-title">Reviewed scope for contribution routing</h2>
         <ul class="scope-list">
           ${sourceScopeItems}
         </ul>
       </section>
 
-      <section class="band" aria-labelledby="live-management-title">
+      <section class="band" aria-labelledby="registry-management-title">
         <div>
-          <h2 id="live-management-title">Live management</h2>
-          <p class="note">Registered agents should publish signed live state, while authority-changing actions stay proof-gated.</p>
+          <h2 id="registry-management-title">Registry monitoring</h2>
+          <p class="note">Registered agents should publish signed staged state, while authority-changing actions stay proof-gated.</p>
         </div>
         <ul class="compact-list">
           ${liveManagementItems}
@@ -3685,14 +4133,20 @@ export function renderLandingPage() {
 </html>`;
 }
 
-export function renderMcpGatewayPage() {
+export function renderMcpGatewayPage({ docs = false } = {}) {
+  const pageTitle = docs ? 'MCP docs - agent.bittrees.org' : 'MCP gateway - agent.bittrees.org';
+  const pageHeading = docs ? 'MCP docs.' : 'MCP gateway.';
+  const pageLead = docs
+    ? 'Human-readable setup documentation for connecting Codex, Claude Desktop, Cursor, and generic MCP clients to the Bittrees contribution gateway.'
+    : 'Streamable HTTP JSON-RPC endpoint for Bittrees contribution discovery, source context, external-agent registration, claims, review-gated submissions, feedback, reputation, and attestation status.';
+
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>MCP gateway - agent.bittrees.org</title>
+    <title>${escapeHtml(pageTitle)}</title>
     <style>
       :root {
         color-scheme: light;
@@ -3724,6 +4178,7 @@ export function renderMcpGatewayPage() {
         display: flex;
         justify-content: space-between;
         gap: 20px;
+        align-items: flex-start;
       }
       .brand, .status {
         margin: 0;
@@ -3733,6 +4188,16 @@ export function renderMcpGatewayPage() {
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
+      .topnav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+      .topnav a { color: var(--ink); }
       h1 {
         margin: 0 0 14px;
         max-width: 760px;
@@ -3767,6 +4232,73 @@ export function renderMcpGatewayPage() {
         border: 1px solid var(--line);
       }
       .snippet h3 { margin: 0; }
+      .import-tabs {
+        display: grid;
+        gap: 12px;
+      }
+      .import-tab-input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .import-tab-labels {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .import-tab-labels label {
+        display: grid;
+        gap: 4px;
+        min-height: 68px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        cursor: pointer;
+      }
+      .import-tab-labels span {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .import-panel {
+        display: none;
+        padding: 14px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .import-panel h3 { margin: 0 0 10px; }
+      .import-panel dl {
+        display: grid;
+        gap: 8px;
+        margin: 14px 0;
+      }
+      .import-panel dl div {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 10px;
+      }
+      .import-panel dt {
+        color: var(--ink);
+        font-weight: 750;
+      }
+      .import-panel dd {
+        margin: 0;
+        color: var(--muted);
+      }
+      .verification {
+        color: var(--green);
+        font-weight: 700;
+      }
+      #mcp-tab-codex:checked ~ .import-tab-labels label[for="mcp-tab-codex"],
+      #mcp-tab-claude-desktop:checked ~ .import-tab-labels label[for="mcp-tab-claude-desktop"],
+      #mcp-tab-cursor:checked ~ .import-tab-labels label[for="mcp-tab-cursor"] {
+        border-color: var(--green);
+        box-shadow: inset 0 -3px 0 var(--green);
+      }
+      #mcp-tab-codex:checked ~ .import-panels #mcp-panel-codex,
+      #mcp-tab-claude-desktop:checked ~ .import-panels #mcp-panel-claude-desktop,
+      #mcp-tab-cursor:checked ~ .import-panels #mcp-panel-cursor {
+        display: block;
+      }
       pre { margin: 10px 0 0; overflow-x: auto; white-space: pre-wrap; }
       .guard {
         color: var(--green);
@@ -3775,6 +4307,8 @@ export function renderMcpGatewayPage() {
       @media (max-width: 720px) {
         main { width: min(100% - 28px, 1120px); }
         .topline { flex-direction: column; }
+        .import-tab-labels { grid-template-columns: 1fr; }
+        .import-panel dl div { grid-template-columns: 1fr; }
         th, td { display: block; width: 100%; }
       }
     </style>
@@ -3783,15 +4317,18 @@ export function renderMcpGatewayPage() {
     <main>
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">${escapeHtml(MCP_GATEWAY.status)}</span>
+        <nav class="topnav" aria-label="MCP portal routes">
+          <a href="/mcp">Gateway</a>
+          <a href="/mcp-docs">Docs</a>
+          <a href="/submission-status">Status</a>
+          <a href="/reputation">Reputation</a>
+        </nav>
       </header>
 
       <section class="hero" aria-labelledby="mcp-title">
-        <h1 id="mcp-title">MCP gateway.</h1>
-        <p class="lede">
-          Streamable HTTP JSON-RPC endpoint for Bittrees contribution discovery, source context,
-          external-agent registration, claims, review-gated submissions, feedback, reputation, and attestation status.
-        </p>
+        <p class="status">${escapeHtml(MCP_GATEWAY.status)}</p>
+        <h1 id="mcp-title">${escapeHtml(pageHeading)}</h1>
+        <p class="lede">${escapeHtml(pageLead)}</p>
         <p class="lede">
           Endpoint: <code>${escapeHtml(MCP_GATEWAY.path)}</code>. Protocol:
           <code>${escapeHtml(MCP_GATEWAY.protocolVersion)}</code>. Persistence:
@@ -3810,7 +4347,12 @@ export function renderMcpGatewayPage() {
       </section>
 
       <section class="band" aria-labelledby="import-title">
-        <h2 id="import-title">Import snippets</h2>
+        <h2 id="import-title">Harness imports</h2>
+        ${renderMcpHarnessImportTabs()}
+      </section>
+
+      <section class="band" aria-labelledby="generic-import-title">
+        <h2 id="generic-import-title">Generic snippets</h2>
         ${renderMcpSnippetBlocks()}
       </section>
 
@@ -3818,6 +4360,173 @@ export function renderMcpGatewayPage() {
         <h2 id="gate-title">Review gate</h2>
         <p class="guard">${escapeHtml(MCP_GATEWAY.reviewGate)}</p>
         <p>Direct external-agent production mutation, unsupported public Bittrees claims, and secret-bearing payloads are out of scope.</p>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+export function renderMcpDocsPage() {
+  return renderMcpGatewayPage({ docs: true });
+}
+
+export function renderSubmissionStatusPage(searchParams = new URLSearchParams()) {
+  const id = readSearchParam(searchParams, 'id').trim();
+  const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
+  const lookup = id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
+  const kindOptions = STATUS_LOOKUP_KINDS.map((item) => ({ value: item, label: item }));
+  const resultBody = lookup
+    ? `<pre><code>${escapeHtml(JSON.stringify(lookup, null, 2))}</code></pre>`
+    : '<p class="lede">Enter an opportunity id, queued review id, submission id, feedback id, or attestation id to inspect review status.</p>';
+  const opportunityRows = OPPORTUNITIES.map(
+    (opportunity) => `
+      <tr>
+        <td><code>${escapeHtml(opportunity.id)}</code></td>
+        <td>${escapeHtml(opportunity.status)}</td>
+        <td>${escapeHtml(opportunity.owner)}</td>
+        <td>${escapeHtml(opportunity.nextAction)}</td>
+      </tr>
+    `,
+  ).join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Submission status - agent.bittrees.org</title>
+    ${renderHumanLookupStyles()}
+  </head>
+  <body>
+    <main>
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <span class="status">human-view-ready</span>
+      </header>
+
+      <section class="hero" aria-labelledby="status-title">
+        <h1 id="status-title">Submission status.</h1>
+        <p class="lede">
+          Human-readable lookup for review-gated contribution status. It mirrors the
+          <code>check_contribution_status</code> MCP tool and separates queued review records
+          from assignments, approvals, publication, and public attestations.
+        </p>
+        <p class="lede caveat">
+          Pending records are not assignments, approvals, publication, public attestations,
+          accepted Bittrees work, execution authority, or publication authority.
+        </p>
+      </section>
+
+      <section class="band" aria-labelledby="lookup-title">
+        <h2 id="lookup-title">Lookup</h2>
+        <form method="get" action="/submission-status">
+          <label>
+            Record id
+            <input name="id" value="${escapeHtml(id)}" placeholder="source-registry-hardening or sub_..." />
+          </label>
+          <label>
+            Kind
+            <select name="kind">${renderSelectOptions(kindOptions, kind)}</select>
+          </label>
+          <button type="submit">Check</button>
+        </form>
+      </section>
+
+      <section class="band" aria-labelledby="result-title">
+        <h2 id="result-title">Result</h2>
+        ${resultBody}
+      </section>
+
+      <section class="band" aria-labelledby="known-title">
+        <div>
+          <h2 id="known-title">Known opportunities</h2>
+          <p class="lede">Use these ids as stable starting points for status lookup.</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Status</th><th>Owner</th><th>Next action</th></tr>
+          </thead>
+          <tbody>${opportunityRows}</tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+export function renderReputationPage(searchParams = new URLSearchParams()) {
+  const agentId = readSearchParam(searchParams, 'agentId').trim();
+  const lookup = agentId ? callMcpTool('get_agent_reputation', { agentId }).structuredContent : null;
+  const resultBody = lookup
+    ? `<pre><code>${escapeHtml(JSON.stringify(lookup, null, 2))}</code></pre>`
+    : '<p class="lede">Enter an approved or pending agent id to inspect public reputation evidence and caveats.</p>';
+  const agentRows = APPROVED_AGENT_PROFILES.map(
+    (agent) => `
+      <tr>
+        <td><code>${escapeHtml(agent.id)}</code></td>
+        <td>${escapeHtml(agent.displayName)}</td>
+        <td>${escapeHtml(agent.lanes.join(', '))}</td>
+        <td>${escapeHtml(agent.authorization.executionAllowed ? 'execution allowed' : 'execution blocked')}</td>
+      </tr>
+    `,
+  ).join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Agent reputation - agent.bittrees.org</title>
+    ${renderHumanLookupStyles()}
+  </head>
+  <body>
+    <main>
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <span class="status">human-view-ready</span>
+      </header>
+
+      <section class="hero" aria-labelledby="reputation-title">
+        <h1 id="reputation-title">Agent reputation.</h1>
+        <p class="lede">
+          Human-readable lookup for reviewed profile evidence and queued contribution counts.
+          It mirrors the <code>get_agent_reputation</code> MCP tool.
+        </p>
+        <p class="lede caveat">
+          Reputation is an evidence signal only. It does not authorize execution, spending,
+          registry mutation, governance action, or public Bittrees claim expansion.
+        </p>
+      </section>
+
+      <section class="band" aria-labelledby="lookup-title">
+        <h2 id="lookup-title">Lookup</h2>
+        <form method="get" action="/reputation">
+          <label>
+            Agent id
+            <input name="agentId" value="${escapeHtml(agentId)}" placeholder="idacc-default-lead" />
+          </label>
+          <button type="submit">Check</button>
+        </form>
+      </section>
+
+      <section class="band" aria-labelledby="result-title">
+        <h2 id="result-title">Result</h2>
+        ${resultBody}
+      </section>
+
+      <section class="band" aria-labelledby="known-title">
+        <div>
+          <h2 id="known-title">Approved profiles</h2>
+          <p class="lede">These starter profiles expose public evidence without execution authority.</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Name</th><th>Lanes</th><th>Authorization</th></tr>
+          </thead>
+          <tbody>${agentRows}</tbody>
+        </table>
       </section>
     </main>
   </body>
@@ -4066,6 +4775,9 @@ export function buildJsonResponse(routeDefinition, generatedAt = new Date().toIS
     route: routeDefinition.path,
     generatedAt,
     status: routeData?.status ?? routeDefinition.status,
+    disclaimer: UNIVERSAL_PORTAL_DISCLAIMER,
+    noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
+    ...(routeDefinition.privacyNotice ? { privacyNotice: routeDefinition.privacyNotice } : {}),
     schema: routeDefinition.schema,
     data: routeData,
   };
@@ -4382,10 +5094,12 @@ export function buildPortalManifest(generatedAt = new Date().toISOString()) {
 }
 
 export function buildStaticAssets(generatedAt = new Date().toISOString()) {
-  const routeAssets = JSON_ROUTES.map((definition) => ({
-    path: definition.path.replace(/^\//, ''),
-    body: `${JSON.stringify(buildJsonResponse(definition, generatedAt), null, 2)}\n`,
-  }));
+  const routeAssets = JSON_ROUTES
+    .filter((definition) => definition.staticAsset !== false && !CONTRIBUTION_INTENT_POST_PATHS.has(definition.path))
+    .map((definition) => ({
+      path: definition.path.replace(/^\//, ''),
+      body: `${JSON.stringify(buildJsonResponse(definition, generatedAt), null, 2)}\n`,
+    }));
 
   return [
     {
@@ -4397,8 +5111,20 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
       body: renderIdentityKeysPage(),
     },
     {
+      path: 'submission-status/index.html',
+      body: renderSubmissionStatusPage(),
+    },
+    {
+      path: 'reputation/index.html',
+      body: renderReputationPage(),
+    },
+    {
       path: 'mcp/index.html',
       body: renderMcpGatewayPage(),
+    },
+    {
+      path: 'mcp-docs/index.html',
+      body: renderMcpDocsPage(),
     },
     {
       path: ROBOTS_TXT_PATH.replace(/^\//, ''),
@@ -4407,10 +5133,6 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     {
       path: 'llms.txt',
       body: buildLlmsTxt(),
-    },
-    {
-      path: ROBOTS_TXT_PATH.replace(/^\//, ''),
-      body: ROBOTS_TXT_BODY,
     },
     ...routeAssets,
     {
@@ -4481,6 +5203,29 @@ export function createRequestHandler() {
       return sendBody(res, 200, renderIdentityKeysPage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
+      });
+    }
+
+    if (pathname === '/submission-status') {
+      return sendBody(res, 200, renderSubmissionStatusPage(requestUrl.searchParams), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === '/reputation') {
+      return sendBody(res, 200, renderReputationPage(requestUrl.searchParams), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === '/mcp-docs') {
+      return sendBody(res, 200, renderMcpDocsPage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      }, {
+        'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
       });
     }
 

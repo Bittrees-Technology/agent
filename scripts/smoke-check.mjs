@@ -7,6 +7,8 @@ const baseUrl = new URL(baseUrlArg ? baseUrlArg.split('=').slice(1).join('=') : 
 const routeChecks = [
   { path: '/', kind: 'html' },
   { path: '/identity-keys', kind: 'html' },
+  { path: '/submission-status', kind: 'html' },
+  { path: '/reputation', kind: 'html' },
   { path: '/llms.txt', kind: 'text' },
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },
@@ -16,7 +18,10 @@ const routeChecks = [
   { path: '/contribution-intents', kind: 'json' },
   { path: '/gateway/contribution-intents', kind: 'json' },
   { path: '/mcp', kind: 'html' },
+  { path: '/mcp-docs', kind: 'html' },
   { path: '/mcp.json', kind: 'json' },
+  { path: '/submission-status.json', kind: 'json' },
+  { path: '/reputation.json', kind: 'json' },
   { path: '/idacc/releases.json', kind: 'json' },
   { path: '/monitoring.json', kind: 'json' },
 ];
@@ -92,6 +97,24 @@ async function checkRoute(path, kind) {
   if (path === '/') {
     check(text.includes('Contribution workflow'), '/ missing contribution workflow');
     check(!text.includes('staging-ready'), '/ still contains staging-ready');
+  }
+
+  if (path === '/mcp' || path === '/mcp-docs') {
+    check(text.includes('Harness imports'), `${path} missing harness import tabs`);
+    check(text.includes('Codex'), `${path} missing Codex import tab`);
+    check(text.includes('Claude Desktop'), `${path} missing Claude Desktop import tab`);
+    check(text.includes('Cursor'), `${path} missing Cursor import tab`);
+  }
+
+  if (path === '/submission-status') {
+    check(text.includes('Submission status'), '/submission-status missing title');
+    check(text.includes('check_contribution_status'), '/submission-status missing MCP tool reference');
+  }
+
+  if (path === '/reputation') {
+    check(text.includes('Agent reputation'), '/reputation missing title');
+    check(text.includes('get_agent_reputation'), '/reputation missing MCP tool reference');
+    check(text.includes('Reputation is an evidence signal'), '/reputation missing authority caveat');
   }
 }
 
@@ -194,6 +217,10 @@ async function checkMcpGateway() {
       check(toolNames.has(toolName), `/mcp.json missing ${toolName}`);
     }
     check(contract.data?.reviewGate?.productionMutationAllowed === false, '/mcp.json review gate allows production mutation');
+    const importTabs = new Set((contract.data?.harnessImportTabs ?? []).map((tab) => tab.id));
+    for (const tabId of ['codex', 'claude-desktop', 'cursor']) {
+      check(importTabs.has(tabId), `/mcp.json missing ${tabId} import tab`);
+    }
   }
 
   const init = await postMcp({
