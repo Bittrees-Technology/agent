@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createInterface } from 'node:readline';
@@ -722,6 +722,51 @@ test('mcp endpoint rejects browser-origin mismatch and server-initiated sse get'
     });
     assert.equal(sseRejected.status, 405);
   });
+});
+
+test('mcp endpoint accepts pre-parsed JSON request bodies', async () => {
+  const handler = createRequestHandler();
+  const req = new EventEmitter();
+  req.method = 'POST';
+  req.url = MCP_GATEWAY.path;
+  req.headers = {
+    host: 'agent.bittrees.org',
+    accept: 'application/json, text/event-stream',
+    'content-type': 'application/json',
+    'mcp-protocol-version': MCP_GATEWAY.protocolVersion,
+  };
+  req.body = {
+    jsonrpc: '2.0',
+    id: 'pre-parsed-body',
+    method: 'initialize',
+    params: {
+      protocolVersion: MCP_GATEWAY.protocolVersion,
+      capabilities: {},
+      clientInfo: { name: 'pre-parsed-test', version: '0.1.0' },
+    },
+  };
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['MCP-Protocol-Version'], MCP_GATEWAY.protocolVersion);
+
+  const body = JSON.parse(res.body);
+  assert.equal(body.result?.protocolVersion, MCP_GATEWAY.protocolVersion);
 });
 
 test('mcp endpoint rejects oversized request bodies with 413', async () => {
