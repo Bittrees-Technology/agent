@@ -20,11 +20,13 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
 export const UNIVERSAL_PORTAL_DISCLAIMER =
-  'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, or governance advice, and nothing here is an offer to sell or a solicitation to buy any security, token, or other financial instrument. Nothing on this portal grants authority, authorization, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, or governance body.';
+  'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, registry owner, or governance body.';
 export const NO_RIGHTS_CREATED_DISCLAIMER =
-  'Submitting through this portal does not create employment, contractor status, agency, partnership, fiduciary duties, compensation rights, token rights, equity rights, grant rights, revenue-share rights, onboarding approval, or acceptance into any program or workflow. Any compensated work, token program, or formal contributor relationship requires separate written terms and owner approval.';
+  'Submitting through this portal does not create employment, contractor status, agency, partnership, fiduciary duties, onboarding approval, compensation rights, token rights, equity rights, grant rights, revenue-share rights, confidentiality obligations, or acceptance into any program or workflow. Any formal contributor relationship, compensated work, token program, grant, or authority delegation requires separate written terms and explicit owner approval.';
 export const CONTRIBUTION_PRIVACY_NOTICE =
-  'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Use the engineering-lead contact route (M:engineering-team/engineering-lead) for privacy questions, correction requests, or deletion requests until a dedicated privacy contact route is approved.';
+  'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Use `[approved privacy contact route]` for privacy questions, correction requests, or deletion requests.';
+export const REGISTRY_PROFILE_PUBLICATION_NOTICE =
+  'Starter IDACC-managed agent profile records are staged for review with private material redacted. Public signatures, fingerprints, and controller-signed manifest publication remain pending where marked. Listing, review, or publication status is evidence of review only and does not grant authority, delegation, or execution approval.';
 export const INTERNAL_OPPORTUNITY_REVIEW_NOTICE =
   'This route supports internal review and qualification only. Public visibility does not by itself create compensation, token, grant, equity, participation, application, or onboarding rights, and it is not a public job offer, public solicitation, fundraising communication, bounty, or authorization for external outreach or execution without owner approval.';
 
@@ -39,7 +41,7 @@ export const LAUNCH_STATUS = {
   status: 'prelaunch-contract-under-review',
   audience: 'AI agents, operator tooling, and reviewers preparing Bittrees contributions',
   publicLaunchGate:
-    'Keep noindex enabled until the source registry, identity/key contract, and public claims are approved by lead.',
+    'Prelaunch review surface. Public launch remains blocked until lead approves claims, registry controls, identity/key publication status, intake safeguards, source scope, and route-contract behavior.',
 };
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -372,8 +374,7 @@ export const CONTRIBUTION_LANES = [
 export const LIVE_AGENT_REGISTRY = {
   status: 'prelaunch-monitoring-active',
   mode: 'agent-signed-staged-state-with-guarded-authority-changes',
-  currentState:
-    'Starter IDACC-managed agent profile records are staged for review with private material redacted. Public signatures, fingerprints, and controller-signed manifest publication remain pending where marked. Listing, review, or publication status is evidence of review only and does not grant authority, delegation, or execution approval.',
+  currentState: REGISTRY_PROFILE_PUBLICATION_NOTICE,
   registryRoute: '/agents.json',
   identityKeysRoute: '/identity-keys.json',
   automatedManagement: {
@@ -728,7 +729,7 @@ function buildManagedAgentProfile({
       ],
     },
     signedProfile: {
-      status: 'registry-reviewed-profile',
+      status: 'registry-reviewed-profile-record',
       signatureType: 'IDACC operator-reviewed profile record',
       verificationStatus: 'operator-reviewed-signature-record-not-publicly-published',
       signedAt: '2026-07-07T22:30:00Z',
@@ -2100,8 +2101,7 @@ const JSON_ROUTES = [
       },
       agents: APPROVED_AGENT_PROFILES,
       intakePolicy: {
-        currentState:
-          'Starter IDACC-managed profile records are staged for review with public key material redacted. Submit additional signed profiles that satisfy the identity/key contract before inclusion review.',
+        currentState: REGISTRY_PROFILE_PUBLICATION_NOTICE,
         minimumReview: [
           'source policy review',
           'operator/contact verification',
@@ -2130,8 +2130,7 @@ const JSON_ROUTES = [
       registryManagement: LIVE_AGENT_REGISTRY,
       identityKeys: IDENTITY_KEYS_PUBLIC_CONTRACT,
       launchGate: {
-        currentState:
-          'Contract draft is prepared for staging review. Public launch remains blocked until lead approves claims, source scope, registry controls, and intake safeguards.',
+        currentState: LAUNCH_STATUS.publicLaunchGate,
         blockersBeforeFullyAutomatedRegistry: [
           'Back a registry writer with authenticated control-plane tooling.',
           'Verify controller-signed challenge flow end to end.',

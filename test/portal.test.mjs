@@ -21,12 +21,14 @@ import {
   INTERNAL_OPPORTUNITY_REVIEW_NOTICE,
   JSON_ROUTE_MAP,
   LAUNCH_FRESHNESS_MONITORING,
+  LAUNCH_STATUS,
   LIVE_AGENT_REGISTRY,
   MCP_CONTRIBUTION_TOOLS,
   MCP_GATEWAY,
   MCP_HARNESS_IMPORT_TABS,
   NO_RIGHTS_CREATED_DISCLAIMER,
   PORTAL_SECURITY_HEADERS,
+  REGISTRY_PROFILE_PUBLICATION_NOTICE,
   ROUTE_DEFINITIONS,
   UNIVERSAL_PORTAL_DISCLAIMER,
   buildJsonResponse,
@@ -238,6 +240,26 @@ test('legal disclaimers and privacy notice are present across public route outpu
   );
   const discoveryLane = CONTRIBUTION_LANES.find((lane) => lane.id === 'discovery');
 
+  assert.equal(
+    UNIVERSAL_PORTAL_DISCLAIMER,
+    'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, registry owner, or governance body.',
+  );
+  assert.equal(
+    NO_RIGHTS_CREATED_DISCLAIMER,
+    'Submitting through this portal does not create employment, contractor status, agency, partnership, fiduciary duties, onboarding approval, compensation rights, token rights, equity rights, grant rights, revenue-share rights, confidentiality obligations, or acceptance into any program or workflow. Any formal contributor relationship, compensated work, token program, grant, or authority delegation requires separate written terms and explicit owner approval.',
+  );
+  assert.equal(
+    CONTRIBUTION_PRIVACY_NOTICE,
+    'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Use `[approved privacy contact route]` for privacy questions, correction requests, or deletion requests.',
+  );
+  assert.equal(
+    LAUNCH_STATUS.publicLaunchGate,
+    'Prelaunch review surface. Public launch remains blocked until lead approves claims, registry controls, identity/key publication status, intake safeguards, source scope, and route-contract behavior.',
+  );
+  assert.equal(
+    REGISTRY_PROFILE_PUBLICATION_NOTICE,
+    'Starter IDACC-managed agent profile records are staged for review with private material redacted. Public signatures, fingerprints, and controller-signed manifest publication remain pending where marked. Listing, review, or publication status is evidence of review only and does not grant authority, delegation, or execution approval.',
+  );
   assert.ok(htmlAsset.body.includes(UNIVERSAL_PORTAL_DISCLAIMER));
   assert.ok(htmlAsset.body.includes(NO_RIGHTS_CREATED_DISCLAIMER));
   assert.ok(htmlAsset.body.includes(CONTRIBUTION_PRIVACY_NOTICE));
@@ -364,6 +386,8 @@ test('agents route advertises prelaunch registry management rather than manual-o
 
   assert.equal(response.status, 'prelaunch-registry-under-review');
   assert.equal(response.data.registryManagement.status, LIVE_AGENT_REGISTRY.status);
+  assert.equal(response.data.registryManagement.currentState, REGISTRY_PROFILE_PUBLICATION_NOTICE);
+  assert.equal(response.data.intakePolicy.currentState, REGISTRY_PROFILE_PUBLICATION_NOTICE);
   assert.equal(response.data.identityKeys.route, '/identity-keys.json');
   assert.equal(response.data.contributionWorkflow.length, CONTRIBUTION_WORKFLOW.length);
   assert.equal(response.data.agents.length, APPROVED_AGENT_PROFILES.length);
@@ -374,7 +398,7 @@ test('agents route advertises prelaunch registry management rather than manual-o
     assert.ok(agent.authority, `${agent.id} should separate authority`);
     assert.ok(agent.authorization, `${agent.id} should separate authorization`);
     assert.equal(agent.authorization.executionAllowed, false);
-    assert.equal(agent.signedProfile.status, 'registry-reviewed-profile');
+    assert.equal(agent.signedProfile.status, 'registry-reviewed-profile-record');
   }
   assert.ok(
     response.data.registryManagement.automatedManagement.allowedWithoutHumanReview.some((rule) =>
