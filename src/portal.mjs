@@ -19,6 +19,12 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   CONTRIBUTION_INTENT_CONTRACT_PATH,
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
+const AGENT_CONTACT_KIND_VALUES = ['url', 'email', 'ens', 'xmtp', 'github', 'internal-route'];
+// Approved public profiles route contact through the portal, not manager dispatch slugs.
+const PUBLIC_MANAGED_AGENT_CONTACT = Object.freeze({
+  kind: 'url',
+  value: new URL(CONTRIBUTION_INTENT_CONTRACT_PATH, PORTAL_BASE_URL).toString(),
+});
 export const UNIVERSAL_PORTAL_DISCLAIMER =
   'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, registry owner, or governance body.';
 export const NO_RIGHTS_CREATED_DISCLAIMER =
@@ -555,7 +561,12 @@ const AGENT_PROFILE_SCHEMA = {
       additionalProperties: false,
       required: ['kind', 'value'],
       properties: {
-        kind: { type: 'string', enum: ['url', 'email', 'ens', 'xmtp', 'github', 'internal-route'] },
+        kind: {
+          type: 'string',
+          enum: AGENT_CONTACT_KIND_VALUES,
+          description:
+            'internal-route is accepted for review-gated/internal records; approved public profiles publish public-safe contact channels.',
+        },
         value: { type: 'string' },
       },
     },
@@ -684,7 +695,7 @@ function buildManagedAgentProfile({
   operator,
   lanes,
   capabilities,
-  contact,
+  publicContact = PUBLIC_MANAGED_AGENT_CONTACT,
   registryId,
   roleAuthority,
   allowedActions,
@@ -698,10 +709,7 @@ function buildManagedAgentProfile({
     capabilities,
     evidencePolicy:
       'Cite source ids or URLs, separate claims from caveats, mark mutable facts with freshness windows, and do not treat identity or trust evidence as authorization.',
-    contact: {
-      kind: 'internal-route',
-      value: contact,
-    },
+    contact: { ...publicContact },
     identity: {
       agentRegistryId: registryId,
       chain: 'not-published',
@@ -785,8 +793,7 @@ export const APPROVED_AGENT_PROFILES = [
     operator: 'default team',
     lanes: ['inc-ops-governance', 'research'],
     capabilities: ['team coordination', 'task routing', 'operator briefing', 'Bittrees contribution synthesis'],
-    contact: 'default/lead',
-    registryId: 'default/lead',
+    registryId: 'idacc-default-lead',
     roleAuthority: ['coordinate cross-team contribution work', 'synthesize validated team outputs'],
     allowedActions: ['prepare contribution packets', 'route work to team leads', 'summarize validated results'],
     trustSignals: ['manager catalog profile reviewed', 'active Bittrees contributor goal alignment'],
@@ -797,8 +804,7 @@ export const APPROVED_AGENT_PROFILES = [
     operator: 'default team',
     lanes: ['inc-ops-governance'],
     capabilities: ['code review', 'implementation validation', 'build and test verification', 'deployment-readiness review'],
-    contact: 'default/coder',
-    registryId: 'default/coder',
+    registryId: 'idacc-default-coder-validator',
     roleAuthority: ['validate technical and operational work after team-lead execution'],
     allowedActions: ['review implementation packets', 'validate tests and build evidence', 'report technical blockers'],
     trustSignals: ['manager catalog profile reviewed', 'default validation route'],
@@ -809,8 +815,7 @@ export const APPROVED_AGENT_PROFILES = [
     operator: 'default team',
     lanes: ['research'],
     capabilities: ['source review', 'evidence synthesis', 'policy-fit validation', 'claim and caveat review'],
-    contact: 'default/researcher',
-    registryId: 'default/researcher',
+    registryId: 'idacc-default-researcher-validator',
     roleAuthority: ['validate evidence, sourcing, reasoning, and policy fit after team-lead execution'],
     allowedActions: ['review source packets', 'validate claim guardrails', 'report evidence blockers'],
     trustSignals: ['manager catalog profile reviewed', 'default validation route'],
@@ -1534,7 +1539,12 @@ export const MCP_CONTRIBUTION_TOOLS = [
         additionalProperties: false,
         required: ['kind', 'value'],
         properties: {
-          kind: { type: 'string', enum: ['url', 'email', 'ens', 'xmtp', 'github', 'internal-route'] },
+          kind: {
+            type: 'string',
+            enum: AGENT_CONTACT_KIND_VALUES,
+            description:
+              'internal-route submissions are review-gated and must not be copied verbatim into approved public profiles.',
+          },
           value: textSchema('Contact route.'),
         },
       },
@@ -2384,6 +2394,7 @@ export const ROUTE_DEFINITIONS = [
     description: 'JSON-RPC endpoint for contribution tools. POST to call MCP methods; browser GET returns endpoint documentation.',
     kind: 'html',
     status: MCP_GATEWAY.status,
+    staticAsset: false,
   },
   {
     path: '/mcp-docs',
@@ -2411,6 +2422,10 @@ function getRouteData(definition) {
   return typeof definition.data === 'function' ? definition.data() : definition.data;
 }
 
+function getRouteDescription(path, fallback) {
+  return ROUTE_DEFINITIONS.find((definition) => definition.path === path)?.description ?? fallback;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -2418,6 +2433,22 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow' }) {
+  const canonicalUrl = new URL(path, PORTAL_BASE_URL).toString();
+
+  return `<meta name="description" content="${escapeHtml(description)}" />
+    <meta name="robots" content="${escapeHtml(robots)}" />
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+    <meta property="og:site_name" content="agent.bittrees.org" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />`;
 }
 
 function renderLaneRows() {
@@ -2562,7 +2593,7 @@ function renderHumanLookupStyles() {
         --panel: #ffffff;
         --green: #1f6b4f;
         --blue: #315a8a;
-        --gold: #9c6b16;
+        --gold: #8b5c10;
       }
 
       * { box-sizing: border-box; }
@@ -2746,8 +2777,29 @@ function renderHumanLookupStyles() {
   `;
 }
 
+function getContributionIntentCtaCopy() {
+  if (isContributionIntentsWriteEnabled()) {
+    return {
+      buttonLabel: 'Submit contribution intent',
+      sectionNotice:
+        'Submit a source-aware packet for lead review. A non-production write flag is enabled, so valid contribution intents can receive receipts and local review-record persistence.',
+      formNotice:
+        'Non-production contribution-intent writes are enabled. A valid submission can create a local review record and receipt for lead review.',
+    };
+  }
+
+  return {
+    buttonLabel: 'Prepare offline contribution packet',
+    sectionNotice:
+      'Prepare a source-aware offline packet for lead review. Live contribution-intent writes are disabled by default; this form returns offline guidance and does not create a live submission or review record.',
+    formNotice:
+      'Live contribution-intent writes are disabled. Use this action to prepare offline guidance and a packet template; it will not create a live submission or review record.',
+  };
+}
+
 function renderContributionIntentForm(payload = {}) {
   const values = buildContributionIntentFormValues(payload);
+  const ctaCopy = getContributionIntentCtaCopy();
   const laneOptions = CONTRIBUTION_LANES.map((lane) => ({
     value: lane.id,
     label: `${lane.label} - ${lane.bittreesArm}`,
@@ -2764,6 +2816,7 @@ function renderContributionIntentForm(payload = {}) {
   return `<div class="intent-form-shell">
     <p class="form-notice">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
     <p class="form-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
+    <p class="form-notice">${escapeHtml(ctaCopy.formNotice)}</p>
     <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post">
     <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
     <div class="form-grid">
@@ -2775,19 +2828,19 @@ function renderContributionIntentForm(payload = {}) {
       </label>
       <label>
         <span>Contributor name</span>
-        <input name="contributor.name" value="${escapeHtml(values['contributor.name'])}" required minlength="2" maxlength="120" autocomplete="name" />
+        <input type="text" name="contributor.name" value="${escapeHtml(values['contributor.name'])}" required minlength="2" maxlength="120" autocomplete="name" />
       </label>
       <label>
         <span>Agent ID</span>
-        <input name="contributor.agentId" value="${escapeHtml(values['contributor.agentId'])}" maxlength="120" autocomplete="off" />
+        <input type="text" name="contributor.agentId" value="${escapeHtml(values['contributor.agentId'])}" maxlength="120" autocomplete="off" />
       </label>
       <label>
         <span>Team</span>
-        <input name="contributor.team" value="${escapeHtml(values['contributor.team'])}" maxlength="120" autocomplete="organization" />
+        <input type="text" name="contributor.team" value="${escapeHtml(values['contributor.team'])}" maxlength="120" autocomplete="organization" />
       </label>
       <label class="wide">
         <span>Contact route</span>
-        <input name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/agent-name" />
+        <input type="text" name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/agent-name" />
       </label>
       <label>
         <span>Target lane</span>
@@ -2807,11 +2860,11 @@ function renderContributionIntentForm(payload = {}) {
       </label>
       <label>
         <span>Requested owner route</span>
-        <input name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/engineering-lead" />
+        <input type="text" name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/engineering-lead" />
       </label>
       <label>
         <span>Goal ID</span>
-        <input name="handoff.goalId" value="${escapeHtml(values['handoff.goalId'])}" maxlength="120" autocomplete="off" />
+        <input type="text" name="handoff.goalId" value="${escapeHtml(values['handoff.goalId'])}" maxlength="120" autocomplete="off" />
       </label>
       <label class="wide">
         <span>Expected output</span>
@@ -2840,7 +2893,7 @@ function renderContributionIntentForm(payload = {}) {
       <label><input type="checkbox" name="safety.noLiveWriteAcknowledged" value="true" required${values['safety.noLiveWriteAcknowledged'] ? ' checked' : ''} /> I understand live production writes remain disabled without approval.</label>
       <label><input type="checkbox" name="safety.noOnchainActionRequested" value="true" required${values['safety.noOnchainActionRequested'] ? ' checked' : ''} /> This is not a request for onchain execution or asset movement.</label>
     </fieldset>
-    <button type="submit">Submit contribution intent</button>
+    <button type="submit">${escapeHtml(ctaCopy.buttonLabel)}</button>
   </form>
   </div>`;
 }
@@ -3305,14 +3358,16 @@ function buildOfflineContributionIntentPacket(generatedAt = new Date().toISOStri
   };
 }
 
-function renderContributionIntentPage({ title, heading, lead, body }) {
+function renderContributionIntentPage({ title, heading, lead, body, path = CONTRIBUTION_INTENT_CONTRACT_PATH }) {
+  const pageTitle = `${title} - agent.bittrees.org`;
+
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
-    <title>${escapeHtml(title)} - agent.bittrees.org</title>
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: lead, path })}
   </head>
   <body>
     <main>
@@ -3334,6 +3389,7 @@ function renderContributionIntentDisabledPage(response) {
     title: 'Contribution intent offline packet',
     heading: 'Submission writes are disabled',
     lead: response.message,
+    path: response.route,
     body: `<h2>Offline packet template</h2>
     <p>${escapeHtml(response.nextStep ?? '')}</p>
     <pre>${escapeHtml(JSON.stringify(offlinePacket, null, 2))}</pre>`,
@@ -3345,6 +3401,7 @@ function renderContributionIntentReceiptPage(response) {
     title: 'Contribution intent receipt',
     heading: 'Contribution intent received',
     lead: response.message,
+    path: response.route,
     body: `<p><strong>Receipt ID:</strong> <code>${escapeHtml(response.receiptId ?? '')}</code></p>
     <p>${escapeHtml(response.nextStep ?? '')}</p>`,
   });
@@ -3357,6 +3414,7 @@ function renderContributionIntentValidationPage(response, payload = {}) {
     title: 'Contribution intent needs changes',
     heading: 'Check the submission',
     lead: response.message,
+    path: response.route,
     body: `<ul>${errorItems}</ul>${renderContributionIntentForm(payload)}`,
   });
 }
@@ -3701,14 +3759,17 @@ export function renderLandingPage() {
   ]
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
+  const contributionIntentCopy = getContributionIntentCtaCopy();
+  const pageTitle = 'agent.bittrees.org';
+  const pageDescription = getRouteDescription('/', 'Human-facing overview for the agent contribution portal.');
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
-    <title>agent.bittrees.org</title>
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/' })}
     <style>
       :root {
         color-scheme: light;
@@ -3719,7 +3780,7 @@ export function renderLandingPage() {
         --panel: #ffffff;
         --green: #1f6b4f;
         --blue: #315a8a;
-        --gold: #9c6b16;
+        --gold: #8b5c10;
       }
 
       * { box-sizing: border-box; }
@@ -4085,8 +4146,7 @@ export function renderLandingPage() {
         <div>
           <h2 id="intent-title">Contribution intent</h2>
           <p class="note">
-            Submit a source-aware packet for lead review. The public launch default returns offline guidance;
-            non-production write flags enable receipt and local review-record persistence.
+            ${escapeHtml(contributionIntentCopy.sectionNotice)}
           </p>
         </div>
         ${renderContributionIntentForm()}
@@ -4134,6 +4194,7 @@ export function renderLandingPage() {
 
 export function renderMcpGatewayPage({ docs = false } = {}) {
   const pageTitle = docs ? 'MCP docs - agent.bittrees.org' : 'MCP gateway - agent.bittrees.org';
+  const pagePath = docs ? '/mcp-docs' : MCP_GATEWAY.path;
   const pageHeading = docs ? 'MCP docs.' : 'MCP gateway.';
   const pageLead = docs
     ? 'Human-readable setup documentation for connecting Codex, Claude Desktop, Cursor, and generic MCP clients to the Bittrees contribution gateway.'
@@ -4144,8 +4205,8 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
     <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageLead, path: pagePath })}
     <style>
       :root {
         color-scheme: light;
@@ -4387,14 +4448,19 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
       </tr>
     `,
   ).join('');
+  const pageTitle = 'Submission status - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    '/submission-status',
+    'Human-readable lookup for review-gated contribution, claim, feedback, and attestation status.',
+  );
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
-    <title>Submission status - agent.bittrees.org</title>
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/submission-status' })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -4470,14 +4536,19 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
       </tr>
     `,
   ).join('');
+  const pageTitle = 'Agent reputation - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    '/reputation',
+    'Human-readable lookup for agent reputation evidence with identity, authority, and authorization caveats.',
+  );
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
-    <title>Agent reputation - agent.bittrees.org</title>
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/reputation' })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -4560,14 +4631,19 @@ export function renderIdentityKeysPage() {
   const approvalItems = LIVE_AGENT_REGISTRY.automatedManagement.requiresExplicitApproval
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
+  const pageTitle = 'Identity and keys - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    '/identity-keys',
+    'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
+  );
 
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex,nofollow" />
-    <title>Identity and keys - agent.bittrees.org</title>
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/identity-keys' })}
     <style>
       :root {
         color-scheme: light;
@@ -4578,7 +4654,7 @@ export function renderIdentityKeysPage() {
         --panel: #ffffff;
         --green: #1f6b4f;
         --blue: #315a8a;
-        --gold: #9c6b16;
+        --gold: #8b5c10;
       }
 
       * { box-sizing: border-box; }
@@ -5116,10 +5192,6 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     {
       path: 'reputation/index.html',
       body: renderReputationPage(),
-    },
-    {
-      path: 'mcp/index.html',
-      body: renderMcpGatewayPage(),
     },
     {
       path: 'mcp-docs/index.html',

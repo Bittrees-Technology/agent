@@ -38,6 +38,7 @@ import {
   callMcpTool,
   createRequestHandler,
   renderIdentityKeysPage,
+  renderLandingPage,
   renderMcpDocsPage,
   renderMcpGatewayPage,
   renderReputationPage,
@@ -74,6 +75,38 @@ async function mcpPost(baseUrl, body) {
     response,
     json: await response.json(),
   };
+}
+
+const CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST = [
+  'CONTRIBUTION_INTENTS_WRITE_ENABLED',
+  'CONTRIBUTION_INTENTS_ENABLED',
+  'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
+];
+
+function withContributionIntentWriteFlags(envOverrides, callback) {
+  const previousValues = new Map(
+    CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST.map((flagName) => [flagName, process.env[flagName]]),
+  );
+
+  try {
+    for (const flagName of CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST) {
+      delete process.env[flagName];
+    }
+
+    for (const [flagName, value] of Object.entries(envOverrides)) {
+      process.env[flagName] = value;
+    }
+
+    return callback();
+  } finally {
+    for (const [flagName, value] of previousValues) {
+      if (value === undefined) {
+        delete process.env[flagName];
+      } else {
+        process.env[flagName] = value;
+      }
+    }
+  }
 }
 
 async function readRequestText(req) {
@@ -211,13 +244,57 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('opportunities.json'));
   assert.equal(assetPaths.has('contribution-intents'), false);
   assert.equal(assetPaths.has('gateway/contribution-intents'), false);
-  assert.ok(assetPaths.has('mcp/index.html'));
+  assert.equal(assetPaths.has('mcp/index.html'), false);
   assert.ok(assetPaths.has('mcp-docs/index.html'));
   assert.ok(assetPaths.has('mcp.json'));
   assert.ok(assetPaths.has('submission-status.json'));
   assert.ok(assetPaths.has('reputation.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
   assert.ok(assetPaths.has('monitoring.json'));
+});
+
+test('html pages emit description and Open Graph metadata', () => {
+  const htmlByRoute = new Map([
+    ['/', renderLandingPage()],
+    ['/identity-keys', renderIdentityKeysPage()],
+    ['/submission-status', renderSubmissionStatusPage()],
+    ['/reputation', renderReputationPage()],
+    ['/mcp', renderMcpGatewayPage()],
+    ['/mcp-docs', renderMcpDocsPage()],
+  ]);
+
+  for (const [route, html] of htmlByRoute) {
+    assert.match(html, /<title>[^<]+<\/title>/, route);
+    assert.match(html, /<meta name="description" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta name="robots" content="noindex,nofollow" \/>/, route);
+    assert.match(html, new RegExp(`<link rel="canonical" href="https://agent\\.bittrees\\.org${route === '/' ? '/' : route}" \\/>`), route);
+    assert.match(html, /<meta property="og:title" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta property="og:description" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta property="og:url" content="https:\/\/agent\.bittrees\.org[^"]*" \/>/, route);
+    assert.match(html, /<meta name="twitter:card" content="summary" \/>/, route);
+    assert.match(html, /<meta name="twitter:title" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta name="twitter:description" content="[^"]+" \/>/, route);
+  }
+});
+
+test('landing contribution intent CTA copy follows write flag posture', () => {
+  withContributionIntentWriteFlags({}, () => {
+    const html = renderLandingPage();
+
+    assert.match(html, /Live contribution-intent writes are disabled/);
+    assert.match(html, /does not create a live submission or review record/);
+    assert.match(html, /<button type="submit">Prepare offline contribution packet<\/button>/);
+    assert.doesNotMatch(html, /<button type="submit">Submit contribution intent<\/button>/);
+  });
+
+  withContributionIntentWriteFlags({ CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true' }, () => {
+    const html = renderLandingPage();
+
+    assert.match(html, /Non-production contribution-intent writes are enabled/);
+    assert.match(html, /local review record and receipt/);
+    assert.match(html, /<button type="submit">Submit contribution intent<\/button>/);
+    assert.doesNotMatch(html, /<button type="submit">Prepare offline contribution packet<\/button>/);
+  });
 });
 
 test('legal disclaimers and privacy notice are present across public route outputs', () => {
@@ -296,12 +373,13 @@ test('portal outputs do not emit old readiness or approved-profile labels', () =
   assert.doesNotMatch(serialized, new RegExp(`Starter IDACC-managed agent profiles are ${'published'}`));
 });
 
-test('contribution intent routes stay dynamic and return disabled JSON bodies for POST', async () => {
+test('post-capable routes stay dynamic and return disabled responses for POST', async () => {
   const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
   const assetPaths = new Set(assets.map((asset) => asset.path));
 
   assert.equal(assetPaths.has('contribution-intents'), false);
   assert.equal(assetPaths.has('gateway/contribution-intents'), false);
+  assert.equal(assetPaths.has('mcp/index.html'), false);
 
   await withPortalServer(async (baseUrl) => {
     for (const path of ['/contribution-intents', '/gateway/contribution-intents']) {
@@ -328,6 +406,35 @@ test('contribution intent routes stay dynamic and return disabled JSON bodies fo
       assert.equal(postBody.route, path);
       assert.match(postBody.message, /disabled/);
     }
+
+    const mcpGetResponse = await fetch(`${baseUrl}/mcp`);
+    const mcpGetBody = await mcpGetResponse.text();
+
+    assert.equal(mcpGetResponse.status, 200);
+    assert.match(mcpGetBody, /Streamable HTTP JSON-RPC endpoint/);
+
+    const mcpPostResponse = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json',
+        'MCP-Protocol-Version': '2025-06-18',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'asset-shadow-smoke', version: '0.1.0' },
+        },
+      }),
+    });
+    const mcpPostBody = await mcpPostResponse.json();
+
+    assert.equal(mcpPostResponse.status, 200);
+    assert.equal(mcpPostBody.result?.protocolVersion, '2025-06-18');
   });
 });
 
@@ -392,6 +499,10 @@ test('agents route advertises prelaunch registry management rather than manual-o
   assert.equal(response.data.contributionWorkflow.length, CONTRIBUTION_WORKFLOW.length);
   assert.equal(response.data.agents.length, APPROVED_AGENT_PROFILES.length);
   assert.ok(response.data.agents.length > 0);
+  assert.ok(
+    response.data.agentProfileSchema.properties.contact.properties.kind.enum.includes('internal-route'),
+    'schema should still describe review-gated internal-route contact records',
+  );
   for (const agent of response.data.agents) {
     assert.ok(agent.identity, `${agent.id} should separate identity`);
     assert.ok(agent.trustEvidence, `${agent.id} should separate trust evidence`);
@@ -399,6 +510,11 @@ test('agents route advertises prelaunch registry management rather than manual-o
     assert.ok(agent.authorization, `${agent.id} should separate authorization`);
     assert.equal(agent.authorization.executionAllowed, false);
     assert.equal(agent.signedProfile.status, 'registry-reviewed-profile-record');
+    assert.deepEqual(agent.contact, {
+      kind: 'url',
+      value: 'https://agent.bittrees.org/contribution-intents',
+    });
+    assert.doesNotMatch(JSON.stringify(agent), /default\/(?:lead|coder|researcher)/);
   }
   assert.ok(
     response.data.registryManagement.automatedManagement.allowedWithoutHumanReview.some((rule) =>

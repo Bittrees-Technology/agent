@@ -200,7 +200,6 @@ The build writes:
 - `dist/identity-keys/index.html`
 - `dist/submission-status/index.html`
 - `dist/reputation/index.html`
-- `dist/mcp/index.html`
 - `dist/mcp-docs/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
@@ -215,7 +214,7 @@ The build writes:
 - `dist/monitoring.json`
 - `dist/portal-manifest.json`
 
-`/contribution-intents` and `/gateway/contribution-intents` are intentionally excluded from static output so Vercel does not shadow their POST API handler with extensionless static files.
+`/mcp`, `/contribution-intents`, and `/gateway/contribution-intents` are intentionally excluded from static output so Vercel does not shadow their POST-capable API handlers with static files.
 
 To run the built copy:
 
