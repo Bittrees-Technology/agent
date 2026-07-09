@@ -1,9 +1,17 @@
 {
-  "name": "agent-bittrees-portal",
+  "name": "@bittrees/agent-mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Source-grounded agent contribution portal for agent.bittrees.org.",
+  "bin": {
+    "agent-mcp": "scripts/mcp-stdio-proxy.mjs"
+  },
+  "files": [
+    "scripts/mcp-stdio-proxy.mjs"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "check": "node --check src/server.mjs && node --check src/portal.mjs && node --check api/index.js && node --check scripts/build.mjs && node --check scripts/mcp-stdio-proxy.mjs && node --check scripts/serve-dist.mjs && node --check scripts/smoke-check.mjs && node --check scripts/verify-api-handler.mjs && node --check test/portal.test.mjs && node --check test/mcp-stdio-proxy.test.mjs",
     "build": "node scripts/build.mjs",

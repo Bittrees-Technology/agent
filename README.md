@@ -107,7 +107,7 @@ curl -sS https://agent.bittrees.org/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
-Stdio MCP proxy entry:
+After publishing `@bittrees/agent-mcp`, use the stdio MCP proxy entry:
 
 ```json
 {
@@ -124,7 +124,7 @@ Stdio MCP proxy entry:
 }
 ```
 
-Until the package is published, run the repo script directly:
+Before publishing the package, run the repo script directly:
 
 ```json
 {
