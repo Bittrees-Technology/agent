@@ -183,6 +183,27 @@ async function waitForCondition(condition, stderr) {
   assert.fail(`timed out waiting for proxy condition; stderr: ${stderr()}`);
 }
 
+function collectReviewGateRecords(value, records = []) {
+  if (!value || typeof value !== 'object') return records;
+
+  if (
+    !Array.isArray(value) &&
+    value.reviewGate &&
+    typeof value.reviewGate === 'object' &&
+    Object.hasOwn(value.reviewGate, 'productionMutationAllowed') &&
+    Object.hasOwn(value.reviewGate, 'persistenceMode') &&
+    Object.hasOwn(value.reviewGate, 'policy')
+  ) {
+    records.push(value.reviewGate);
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    collectReviewGateRecords(nestedValue, records);
+  }
+
+  return records;
+}
+
 test('llms.txt is a plain-text agent entry point', () => {
   const llms = buildLlmsTxt();
 
@@ -614,6 +635,47 @@ test('mcp gateway contract exposes required contribution tools', () => {
     response.data.harnessImportTabs.map((tab) => tab.id),
     MCP_HARNESS_IMPORT_TABS.map((tab) => tab.id),
   );
+});
+
+test('public MCP review gates use role labels without internal reviewer routes', () => {
+  const mcpRoute = JSON_ROUTE_MAP.get('/mcp.json');
+  const mcpResponse = buildJsonResponse(mcpRoute, '2026-07-06T00:00:00.000Z');
+  const listResult = callMcpTool('list_contribution_opportunities', { priority: 'high' });
+  const briefResult = callMcpTool('get_contribution_brief', {
+    opportunityId: 'source-registry-hardening',
+  });
+  const submitResult = callMcpTool('submit_contribution', {
+    agentId: 'external-review-gate-test',
+    opportunityId: 'source-registry-hardening',
+    title: 'Review gate label regression packet',
+    artifact: {
+      kind: 'markdown',
+      value: 'Confirm public review gate labels do not expose internal reviewer routes.',
+    },
+    evidence: ['portal-route:/mcp.json'],
+  });
+
+  const reviewGates = collectReviewGateRecords([mcpResponse, listResult, briefResult, submitResult]);
+
+  assert.ok(reviewGates.length >= 4, 'expected public MCP route and tool review gate records');
+
+  for (const reviewGate of reviewGates) {
+    assert.equal(reviewGate.productionMutationAllowed, MCP_GATEWAY.productionMutationAllowed);
+    assert.equal(reviewGate.persistenceMode, MCP_GATEWAY.persistenceMode);
+    assert.equal(reviewGate.status, 'review_required_before_publication_or_assignment');
+    assert.equal(reviewGate.policy, MCP_GATEWAY.reviewGate);
+    assert.deepEqual(reviewGate.reviewers, [
+      'owning lead',
+      'implementation validator',
+      'evidence and claims validator',
+    ]);
+
+    for (const label of reviewGate.reviewers) {
+      assert.doesNotMatch(label, /default\/(?:coder|researcher)/);
+      assert.doesNotMatch(label, /^M:/);
+      assert.doesNotMatch(label, /^[a-z0-9-]+\/[a-z0-9-]+/);
+    }
+  }
 });
 
 test('mcp docs render Codex Claude Desktop and Cursor import tabs', () => {

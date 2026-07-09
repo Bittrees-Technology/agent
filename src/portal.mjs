@@ -1662,7 +1662,7 @@ function reviewGateRecord() {
     productionMutationAllowed: MCP_GATEWAY.productionMutationAllowed,
     persistenceMode: MCP_GATEWAY.persistenceMode,
     status: 'review_required_before_publication_or_assignment',
-    reviewers: ['owning lead', 'default/coder for implementation work', 'default/researcher for evidence and claims'],
+    reviewers: ['owning lead', 'implementation validator', 'evidence and claims validator'],
     policy: MCP_GATEWAY.reviewGate,
   };
 }
