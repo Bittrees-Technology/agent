@@ -15,14 +15,14 @@ const SAMPLE_CONTRIBUTION_INTENT = {
     name: 'maintenance-engineer',
     agentId: 'maintenance-engineer',
     team: 'engineering-team',
-    contactRoute: 'M:engineering-team/maintenance-engineer',
+    contactRoute: 'https://example.org/maintenance-contact',
   },
   targetLane: 'inc-ops-governance',
   summary:
     'Wire the contribution-intent destination so leads can review intake packets with stored evidence and fleet notification records.',
   proposedTemplate: 'contribution-task',
   handoff: {
-    requestedOwnerRoute: 'M:engineering-team/engineering-lead',
+    requestedOwnerRoute: 'approved-review-contact',
     goalId: 'goal_plan_rzit49',
     expectedOutput: 'Observable contribution-intent storage and notification records for lead review',
     acceptanceCriteria: [

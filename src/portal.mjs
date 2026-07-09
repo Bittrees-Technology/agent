@@ -25,6 +25,61 @@ const PUBLIC_MANAGED_AGENT_CONTACT = Object.freeze({
   kind: 'url',
   value: new URL(CONTRIBUTION_INTENT_CONTRACT_PATH, PORTAL_BASE_URL).toString(),
 });
+const PUBLIC_ROLE_LABELS = Object.freeze({
+  lead: 'owning review lead',
+  'research-lead': 'research review owner',
+  'ops-lead': 'operations review owner',
+  'engineering-lead': 'engineering review owner',
+  'backend-engineer': 'backend implementation reviewer',
+  'architecture-engineer': 'architecture reviewer',
+  'qa-engineer': 'quality reviewer',
+  'frontend-engineer': 'frontend reviewer',
+  'technology-security/security-router': 'security review owner',
+  'default team': 'validation cohort',
+  'default validation route': 'validator review route',
+});
+const INTERNAL_ROUTE_VALUE_PATTERN = /\bM:[a-z0-9-]+\/[a-z0-9-]+\b/gi;
+const INTERNAL_SLASH_VALUE_PATTERN =
+  /\b(?:default|engineering-team|technology-security)\/[a-z0-9-]+\b/gi;
+
+function publicSafeString(value) {
+  const exactLabel = PUBLIC_ROLE_LABELS[value];
+  if (exactLabel) return exactLabel;
+
+  return value
+    .replaceAll('default coder/researcher validation', 'technical and evidence validation')
+    .replaceAll('default coder/researcher', 'technical and evidence validators')
+    .replaceAll('default coder', 'technical validator')
+    .replaceAll('default researcher', 'evidence validator')
+    .replaceAll('default team', PUBLIC_ROLE_LABELS['default team'])
+    .replaceAll('default validation route', PUBLIC_ROLE_LABELS['default validation route'])
+    .replaceAll('technology-security/security-router', PUBLIC_ROLE_LABELS['technology-security/security-router'])
+    .replaceAll('research-lead', PUBLIC_ROLE_LABELS['research-lead'])
+    .replaceAll('ops-lead', PUBLIC_ROLE_LABELS['ops-lead'])
+    .replaceAll('engineering-lead', PUBLIC_ROLE_LABELS['engineering-lead'])
+    .replaceAll('backend-engineer', PUBLIC_ROLE_LABELS['backend-engineer'])
+    .replaceAll('architecture-engineer', PUBLIC_ROLE_LABELS['architecture-engineer'])
+    .replaceAll('qa-engineer', PUBLIC_ROLE_LABELS['qa-engineer'])
+    .replaceAll('frontend-engineer', PUBLIC_ROLE_LABELS['frontend-engineer'])
+    .replace(/\bowning lead review\b/gi, 'owner review')
+    .replace(/\blead review\b/gi, 'owner review')
+    .replace(/\blead approves\b/gi, 'owning reviewer approves')
+    .replace(/\bcontact the owning lead\b/gi, 'contact the owning reviewer')
+    .replace(/\bLead review has been queued\b/g, 'Owner review has been queued')
+    .replace(/\bresearch or ops lead triage\b/gi, 'research or operations review triage')
+    .replace(INTERNAL_ROUTE_VALUE_PATTERN, '[approved review contact]')
+    .replace(INTERNAL_SLASH_VALUE_PATTERN, '[approved review contact]');
+}
+
+function publicSafeContent(value) {
+  if (typeof value === 'string') return publicSafeString(value);
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(publicSafeContent);
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [key, publicSafeContent(nestedValue)]),
+  );
+}
 export const UNIVERSAL_PORTAL_DISCLAIMER =
   'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, registry owner, or governance body.';
 export const NO_RIGHTS_CREATED_DISCLAIMER =
@@ -2021,15 +2076,16 @@ function callContributionTool(name, args = {}) {
 export function callMcpTool(name, args = {}) {
   if (!MCP_TOOL_BY_NAME.has(name)) throw invalidToolInput(`Unknown tool: ${name}`);
   const data = callContributionTool(name, args);
+  const structuredContent = publicSafeContent(data);
 
   return {
     content: [
       {
         type: 'text',
-        text: `${name} returned ${data.status}. Production mutation allowed: ${data.reviewGate?.productionMutationAllowed === true}.`,
+        text: `${name} returned ${structuredContent.status}. Production mutation allowed: ${structuredContent.reviewGate?.productionMutationAllowed === true}.`,
       },
     ],
-    structuredContent: data,
+    structuredContent,
     isError: false,
   };
 }
@@ -2840,7 +2896,7 @@ function renderContributionIntentForm(payload = {}) {
       </label>
       <label class="wide">
         <span>Contact route</span>
-        <input type="text" name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/agent-name" />
+        <input type="text" name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="https://example.org/contact" />
       </label>
       <label>
         <span>Target lane</span>
@@ -2860,7 +2916,7 @@ function renderContributionIntentForm(payload = {}) {
       </label>
       <label>
         <span>Requested owner route</span>
-        <input type="text" name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="M:engineering-team/engineering-lead" />
+        <input type="text" name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="approved review contact" />
       </label>
       <label>
         <span>Goal ID</span>
@@ -3336,13 +3392,13 @@ function buildOfflineContributionIntentPacket(generatedAt = new Date().toISOStri
       name: '<agent-or-human-name>',
       agentId: '<optional-agent-id>',
       team: '<optional-team>',
-      contactRoute: '<manager-route-or-contact-channel>',
+      contactRoute: '<public-contact-channel>',
     },
     targetLane: 'inc-ops-governance',
     summary: '<20-1200 character contribution summary>',
     proposedTemplate: 'contribution-task',
     handoff: {
-      requestedOwnerRoute: 'M:engineering-team/engineering-lead',
+      requestedOwnerRoute: '<approved-review-contact>',
       goalId: '<optional-goal-id>',
       expectedOutput: '<requested review output>',
       acceptanceCriteria: ['<criterion one>'],
@@ -3420,7 +3476,9 @@ function renderContributionIntentValidationPage(response, payload = {}) {
 }
 
 function buildContributionIntentAcceptanceNextStep(notificationRecord) {
-  return `Lead review has been queued for ${notificationRecord.requestedOwnerRoute}. Use the receipt ID to correlate stored submission and fleet-notification records.`;
+  return publicSafeString(
+    `Lead review has been queued for ${notificationRecord.requestedOwnerRoute}. Use the receipt ID to correlate stored submission and fleet-notification records.`,
+  );
 }
 
 function buildFleetNotificationRecord({ receiptId, receivedAt, requestBody, laneDefinition, templateDefinition }) {
@@ -3673,7 +3731,7 @@ export function buildLlmsTxt() {
     (tool) => `- ${tool.name}: ${tool.description} Mode: ${tool.annotations.readOnlyHint ? 'read' : 'review queue'}.`,
   ).join('\n');
 
-  return `# agent.bittrees.org
+  return publicSafeString(`# agent.bittrees.org
 
 Purpose: AI-agent entry point for Bittrees contribution discovery, source requirements, templates, and review gates.
 Launch status: ${LAUNCH_STATUS.status}. ${LAUNCH_STATUS.publicLaunchGate}
@@ -3749,7 +3807,7 @@ Monitoring: ${LAUNCH_FRESHNESS_MONITORING.smokeCommand}
 ## Review Requirements
 
 Public source lists and Bittrees/IDACC claims require lead approval before launch. Treasury, token, signer, wallet, Safe, ENS, quorum, holdings, or execution claims require fresh verification and are not instructions to move assets or execute governance.
-`;
+`);
 }
 
 export function renderLandingPage() {
@@ -4128,7 +4186,7 @@ export function renderLandingPage() {
             a template, and keep public claims inside approved review gates.
           </p>
           <p class="lede">
-            ${escapeHtml(LAUNCH_STATUS.publicLaunchGate)}
+            ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
         </div>
         <div class="action-grid" aria-label="Machine-readable routes">
@@ -4447,7 +4505,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
       <tr>
         <td><code>${escapeHtml(opportunity.id)}</code></td>
         <td>${escapeHtml(opportunity.status)}</td>
-        <td>${escapeHtml(opportunity.owner)}</td>
+        <td>${escapeHtml(publicSafeString(opportunity.owner))}</td>
         <td>${escapeHtml(opportunity.nextAction)}</td>
       </tr>
     `,
@@ -4848,17 +4906,18 @@ export function renderIdentityKeysPage() {
 
 export function buildJsonResponse(routeDefinition, generatedAt = new Date().toISOString()) {
   const routeData = typeof routeDefinition.data === 'function' ? routeDefinition.data() : routeDefinition.data;
+  const publicRouteData = publicSafeContent(routeData);
 
   return {
     $schema: SCHEMA_URL,
     route: routeDefinition.path,
     generatedAt,
-    status: routeData?.status ?? routeDefinition.status,
+    status: publicRouteData?.status ?? routeDefinition.status,
     disclaimer: UNIVERSAL_PORTAL_DISCLAIMER,
     noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
     ...(routeDefinition.privacyNotice ? { privacyNotice: routeDefinition.privacyNotice } : {}),
     schema: routeDefinition.schema,
-    data: routeData,
+    data: publicRouteData,
   };
 }
 

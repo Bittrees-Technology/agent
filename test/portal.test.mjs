@@ -204,6 +204,25 @@ function collectReviewGateRecords(value, records = []) {
   return records;
 }
 
+const PUBLIC_CONTENT_FORBIDDEN_PATTERNS = [
+  ['default-team dispatch route', /default\/(?:lead|coder|researcher)/i],
+  ['default validator role pair', /default coder\/researcher/i],
+  ['default team label', /\bdefault team\b/i],
+  ['team lead slug', /\b(?:research|ops|engineering)-lead\b/i],
+  ['security route slug', /technology-security\/security-router/i],
+  ['manager route placeholder', /\bM:[a-z0-9-]+\/[a-z0-9-]+\b/i],
+  ['team slash route', /\b(?:engineering-team|technology-security)\/[a-z0-9-]+\b/i],
+  ['raw owner/reviewer lead field', /"(?:owner|reviewer|operator|requestedOwnerRoute|opportunityOwner)"\s*:\s*"lead"/i],
+];
+
+function assertPublicContentSafe(label, value) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+
+  for (const [name, pattern] of PUBLIC_CONTENT_FORBIDDEN_PATTERNS) {
+    assert.doesNotMatch(text, pattern, `${label} exposed ${name}`);
+  }
+}
+
 test('llms.txt is a plain-text agent entry point', () => {
   const llms = buildLlmsTxt();
 
@@ -678,6 +697,76 @@ test('public MCP review gates use role labels without internal reviewer routes',
   }
 });
 
+test('public contribution surfaces hide internal role and route literals', () => {
+  const publicSamples = [
+    ['/', renderLandingPage()],
+    ['/llms.txt', buildLlmsTxt()],
+    [
+      '/submission-status',
+      renderSubmissionStatusPage(new URLSearchParams('id=source-registry-hardening&kind=opportunity')),
+    ],
+    ['/reputation', renderReputationPage(new URLSearchParams('agentId=idacc-default-lead'))],
+  ];
+
+  for (const [path, routeDefinition] of JSON_ROUTE_MAP) {
+    publicSamples.push([path, buildJsonResponse(routeDefinition, '2026-07-06T00:00:00.000Z')]);
+  }
+
+  const registrationResult = callMcpTool('register_external_agent', {
+    agentId: 'external-public-safety-test',
+    displayName: 'External Public Safety Test',
+    operator: 'engineering-lead',
+    contact: {
+      kind: 'internal-route',
+      value: 'engineering-team/backend-engineer',
+    },
+    capabilities: ['public response verification'],
+    evidencePolicy: 'Cite public route evidence and keep internal routes out of public responses.',
+  });
+  const claimResult = callMcpTool('claim_contribution', {
+    agentId: 'external-public-safety-test',
+    opportunityId: 'source-registry-hardening',
+    contributionSummary: 'Verify public contribution gateway responses are scrubbed before publication.',
+    evidencePlan: ['portal-route:/mcp.json'],
+  });
+  const submissionResult = callMcpTool('submit_contribution', {
+    agentId: 'external-public-safety-test',
+    opportunityId: 'source-registry-hardening',
+    title: 'Public content safety regression packet',
+    artifact: {
+      kind: 'markdown',
+      value: 'Check public route and MCP responses for internal route-shaped literals.',
+    },
+    evidence: ['portal-route:/templates.json'],
+    requestedReviewers: ['research-lead', 'ops-lead'],
+  });
+
+  publicSamples.push(
+    ['mcp:list_contribution_opportunities', callMcpTool('list_contribution_opportunities', { priority: 'high' })],
+    ['mcp:get_contribution_brief', callMcpTool('get_contribution_brief', { opportunityId: 'source-registry-hardening' })],
+    ['mcp:get_bittrees_context', callMcpTool('get_bittrees_context', {})],
+    ['mcp:register_external_agent', registrationResult],
+    ['mcp:claim_contribution', claimResult],
+    ['mcp:submit_contribution', submissionResult],
+    [
+      'mcp:check_contribution_status',
+      callMcpTool('check_contribution_status', {
+        id: submissionResult.structuredContent.submission.id,
+        kind: 'submission',
+      }),
+    ],
+    ['mcp:get_agent_reputation', callMcpTool('get_agent_reputation', { agentId: 'idacc-default-lead' })],
+    [
+      'mcp:lookup_contribution_attestation',
+      callMcpTool('lookup_contribution_attestation', { contributionId: 'missing-submission' }),
+    ],
+  );
+
+  for (const [label, value] of publicSamples) {
+    assertPublicContentSafe(label, value);
+  }
+});
+
 test('mcp docs render Codex Claude Desktop and Cursor import tabs', () => {
   const html = renderMcpGatewayPage();
   const docsHtml = renderMcpDocsPage();
@@ -938,7 +1027,7 @@ test('mcp endpoint rejects oversized request bodies with 413', async () => {
             operator: 'backend-engineer',
             contact: {
               kind: 'internal-route',
-              value: 'engineering-team/backend-engineer',
+              value: 'approved-review-contact',
             },
             capabilities: ['schema validation'],
             evidencePolicy: 'x'.repeat(1_100_000),
