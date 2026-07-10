@@ -1298,6 +1298,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/identity-keys',
     '/submission-status',
     '/reputation',
+    '/terms-of-use',
     '/llms.txt',
     '/agents.json',
     '/identity-keys.json',
@@ -1311,6 +1312,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/mcp.json',
     '/submission-status.json',
     '/reputation.json',
+    '/terms-of-use.json',
     '/idacc/releases.json',
     '/monitoring.json',
   ],
@@ -1334,6 +1336,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/mcp.json',
       '/submission-status.json',
       '/reputation.json',
+      '/terms-of-use.json',
       '/idacc/releases.json',
       '/monitoring.json',
     ],
@@ -1345,6 +1348,18 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     baselineExcludedClaimIds: EXCLUDED_CLAIM_REVIEW.map((claim) => claim.id),
   },
   smokeCommand: 'npm run smoke -- --base-url=https://agent.bittrees.org',
+};
+
+export const TERMS_OF_USE_LEGAL_STATUS = {
+  status: 'blocked-pending-legal-approved-content',
+  contentStatus: 'pending-legal-approved-content',
+  pageRoute: '/terms-of-use',
+  jsonRoute: '/terms-of-use.json',
+  legalContentOwner: 'legal/general-counsel',
+  publicationStatus: 'not-published',
+  reason: 'Legal-approved Terms of Use content has not been supplied to the portal.',
+  requiredNextAction:
+    'Legal/general-counsel must author and approve the final Terms of Use before this route can publish terms.',
 };
 
 export const MCP_IMPORT_SNIPPETS = [
@@ -2130,6 +2145,16 @@ function buildReputationViewContract() {
   };
 }
 
+function buildTermsOfUseStatus() {
+  return {
+    ...TERMS_OF_USE_LEGAL_STATUS,
+    launchStatus: LAUNCH_STATUS,
+    robotsPolicy: 'noindex,nofollow',
+    caveat:
+      'This is a prelaunch implementation-status route, not Terms of Use text, a legal agreement, or an acceptance flow.',
+  };
+}
+
 const JSON_ROUTES = [
   {
     path: '/agents.json',
@@ -2360,6 +2385,29 @@ const JSON_ROUTES = [
     data: buildReputationViewContract,
   },
   {
+    path: '/terms-of-use.json',
+    label: 'Terms of Use legal-content status',
+    description:
+      'Prelaunch Terms of Use status. Legal-approved content is pending and this route does not publish Terms of Use text.',
+    status: TERMS_OF_USE_LEGAL_STATUS.status,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org Terms of Use status response',
+      type: 'object',
+      additionalProperties: true,
+      required: [
+        'status',
+        'launchStatus',
+        'contentStatus',
+        'pageRoute',
+        'legalContentOwner',
+        'publicationStatus',
+        'requiredNextAction',
+      ],
+    },
+    data: buildTermsOfUseStatus,
+  },
+  {
     path: '/idacc/releases.json',
     label: 'IDACC releases',
     description: 'Dated IDACC release snapshot and current publication policy for IDACC-related updates.',
@@ -2436,6 +2484,14 @@ export const ROUTE_DEFINITIONS = [
     description: 'Human-readable lookup for agent reputation evidence with identity, authority, and authorization caveats.',
     kind: 'html',
     status: 'human-view-ready',
+  },
+  {
+    path: '/terms-of-use',
+    label: 'Terms of Use status page',
+    description:
+      'Prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
+    kind: 'html',
+    status: TERMS_OF_USE_LEGAL_STATUS.status,
   },
   {
     path: '/llms.txt',
@@ -4665,6 +4721,62 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
 </html>`;
 }
 
+export function renderTermsOfUsePage() {
+  const termsStatus = buildTermsOfUseStatus();
+  const pageTitle = 'Terms of Use status - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    '/terms-of-use',
+    'Prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
+  );
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/terms-of-use' })}
+    ${renderHumanLookupStyles()}
+  </head>
+  <body>
+    <main>
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <span class="status">${escapeHtml(termsStatus.status)}</span>
+      </header>
+
+      <section class="hero" aria-labelledby="terms-of-use-title">
+        <h1 id="terms-of-use-title">Terms of Use are pending legal approval.</h1>
+        <p class="lede">
+          Legal-approved Terms of Use content is not yet published. This is a prelaunch implementation-status page,
+          not a legal agreement, acceptance flow, or substitute for final Terms of Use text.
+        </p>
+      </section>
+
+      <section class="band" aria-labelledby="terms-status-title">
+        <h2 id="terms-status-title">Status</h2>
+        <table>
+          <tbody>
+            <tr><th>Content status</th><td><code>${escapeHtml(termsStatus.contentStatus)}</code></td></tr>
+            <tr><th>Publication status</th><td>${escapeHtml(termsStatus.publicationStatus)}</td></tr>
+            <tr><th>Legal content owner</th><td>${escapeHtml(termsStatus.legalContentOwner)}</td></tr>
+            <tr><th>Required next action</th><td>${escapeHtml(termsStatus.requiredNextAction)}</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="band" aria-labelledby="terms-contract-title">
+        <h2 id="terms-contract-title">Machine-readable status</h2>
+        <div>
+          <p class="lede">The equivalent status object is available at <a href="/terms-of-use.json">/terms-of-use.json</a>.</p>
+          <p class="lede caveat">This route remains <code>noindex,nofollow</code> while the launch gate is active.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 export function renderIdentityKeysPage() {
   const sectionRows = IDENTITY_KEYS_PUBLIC_CONTRACT.sections
     .map(
@@ -5257,6 +5369,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
       body: renderReputationPage(),
     },
     {
+      path: 'terms-of-use/index.html',
+      body: renderTermsOfUsePage(),
+    },
+    {
       path: 'mcp-docs/index.html',
       body: renderMcpDocsPage(),
     },
@@ -5349,6 +5465,13 @@ export function createRequestHandler() {
 
     if (pathname === '/reputation') {
       return sendBody(res, 200, renderReputationPage(requestUrl.searchParams), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === '/terms-of-use') {
+      return sendBody(res, 200, renderTermsOfUsePage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });

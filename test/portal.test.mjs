@@ -31,6 +31,7 @@ import {
   REGISTRY_PROFILE_PUBLICATION_NOTICE,
   ROUTE_DEFINITIONS,
   SOURCE_REGISTRY,
+  TERMS_OF_USE_LEGAL_STATUS,
   UNIVERSAL_PORTAL_DISCLAIMER,
   buildJsonResponse,
   buildLlmsTxt,
@@ -44,6 +45,7 @@ import {
   renderMcpGatewayPage,
   renderReputationPage,
   renderSubmissionStatusPage,
+  renderTermsOfUsePage,
 } from '../src/portal.mjs';
 
 async function withPortalServer(callback) {
@@ -300,6 +302,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('identity-keys/index.html'));
   assert.ok(assetPaths.has('submission-status/index.html'));
   assert.ok(assetPaths.has('reputation/index.html'));
+  assert.ok(assetPaths.has('terms-of-use/index.html'));
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
@@ -310,6 +313,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('mcp.json'));
   assert.ok(assetPaths.has('submission-status.json'));
   assert.ok(assetPaths.has('reputation.json'));
+  assert.ok(assetPaths.has('terms-of-use.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
   assert.ok(assetPaths.has('monitoring.json'));
 });
@@ -320,6 +324,7 @@ test('html pages emit description and Open Graph metadata', () => {
     ['/identity-keys', renderIdentityKeysPage()],
     ['/submission-status', renderSubmissionStatusPage()],
     ['/reputation', renderReputationPage()],
+    ['/terms-of-use', renderTermsOfUsePage()],
     ['/mcp', renderMcpGatewayPage()],
     ['/mcp-docs', renderMcpDocsPage()],
   ]);
@@ -336,6 +341,39 @@ test('html pages emit description and Open Graph metadata', () => {
     assert.match(html, /<meta name="twitter:title" content="[^"]+" \/>/, route);
     assert.match(html, /<meta name="twitter:description" content="[^"]+" \/>/, route);
   }
+});
+
+test('Terms of Use routes are blocked pending legal-approved content', async () => {
+  const termsRoute = JSON_ROUTE_MAP.get('/terms-of-use.json');
+  const termsContract = buildJsonResponse(termsRoute, '2026-07-10T00:00:00.000Z');
+  const termsPage = renderTermsOfUsePage();
+
+  assert.ok(termsRoute);
+  assert.equal(termsContract.status, TERMS_OF_USE_LEGAL_STATUS.status);
+  assert.equal(termsContract.data.contentStatus, 'pending-legal-approved-content');
+  assert.equal(termsContract.data.publicationStatus, 'not-published');
+  assert.equal(termsContract.data.legalContentOwner, 'legal/general-counsel');
+  assert.match(termsContract.data.requiredNextAction, /Legal\/general-counsel must author and approve/);
+  assert.match(termsPage, /Terms of Use are pending legal approval/);
+  assert.match(termsPage, /not a legal agreement, acceptance flow, or substitute/);
+  assert.match(termsPage, /<meta name="robots" content="noindex,nofollow" \/>/);
+
+  await withPortalServer(async (baseUrl) => {
+    const pageResponse = await fetch(`${baseUrl}/terms-of-use`);
+    const contractResponse = await fetch(`${baseUrl}/terms-of-use.json`);
+    const contractBody = await contractResponse.json();
+
+    assert.equal(pageResponse.status, 200);
+    assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
+    assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(await pageResponse.text(), /pending legal approval/);
+
+    assert.equal(contractResponse.status, 200);
+    assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
+    assert.equal(contractResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.equal(contractBody.status, TERMS_OF_USE_LEGAL_STATUS.status);
+    assert.equal(contractBody.data.contentStatus, 'pending-legal-approved-content');
+  });
 });
 
 test('landing contribution intent CTA copy follows write flag posture', () => {
@@ -638,11 +676,13 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/identity-keys'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/submission-status'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/reputation'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms-of-use'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/sources.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/submission-status.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/reputation.json'));
+  assert.ok(response.data.monitoring.schemaValidity.routes.includes('/terms-of-use.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.claimDrift.baselineApprovedClaimIds.includes(APPROVED_CLAIMS[0].id));
   assert.ok(response.data.monitoring.claimDrift.baselineExcludedClaimIds.includes(EXCLUDED_CLAIM_REVIEW[0].id));
@@ -722,6 +762,7 @@ test('public contribution surfaces hide internal role and route literals', () =>
   const publicSamples = [
     ['/', renderLandingPage()],
     ['/llms.txt', buildLlmsTxt()],
+    ['/terms-of-use', renderTermsOfUsePage()],
     [
       '/submission-status',
       renderSubmissionStatusPage(new URLSearchParams('id=source-registry-hardening&kind=opportunity')),
