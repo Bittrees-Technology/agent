@@ -226,6 +226,6 @@ npm run start:dist
 
 - `vercel.json` keeps `X-Robots-Tag: noindex, nofollow` enabled.
 - Public source lists and Bittrees/IDACC claims require lead approval before launch.
-- The identity/key route is prelaunch-contract-under-review, and production registry writes still need an authenticated control-plane writer, controller-signed challenge verification, and redaction tests.
+- The identity/key route remains prelaunch-contract-under-review. The durable authenticated writer and signed-heartbeat ingestion primitives live in `src/registry-control-plane.mjs` with versioned schemas and behavioral coverage; they are intentionally not wired to a public route or any authority, spend, execution, deployment, DNS, credential, or asset-movement path.
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.
