@@ -2290,7 +2290,7 @@ const JSON_ROUTES = [
           'publicPrivateStatus',
         ],
       },
-      sources: SOURCE_REGISTRY,
+      sources: SOURCE_REGISTRY.filter((source) => source.publicSafe === true),
       approvedClaims: APPROVED_CLAIMS,
       excludedClaims: EXCLUDED_CLAIMS,
       excludedClaimReview: EXCLUDED_CLAIM_REVIEW,

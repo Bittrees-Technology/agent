@@ -30,6 +30,7 @@ import {
   PORTAL_SECURITY_HEADERS,
   REGISTRY_PROFILE_PUBLICATION_NOTICE,
   ROUTE_DEFINITIONS,
+  SOURCE_REGISTRY,
   UNIVERSAL_PORTAL_DISCLAIMER,
   buildJsonResponse,
   buildLlmsTxt,
@@ -263,6 +264,26 @@ test('source guardrails include approved and excluded Bittrees claims', () => {
     EXCLUDED_CLAIMS.some((claim) => claim.includes('AI-agent blockchain platform')),
     'expected explicit excluded AI-agent-platform claim',
   );
+});
+
+test('sources JSON only serves explicitly public-safe source records', async () => {
+  const sourcesRoute = JSON_ROUTE_MAP.get('/sources.json');
+  const expectedPublicSources = SOURCE_REGISTRY.filter((source) => source.publicSafe === true);
+
+  assert.deepEqual(sourcesRoute.data.sources, expectedPublicSources);
+
+  await withPortalServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/sources.json`);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(
+      body.data.sources.map((source) => source.id),
+      expectedPublicSources.map((source) => source.id),
+    );
+    assert.ok(body.data.sources.every((source) => source.publicSafe === true));
+    assert.doesNotMatch(JSON.stringify(body), /bittrees-research-executive-summary|ops-guide-1-5-1/);
+  });
 });
 
 test('static build includes all advertised routes', () => {
