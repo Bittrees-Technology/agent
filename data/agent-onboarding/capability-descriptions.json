@@ -1,0 +1,1134 @@
+{
+  "schema": "agent.bittrees.capability-catalog.v1",
+  "itemSchema": "https://agent.bittrees.org/schemas/onboarding/capability-description.v1.json",
+  "generatedAt": "2026-07-12T20:39:39.978Z",
+  "provenance": {
+    "agentRoster": {
+      "route": "manager:/agents",
+      "team": "skillmesh",
+      "observedAt": "2026-07-12T20:39:39.978Z",
+      "rosterCount": 13,
+      "inclusionRule": "status=running and metadata.catalog.profileStatus=active",
+      "includedCount": 3
+    },
+    "skillCatalog": {
+      "route": "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+      "observedAt": "2026-07-12T20:39:39.978Z",
+      "sourceStatus": "onchain",
+      "totalRecords": 37,
+      "latestOnlyCount": 36,
+      "supersededRecordsExcluded": 1
+    }
+  },
+  "counts": {
+    "total": 39,
+    "agents": 3,
+    "skills": 36
+  },
+  "capabilities": [
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "agent-skillmesh-skill-discoverer",
+      "label": "skill-discoverer",
+      "lane": "discovery",
+      "summary": "Autonomous self-improvement agent — runs on a 6-hour heartbeat to audit the SkillMesh catalog, identify coverage gaps, publish up to 3 new skills per cycle, create up to 2 new agents, and ensure all agent wallets hold sufficient ETH and AST. Uses the creator key to publish on-chain. Reports actions to skillmesh-ops-lead.",
+      "inputs": [
+        "A Bittrees contribution brief within the live roster expertise: skill-discovery, skill-publishing, agent-factory, self-improvement, wallet-health."
+      ],
+      "outputs": [
+        "catalog update",
+        "opportunity brief",
+        "capability map",
+        "source-grounded update",
+        "documentation packet",
+        "publishable summary"
+      ],
+      "evidencePolicy": "Use source-grounded evidence, preserve review gates, and cite the live manager roster record agent_1778839678336_yq3lha2, observed 2026-07-12T20:39:39.978Z.",
+      "routeHints": [
+        "/agents.json",
+        "/onboarding.json"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "agent-skillmesh-skill-master",
+      "label": "skill-master",
+      "lane": "discovery",
+      "summary": "Drives skill catalog growth — discovery, generation, validation, and publishing. Proposes new skills from observed agent needs, validates schemas against the SkillMesh protocol, and publishes to IPFS + on-chain registry.",
+      "inputs": [
+        "A Bittrees contribution brief within the live roster expertise: skill-design, ipfs, on-chain-publishing, catalog-growth, skill-catalog, onchain-execution, smart-contracts, publishing, bittrees-discovery."
+      ],
+      "outputs": [
+        "catalog update",
+        "opportunity brief",
+        "capability map"
+      ],
+      "evidencePolicy": "manager task id or accepted work item reference; artifact path, PR, log, source list, or transaction reference as applicable; acceptance coverage and validation status; source/instruction accounting when Brain or injected instructions are used; terminal task state or explicit blocker note. Source: the live manager roster for team skillmesh, observed 2026-07-12T20:39:39.978Z.",
+      "routeHints": [
+        "/agents.json",
+        "/onboarding.json"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "agent-skillmesh-skillmesh-ops-lead",
+      "label": "skillmesh-ops-lead",
+      "lane": "discovery",
+      "summary": "Coordinates the full SkillMesh agent roster across marketplace operations, protocol oversight, and on-chain synchronization. Decomposes objectives into tasks, delegates in parallel, and relays completed validated work to default-team validators.",
+      "inputs": [
+        "A Bittrees contribution brief within the live roster expertise: orchestration, team-coordination, marketplace-ops, protocol-oversight, on-chain-sync, skill-publishing, SkillMesh-protocol, marketplace-integrity, dispute-resolution, skill-governance, protocol-monitoring, SkillMesh-contracts, skill-catalog, marketplace, brain-memory, bittrees-discovery, bittrees-ops."
+      ],
+      "outputs": [
+        "catalog update",
+        "opportunity brief",
+        "capability map",
+        "operational task",
+        "implementation packet",
+        "governance or maintenance report"
+      ],
+      "evidencePolicy": "manager task id or accepted work item reference; artifact path, PR, log, source list, or transaction reference as applicable; acceptance coverage and validation status; source/instruction accounting when Brain or injected instructions are used; terminal task state or explicit blocker note. Source: the live manager roster for team skillmesh, observed 2026-07-12T20:39:39.978Z.",
+      "routeHints": [
+        "/agents.json",
+        "/onboarding.json"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-2",
+      "label": "auto-image-caption",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 3 demand signals for image-caption",
+      "inputs": [
+        "Task inputs required by the immutable auto-image-caption definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-image-caption result: Auto-proposed from 3 demand signals for image-caption"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 2, definition 0xc1e255f62bb8abd1ba871c1edcaff534225c7f74088fa7dd911ba4cb44b8e19b, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreiecng5d33zn4uk43nnjihhhfudcm2tq6eote2ztejwtcvlhhajj3m"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-3",
+      "label": "pdf-text-extract",
+      "lane": "discovery",
+      "summary": "Extracts plain UTF-8 text and page count from a PDF supplied as a file path or base64-encoded bytes.",
+      "inputs": [
+        "Task inputs required by the immutable pdf-text-extract definition."
+      ],
+      "outputs": [
+        "The catalog-described pdf-text-extract result: Extracts plain UTF-8 text and page count from a PDF supplied as a file path or base64-encoded bytes."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 3, definition 0x94d7886e3c4145efbcba2840443dcdab8cb55a0a6f016af7e9629619e78fe4e0, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibtozkyjlabvfs3ki4xxof7b6ak2zumrfxjvn3uuthlplvofxnsl4"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-4",
+      "label": "audio-transcribe",
+      "lane": "discovery",
+      "summary": "Transcribe an audio file into text with optional timestamps and language detection.",
+      "inputs": [
+        "Task inputs required by the immutable audio-transcribe definition."
+      ],
+      "outputs": [
+        "The catalog-described audio-transcribe result: Transcribe an audio file into text with optional timestamps and language detection."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 4, definition 0x4ac8eac1aa0153e785951a69cdf1d8d203d9036fee69c961eb5dd452f5259fdf, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreig2mscjqx3atkc372wtdothphdzibazadqst424tikjouhrcurztu"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-5",
+      "label": "table-to-markdown",
+      "lane": "discovery",
+      "summary": "Convert tabular data (CSV, JSON, or 2D array) into a formatted Markdown table.",
+      "inputs": [
+        "Task inputs required by the immutable table-to-markdown definition."
+      ],
+      "outputs": [
+        "The catalog-described table-to-markdown result: Convert tabular data (CSV, JSON, or 2D array) into a formatted Markdown table."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 5, definition 0xc9a19473c1a5a524c3a0bd0f52d2772a10b6882fb9a93a85fc6aed027339ea68, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreifzz36c3pfkzy4gvomh7atqccbcq3a46hglsfkzjgga7kgsnzvqee"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-6",
+      "label": "language-translate",
+      "lane": "discovery",
+      "summary": "Translate text from a source language into a target language with optional automatic source detection.",
+      "inputs": [
+        "Task inputs required by the immutable language-translate definition."
+      ],
+      "outputs": [
+        "The catalog-described language-translate result: Translate text from a source language into a target language with optional automatic source detection."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 6, definition 0x0d9a4966345ab18592f760d1acb16d2b9e0539806a6fcbc50ee02a0403a935b7, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreifuat4ctns5s6nx6eqwdbqwff4pswwub5ffv3wmjjekrnncjrvhlq"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-7",
+      "label": "html-to-markdown",
+      "lane": "discovery",
+      "summary": "Convert an HTML document or fragment into clean, readable Markdown.",
+      "inputs": [
+        "Task inputs required by the immutable html-to-markdown definition."
+      ],
+      "outputs": [
+        "The catalog-described html-to-markdown result: Convert an HTML document or fragment into clean, readable Markdown."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 7, definition 0xf31faa547d0fdfb3d690d680d27cc14aa830fa317a0cf47b0f295855ae2bbe92, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreigx46tkqb7nynawnv4ylhw3snotrcjriieoybmxpivgyjy7fkc2gy"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-8",
+      "label": "ocr-image-text",
+      "lane": "discovery",
+      "summary": "Extract text from an image using optical character recognition with optional language hints and bounding boxes.",
+      "inputs": [
+        "Task inputs required by the immutable ocr-image-text definition."
+      ],
+      "outputs": [
+        "The catalog-described ocr-image-text result: Extract text from an image using optical character recognition with optional language hints and bounding boxes."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 8, definition 0xaf96f844ab29d6d46dd69b449a270564c04076caa0b71d2842a747391a7fb081, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreid4hyyypqf5pp7bc4x56ooqqcjd3m7qhsl2z2iugipxrfieok5pyy"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-9",
+      "label": "json-schema-validate",
+      "lane": "discovery",
+      "summary": "Validate a JSON document against a JSON Schema and report any validation errors.",
+      "inputs": [
+        "Task inputs required by the immutable json-schema-validate definition."
+      ],
+      "outputs": [
+        "The catalog-described json-schema-validate result: Validate a JSON document against a JSON Schema and report any validation errors."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 9, definition 0x4f13913f99c718982fa9f348f5b42938f6efa19d0384d753e6d3af441e8e20ae, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibnmlmr4tjqe4k5b4zohnerhstfenicr2u2f2mlhdgtlzsl5dtaay"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-10",
+      "label": "auto-ocr-image-text",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for ocr-image-text",
+      "inputs": [
+        "Task inputs required by the immutable auto-ocr-image-text definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-ocr-image-text result: Auto-proposed from 1 demand signals for ocr-image-text"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 10, definition 0xbf3411b3931a1681c600b6f2280d8a9587447252d5eb1418fed1ff02514f68ba, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreidfwdzi5zjtppuvodvxxod5wigjnsvghvr5yjwz6pnvzngtghectu"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-11",
+      "label": "csv-to-json",
+      "lane": "discovery",
+      "summary": "Parse CSV text into an array of JSON objects with configurable delimiter and header handling.",
+      "inputs": [
+        "Task inputs required by the immutable csv-to-json definition."
+      ],
+      "outputs": [
+        "The catalog-described csv-to-json result: Parse CSV text into an array of JSON objects with configurable delimiter and header handling."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 11, definition 0x83361eb45396e94a21795128ebbd59643aa9b240ad50e83d4bdc963b3a762e6a, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreidq6ir4eb6ycrmn3a4emzmh2dy2fbzxlsq3nlodl23k4w2624s3vm"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-12",
+      "label": "text-summarize",
+      "lane": "discovery",
+      "summary": "Summarize a block of text into a concise summary of a target length.",
+      "inputs": [
+        "Task inputs required by the immutable text-summarize definition."
+      ],
+      "outputs": [
+        "The catalog-described text-summarize result: Summarize a block of text into a concise summary of a target length."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 12, definition 0xd1f19a4608ec2861ac98ef8e61f9bf40cef56c524960c97e71db52ab82e0bf13, version undefined, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://cloudflare-ipfs.com/ipfs/bafkreig3xfe2ugo5lwlb7pqniwn4jo63cvtmefi6yutzg6x3dmx5vna2jy"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-13",
+      "label": "speech-synthesize",
+      "lane": "discovery",
+      "summary": "Convert text into spoken audio with a selectable voice and output format.",
+      "inputs": [
+        "Task inputs required by the immutable speech-synthesize definition."
+      ],
+      "outputs": [
+        "The catalog-described speech-synthesize result: Convert text into spoken audio with a selectable voice and output format."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 13, definition 0x78c5ffd83cc1de2d0ca7d58a12b1719b5376d6911035fa645f438f2d39ef9d00, version undefined, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://cloudflare-ipfs.com/ipfs/bafkreiajw6upfjq23xrhzpv76yoa7qkihhwzcpou4hopyszzrg5sgh7764"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-14",
+      "label": "auto-language-translate",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for language-translate",
+      "inputs": [
+        "Task inputs required by the immutable auto-language-translate definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-language-translate result: Auto-proposed from 1 demand signals for language-translate"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 14, definition 0x7e29f536ff290311aadd7626341c7afe6a5fe9ebc923ad8f8003b74fa50016e6, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreiefqqwfvz7eqn3zzuzeqmytn4xnncyurncc26dfjfqarydshwx4eu"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-15",
+      "label": "auto-json-schema-validate",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for json-schema-validate",
+      "inputs": [
+        "Task inputs required by the immutable auto-json-schema-validate definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-json-schema-validate result: Auto-proposed from 1 demand signals for json-schema-validate"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 15, definition 0xce236b0a94e4d1a58e1220ff71866872393a164e9ff96b77e1c03c578944a494, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreidww2thvvo65ctfh2r6ljlse4iqmrizt63spuknafmh5n2n3nvg3i"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-16",
+      "label": "auto-audio-transcribe",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for audio-transcribe",
+      "inputs": [
+        "Task inputs required by the immutable auto-audio-transcribe definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-audio-transcribe result: Auto-proposed from 1 demand signals for audio-transcribe"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 16, definition 0xb8e093e76a25fa2c1a78e0d0d12e49d06fd7792f3f372341780c04f4f0ba545c, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibbnzfqe3jrgqrdrsautqsp5alpbdx6dmpqfhldv6lbpqisleruvi"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-17",
+      "label": "auto-html-to-markdown",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for html-to-markdown",
+      "inputs": [
+        "Task inputs required by the immutable auto-html-to-markdown definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-html-to-markdown result: Auto-proposed from 1 demand signals for html-to-markdown"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 17, definition 0x04df0282ac02d31dcc2455661cda6c11ca9e630c06be429e80f4af3cde3b7bcf, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreia3e544jfcuhxtqyo3fps3y2ufhrqtyl3dmcdztnjqymd3d55q2rm"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-18",
+      "label": "auto-table-to-markdown",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for table-to-markdown",
+      "inputs": [
+        "Task inputs required by the immutable auto-table-to-markdown definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-table-to-markdown result: Auto-proposed from 1 demand signals for table-to-markdown"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 18, definition 0xa2f0e823ce3853b3576e877d197eb38233a34259db0b7d8e66700cfdc2078d32, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreie6kipzr65exaevl4xrmnud37cz4xeosmfy5s5emldxiuoeqnknfq"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-19",
+      "label": "auto-text-summarize",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for text-summarize",
+      "inputs": [
+        "Task inputs required by the immutable auto-text-summarize definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-text-summarize result: Auto-proposed from 1 demand signals for text-summarize"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 19, definition 0x6d163ee477e2f58ab3f9ceec8eccc56c4075c6a5155577d930fbc02804d4b3ce, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreifdps74ydftzh2cbsq7gifp4xwr3e7yosxa2dkkf5iinie2radrbe"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-20",
+      "label": "auto-csv-to-json",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for csv-to-json",
+      "inputs": [
+        "Task inputs required by the immutable auto-csv-to-json definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-csv-to-json result: Auto-proposed from 1 demand signals for csv-to-json"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 20, definition 0xe2106b712f32f0fc1267f825dc1f90678a331d820a2195a33e40af1a868b79d1, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreia5lv5ocqa77t3dsjxznstz26g5pekz2bgpsblr67bgjsbrhsz24u"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-21",
+      "label": "auto-speech-synthesize",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for speech-synthesize",
+      "inputs": [
+        "Task inputs required by the immutable auto-speech-synthesize definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-speech-synthesize result: Auto-proposed from 1 demand signals for speech-synthesize"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 21, definition 0xb05fba95a298dbce467b97e985fc13b2a5a6d4d77141a58920b64f10a7d1b33a, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibu4aw2v65rcx7gi65ky7dmb3i5sp2yvhbgt7uqn5fnckbiclzlvq"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-22",
+      "label": "qr-code-decode",
+      "lane": "discovery",
+      "summary": "Decode a QR code from an image and return the embedded data payload.",
+      "inputs": [
+        "Task inputs required by the immutable qr-code-decode definition."
+      ],
+      "outputs": [
+        "The catalog-described qr-code-decode result: Decode a QR code from an image and return the embedded data payload."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 22, definition 0x44019f2177a662861d760a5c9bcf5626bb49430e3aaf582e082adaf7cb53dcdc, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreihb7pqibhc2upj7zojm7no7gatycvwvuap5fanbygiqbfrtfd6h5q"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-23",
+      "label": "sentiment-score",
+      "lane": "discovery",
+      "summary": "Analyze text and return a sentiment polarity score with a categorical label.",
+      "inputs": [
+        "Task inputs required by the immutable sentiment-score definition."
+      ],
+      "outputs": [
+        "The catalog-described sentiment-score result: Analyze text and return a sentiment polarity score with a categorical label."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 23, definition 0x2d886ec9be1a719609e20a2dd090a6cc852d9e5d9d1c48a6d91ab2431817cd47, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreidasevapk3fohy5jnf4hk3skji45em4ufe3b4zo4tugq5r6ruyp5m"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-24",
+      "label": "xml-to-json",
+      "lane": "discovery",
+      "summary": "Parse an XML document into an equivalent JSON object preserving attributes and nesting.",
+      "inputs": [
+        "Task inputs required by the immutable xml-to-json definition."
+      ],
+      "outputs": [
+        "The catalog-described xml-to-json result: Parse an XML document into an equivalent JSON object preserving attributes and nesting."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 24, definition 0x439c06ffa058f188a7234703c00f53af82ca012a11bd0f45abe67b81d0c4a700, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreihxlw7z6uerqienuyyygh6v6553f2i3hv3d2wl3c3s2j473yqkqpa"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-25",
+      "label": "auto-sentiment-score",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for sentiment-score",
+      "inputs": [
+        "Task inputs required by the immutable auto-sentiment-score definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-sentiment-score result: Auto-proposed from 1 demand signals for sentiment-score"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 25, definition 0x754391749a77f11a1754d941c6fd37fa9ffe34ba076ca5f8cf678d26a2d51a23, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibi3j6fhjltjs6ov57xdg3ovsezakgbm7rx7dcnhspw5aucb4fva4"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-26",
+      "label": "auto-qr-code-decode",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for qr-code-decode",
+      "inputs": [
+        "Task inputs required by the immutable auto-qr-code-decode definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-qr-code-decode result: Auto-proposed from 1 demand signals for qr-code-decode"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 26, definition 0x76e16e542b568a38cb82b7f78f068a9085307937d074f9c68cbc29f51788154b, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibz6v5qmnwbvxk2dc4bvhoavkaz5iuoennvj2iviuak2wr7okykdi"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-27",
+      "label": "auto-xml-to-json",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for xml-to-json",
+      "inputs": [
+        "Task inputs required by the immutable auto-xml-to-json definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-xml-to-json result: Auto-proposed from 1 demand signals for xml-to-json"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 27, definition 0xccae2b86b1015da249e547e349aca507b35d85864b3105617992f42c9f7da0d2, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreidn7mxmarbkdq4yx5y24ms5hi7oujzduogala2eyuqxxeujavahba"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-28",
+      "label": "named-entity-extract",
+      "lane": "discovery",
+      "summary": "Extract named entities such as people, organizations, locations, and dates from text.",
+      "inputs": [
+        "Task inputs required by the immutable named-entity-extract definition."
+      ],
+      "outputs": [
+        "The catalog-described named-entity-extract result: Extract named entities such as people, organizations, locations, and dates from text."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 28, definition 0xfe5b7ba2fbd2a229df229fc769c7428fc85be0507335cbd3882f467cf5b28c33, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreifk4rdowtup4hal2p2y2dgqpk4b4a5zfovgfelagxwjrq4dqbranq"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-29",
+      "label": "json-to-csv",
+      "lane": "discovery",
+      "summary": "Convert an array of JSON objects into CSV text with configurable columns and delimiter.",
+      "inputs": [
+        "Task inputs required by the immutable json-to-csv definition."
+      ],
+      "outputs": [
+        "The catalog-described json-to-csv result: Convert an array of JSON objects into CSV text with configurable columns and delimiter."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 29, definition 0x4a2b27f752fc9256a803f6e542f4814d53e7686de74832fc608a547f4a6bd8ca, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreibkhecz27wyzzu7kiecl7ff2re4tfk6qhbdntijpqtf7nysoesa34"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-30",
+      "label": "image-resize",
+      "lane": "discovery",
+      "summary": "Resize an image to target dimensions with optional aspect-ratio preservation and output format.",
+      "inputs": [
+        "Task inputs required by the immutable image-resize definition."
+      ],
+      "outputs": [
+        "The catalog-described image-resize result: Resize an image to target dimensions with optional aspect-ratio preservation and output format."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 30, definition 0x2f52da785bd8fcc0a5697aa595a017f97c3b7587d09dfd5cc97b0548bde5336b, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreifp25lwzqrc7oclieueodrjtf5yibnh6elvyyj2bkyls7zmjpku5u"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-31",
+      "label": "language-detect",
+      "lane": "discovery",
+      "summary": "Detect the language of a given text and return the language code with a confidence score.",
+      "inputs": [
+        "Task inputs required by the immutable language-detect definition."
+      ],
+      "outputs": [
+        "The catalog-described language-detect result: Detect the language of a given text and return the language code with a confidence score."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 31, definition 0xe0546481c9c5fd7c135d6be8d2b7673e846b986cf94d3ef61b03d682739562fd, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreih4jtsggsskkc35oraae64gp2znk6qfd3b2ax5f4zishv24iwi6ka"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-32",
+      "label": "markdown-to-html",
+      "lane": "discovery",
+      "summary": "Convert Markdown text into sanitized HTML markup.",
+      "inputs": [
+        "Task inputs required by the immutable markdown-to-html definition."
+      ],
+      "outputs": [
+        "The catalog-described markdown-to-html result: Convert Markdown text into sanitized HTML markup."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 32, definition 0x93e1dcac5e388cdd80785f801eab0715d23bc19b5c6cbb24d3381055f49869ca, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreieh53v3vxndxjykn5vyt24dcjodxm6b7qby5nrt7t6tdj2b6yew6m"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-33",
+      "label": "yaml-to-json",
+      "lane": "discovery",
+      "summary": "Parse a YAML document into an equivalent JSON object.",
+      "inputs": [
+        "Task inputs required by the immutable yaml-to-json definition."
+      ],
+      "outputs": [
+        "The catalog-described yaml-to-json result: Parse a YAML document into an equivalent JSON object."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 33, definition 0xff9dd377b1fb68e2563472d41b7c6b0eec15e3b69f0a295d3c1b8d2985f65072, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreiggnfvmmcf4txhfwo74rtjpdttg7utnlan7l4hb72z2xbpozqzr4a"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-34",
+      "label": "auto-image-resize",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for image-resize",
+      "inputs": [
+        "Task inputs required by the immutable auto-image-resize definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-image-resize result: Auto-proposed from 1 demand signals for image-resize"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 34, definition 0x3b36c2ad3a1aa61d042ad8147afa53a5cd4d23411f573e6371b2fd6b10c45c48, version undefined, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://cloudflare-ipfs.com/ipfs/bafkreie424sma6w2mcftydjjsdsvt5yghr5xwxyq2gd6cowuvnorp7ydwy"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-35",
+      "label": "auto-language-detect",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for language-detect",
+      "inputs": [
+        "Task inputs required by the immutable auto-language-detect definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-language-detect result: Auto-proposed from 1 demand signals for language-detect"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 35, definition 0xfda2061c866836e2ecc48536a49f921a80dbf20872405bb845d4b08ed0beaa8a, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreif2c35putkq4ej3ig7ukcds7eegmmpqz3er3phdxst5hyusicn654"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-36",
+      "label": "auto-markdown-to-html",
+      "lane": "discovery",
+      "summary": "Auto-proposed from 1 demand signals for markdown-to-html",
+      "inputs": [
+        "Task inputs required by the immutable auto-markdown-to-html definition."
+      ],
+      "outputs": [
+        "The catalog-described auto-markdown-to-html result: Auto-proposed from 1 demand signals for markdown-to-html"
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 36, definition 0xb0aa356a9c7ccfaefc2f546a364c09e135c28bcfb7da2d34adf6d0f065eadbac, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreiarnlbr4t7qgadbgdxjb5x4ys4tag3u464eykiqi6im4hmvfisuym"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    },
+    {
+      "schema": "agent.bittrees.capability-description.v1",
+      "capabilityId": "skillmesh-skill-37",
+      "label": "smoke-test-skill",
+      "lane": "discovery",
+      "summary": "Run a no-op SkillMesh publish smoke test and return deterministic health metadata.",
+      "inputs": [
+        "Task inputs required by the immutable smoke-test-skill definition."
+      ],
+      "outputs": [
+        "The catalog-described smoke-test-skill result: Run a no-op SkillMesh publish smoke test and return deterministic health metadata."
+      ],
+      "evidencePolicy": "Use live SkillMesh skill 37, definition 0x95bdbc92b99c77840e1d1abc1ef8532ddb2c2a01ae4db96960f6feaf3f202fd1, version 0.2.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "routeHints": [
+        "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
+        "https://ipfs.io/ipfs/bafkreiho4a76kldkupznewubxgmvreretgbajmmrtnwjavfa4t3y37j4au"
+      ],
+      "reviewGate": {
+        "productionMutationAllowed": false,
+        "reviewRequired": true,
+        "reviewPath": "Owning lead review is required, with default coder and researcher validation for substantial work."
+      },
+      "publicAuthority": {
+        "executionAllowed": false,
+        "spendAllowed": false,
+        "claimsApproved": false
+      }
+    }
+  ]
+}
