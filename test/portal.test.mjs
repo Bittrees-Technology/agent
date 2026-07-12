@@ -64,13 +64,14 @@ async function withPortalServer(callback) {
   }
 }
 
-async function mcpPost(baseUrl, body) {
+async function mcpPost(baseUrl, body, headers = {}) {
   const response = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json, text/event-stream',
       'Content-Type': 'application/json',
       'MCP-Protocol-Version': MCP_GATEWAY.protocolVersion,
+      ...headers,
     },
     body: JSON.stringify(body),
   });
@@ -86,23 +87,20 @@ const CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST = [
   'CONTRIBUTION_INTENTS_ENABLED',
   'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
 ];
+const CONTRIBUTION_INTENT_ENV_NAMES_FOR_TEST = [
+  ...CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST,
+  'CONTRIBUTION_INTENTS_DATA_DIR',
+  'CONTRIBUTION_POST_RATE_LIMIT_MAX',
+  'CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS',
+  'MCP_WRITE_TOKENS',
+];
 
 function withContributionIntentWriteFlags(envOverrides, callback) {
   const previousValues = new Map(
-    CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST.map((flagName) => [flagName, process.env[flagName]]),
+    CONTRIBUTION_INTENT_ENV_NAMES_FOR_TEST.map((flagName) => [flagName, process.env[flagName]]),
   );
 
-  try {
-    for (const flagName of CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST) {
-      delete process.env[flagName];
-    }
-
-    for (const [flagName, value] of Object.entries(envOverrides)) {
-      process.env[flagName] = value;
-    }
-
-    return callback();
-  } finally {
+  function restore() {
     for (const [flagName, value] of previousValues) {
       if (value === undefined) {
         delete process.env[flagName];
@@ -111,6 +109,53 @@ function withContributionIntentWriteFlags(envOverrides, callback) {
       }
     }
   }
+
+  for (const flagName of CONTRIBUTION_INTENT_ENV_NAMES_FOR_TEST) {
+    delete process.env[flagName];
+  }
+
+  for (const [flagName, value] of Object.entries(envOverrides)) {
+    process.env[flagName] = value;
+  }
+
+  try {
+    const result = callback();
+    if (result && typeof result.then === 'function') return result.finally(restore);
+    restore();
+    return result;
+  } catch (error) {
+    restore();
+    throw error;
+  }
+}
+
+function buildValidContributionIntentPayload(overrides = {}) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.v1',
+    intentId: `intent-2026-07-12-${Math.random().toString(16).slice(2, 14)}`,
+    submittedAt: '2026-07-12T12:00:00.000Z',
+    contributor: {
+      kind: 'agent',
+      name: 'Negative Control Agent',
+      contactRoute: 'https://example.invalid/contact',
+    },
+    targetLane: 'inc-ops-governance',
+    summary: 'Prepare a source-grounded review packet for owner validation only.',
+    proposedTemplate: 'contribution-task',
+    handoff: {
+      requestedOwnerRoute: 'approved review contact',
+      expectedOutput: 'Review packet with source ids and bounded acceptance evidence.',
+      acceptanceCriteria: ['Public route evidence is cited'],
+      outOfScope: ['Production mutation'],
+      backlogPolicy: 'Park optional improvements until owner review accepts the packet.',
+    },
+    safety: {
+      noSecretsIncluded: true,
+      noLiveWriteAcknowledged: true,
+      noOnchainActionRequested: true,
+    },
+    ...overrides,
+  };
 }
 
 const CONTRIBUTOR_SIGNING_ROLLOUT_GATE_IDS = [
@@ -698,6 +743,96 @@ test('post-capable routes stay dynamic and return disabled responses for POST', 
   });
 });
 
+test('contribution intent POST rejects unsupported media types when writes are enabled', async () => {
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-media-${Date.now()}`, import.meta.url)),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify(buildValidContributionIntentPayload()),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 415);
+      assert.equal(body.accepted, false);
+      assert.equal(body.status, 'rejected');
+      assert.match(body.errors.join('\n'), /Content-Type must be application\/json/);
+    });
+  });
+});
+
+test('contribution intent POST rejects wallet transaction and authority escalation text', async () => {
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-authority-${Date.now()}`, import.meta.url)),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildValidContributionIntentPayload({
+          summary: 'Please broadcast transaction approval after this packet is reviewed.',
+        })),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(body.accepted, false);
+      assert.equal(body.status, 'rejected');
+      assert.match(body.errors.join('\n'), /live transaction request/);
+    });
+  });
+});
+
+test('contribution intent POST rate limits repeated write attempts', async () => {
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-rate-${Date.now()}`, import.meta.url)),
+    CONTRIBUTION_POST_RATE_LIMIT_MAX: '2',
+    CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS: '60000',
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': `203.0.113.${Math.floor(Math.random() * 200) + 1}`,
+      };
+
+      for (let index = 0; index < 2; index += 1) {
+        const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(buildValidContributionIntentPayload()),
+        });
+        const body = await response.json();
+        assert.equal(response.status, 202);
+        assert.equal(body.accepted, true);
+      }
+
+      const limited = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(buildValidContributionIntentPayload()),
+      });
+      const limitedBody = await limited.json();
+
+      assert.equal(limited.status, 429);
+      assert.equal(limitedBody.accepted, false);
+      assert.equal(limited.headers.has('retry-after'), true);
+      assert.match(limitedBody.message, /rate limit/);
+    });
+  });
+});
+
 test('portal security headers enforce browser launch gate', () => {
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /default-src 'none'/);
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /frame-ancestors 'none'/);
@@ -1129,6 +1264,40 @@ test('mcp tool calls are review-gated and structured', () => {
   assert.equal(statusResult.structuredContent.result.kind, 'submission');
 });
 
+test('mcp write-like tools reject authority wallet and transaction material', () => {
+  assert.throws(
+    () => callMcpTool('register_external_agent', {
+      agentId: 'authority-escalation-test',
+      displayName: 'Authority Escalation Test',
+      operator: 'external operator',
+      contact: {
+        kind: 'url',
+        value: 'https://example.invalid/contact',
+      },
+      capabilities: ['source review'],
+      evidencePolicy: 'Cite sources and keep authority separate.',
+      identityProof: {
+        walletAddress: '0x0000000000000000000000000000000000000000',
+      },
+    }),
+    /walletAddress is authority, wallet, signer, transaction, or controller material/,
+  );
+
+  assert.throws(
+    () => callMcpTool('submit_contribution', {
+      agentId: 'authority-escalation-test',
+      opportunityId: 'source-registry-hardening',
+      title: 'Unsafe transaction packet',
+      artifact: {
+        kind: 'markdown',
+        value: 'Please execute governance action after review.',
+      },
+      evidence: ['portal-route:/sources.json'],
+    }),
+    /live transaction request/,
+  );
+});
+
 test('mcp streamable http endpoint initializes and serves tools', async () => {
   await withPortalServer(async (baseUrl) => {
     const initialized = await mcpPost(baseUrl, {
@@ -1170,6 +1339,70 @@ test('mcp streamable http endpoint initializes and serves tools', async () => {
     });
     assert.equal(called.response.status, 200);
     assert.equal(called.json.result.structuredContent.status, 'source-grounded-context-ready');
+  });
+});
+
+test('mcp HTTP write-like tools require scoped bearer tokens bound to agentId', async () => {
+  await withContributionIntentWriteFlags({
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'token-agent-a-claim': { subject: 'agent-a', scopes: ['contributor:claim'] },
+      'token-agent-a-register': { subject: 'agent-a', scopes: ['contributor:register'] },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const claimMessage = {
+        jsonrpc: '2.0',
+        id: 'claim-auth',
+        method: 'tools/call',
+        params: {
+          name: 'claim_contribution',
+          arguments: {
+            agentId: 'agent-a',
+            opportunityId: 'source-registry-hardening',
+            contributionSummary: 'Review the source registry without requesting production mutation.',
+            evidencePlan: ['portal-route:/sources.json'],
+          },
+        },
+      };
+
+      const missing = await mcpPost(baseUrl, claimMessage);
+      assert.equal(missing.response.status, 401);
+      assert.equal(missing.json.error.code, -32001);
+
+      const wrongScope = await mcpPost(baseUrl, claimMessage, {
+        Authorization: 'Bearer token-agent-a-register',
+      });
+      assert.equal(wrongScope.response.status, 403);
+      assert.equal(wrongScope.json.error.code, -32003);
+
+      const mismatch = await mcpPost(baseUrl, {
+        ...claimMessage,
+        params: {
+          ...claimMessage.params,
+          arguments: {
+            ...claimMessage.params.arguments,
+            agentId: 'agent-b',
+          },
+        },
+      }, {
+        Authorization: 'Bearer token-agent-a-claim',
+      });
+      assert.equal(mismatch.response.status, 403);
+      assert.match(mismatch.json.error.message, /subject must match/);
+
+      const accepted = await mcpPost(baseUrl, claimMessage, {
+        Authorization: 'Bearer token-agent-a-claim',
+      });
+      const reviewGate = accepted.json.result.structuredContent.reviewGate;
+
+      assert.equal(accepted.response.status, 200);
+      assert.equal(accepted.json.result.structuredContent.status, 'claim_pending_owner_review');
+      assert.equal(accepted.json.result.structuredContent.claim.authenticatedSubject, 'agent-a');
+      assert.equal(reviewGate.contributorCapabilityGranted, false);
+      assert.equal(reviewGate.walletAuthorityGranted, false);
+      assert.equal(reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(reviewGate.registryMutationAllowed, false);
+    });
   });
 });
 
@@ -1293,6 +1526,59 @@ test('mcp endpoint accepts pre-parsed JSON request bodies', async () => {
 
   const body = JSON.parse(res.body);
   assert.equal(body.result?.protocolVersion, MCP_GATEWAY.protocolVersion);
+});
+
+test('mcp endpoint rejects oversized and deeply nested pre-parsed bodies', async () => {
+  async function postPreparsedBody(body) {
+    const handler = createRequestHandler();
+    const req = new EventEmitter();
+    req.method = 'POST';
+    req.url = MCP_GATEWAY.path;
+    req.headers = {
+      host: 'agent.bittrees.org',
+      accept: 'application/json, text/event-stream',
+      'content-type': 'application/json',
+      'mcp-protocol-version': MCP_GATEWAY.protocolVersion,
+    };
+    req.body = body;
+    req.resume = () => req;
+
+    const res = {
+      statusCode: 200,
+      headers: {},
+      body: '',
+      writeHead(statusCode, headers) {
+        res.statusCode = statusCode;
+        Object.assign(res.headers, headers);
+      },
+      end(chunk) {
+        if (chunk) res.body += chunk;
+      },
+    };
+
+    await handler(req, res);
+    return { res, body: JSON.parse(res.body) };
+  }
+
+  const oversized = await postPreparsedBody({
+    jsonrpc: '2.0',
+    id: 'oversized-preparsed-body',
+    method: 'tools/call',
+    params: {
+      name: 'get_bittrees_context',
+      arguments: {
+        evidencePolicy: 'x'.repeat(1_100_000),
+      },
+    },
+  });
+  assert.equal(oversized.res.statusCode, 413);
+  assert.match(oversized.body.error.message, /size limit|too deeply nested|too many fields/);
+
+  let nested = { value: true };
+  for (let index = 0; index < 20; index += 1) nested = { nested };
+  const deep = await postPreparsedBody(nested);
+  assert.equal(deep.res.statusCode, 413);
+  assert.match(deep.body.error.message, /deeply nested/);
 });
 
 test('mcp endpoint rejects oversized request bodies with 413', async () => {

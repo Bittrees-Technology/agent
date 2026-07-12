@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +21,12 @@ const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
+  readFileSync(new URL('../data/agent-onboarding/capability-descriptions.json', import.meta.url), 'utf8'),
+);
+const ONBOARDING_CONTRIBUTION_WORKFLOW_DATA = JSON.parse(
+  readFileSync(new URL('../data/agent-onboarding/contribution-workflow.json', import.meta.url), 'utf8'),
+);
 const REGISTRY_STATE_PATH = process.env.REGISTRY_STATE_PATH ?? join(PROJECT_ROOT, 'var', 'registry', 'state.json');
 const LIVE_REGISTRY_CONTROL_PLANE = new RegistryControlPlane({ store: new JsonFileRegistryStore(REGISTRY_STATE_PATH) });
 const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
@@ -33,6 +40,17 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   CONTRIBUTION_INTENT_CONTRACT_PATH,
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
+const CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS ?? 60_000);
+const CONTRIBUTION_POST_RATE_LIMIT_MAX = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_MAX ?? 30);
+const CONTRIBUTION_POST_RATE_BUCKETS = new Map();
+const MCP_WRITE_TOOL_SCOPES = Object.freeze({
+  register_external_agent: 'contributor:register',
+  claim_contribution: 'contributor:claim',
+  submit_contribution: 'contributor:submit',
+  respond_to_review_feedback: 'contributor:feedback',
+});
+const PREPARSED_BODY_MAX_DEPTH = 16;
+const PREPARSED_BODY_MAX_PROPERTIES = 5000;
 const AGENT_CONTACT_KIND_VALUES = ['url', 'email', 'ens', 'xmtp', 'github', 'internal-route'];
 // Approved public profiles route contact through the portal, not manager dispatch slugs.
 const PUBLIC_MANAGED_AGENT_CONTACT = Object.freeze({
@@ -1361,6 +1379,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/submission-status',
     '/reputation',
     '/terms-of-use',
+    '/onboarding',
     '/llms.txt',
     '/agents.json',
     '/identity-keys.json',
@@ -1544,6 +1563,17 @@ const MCP_REVIEW_QUEUE = {
 };
 
 const SECRET_FIELD_PATTERN = /(?:private|secret|mnemonic|seed|bearer|oauth|token|cookie|recovery)/i;
+const AUTHORITY_FIELD_PATTERN =
+  /(?:authority|authorization|execution|execute|spend|signer|signature|wallet|transaction|controller|delegation|credential)/i;
+const SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS = [
+  ['private key material', /\b(?:private key|secret key|seed phrase|mnemonic|recovery phrase)\b/i],
+  ['credential material', /\b(?:bearer token|oauth token|api key|session cookie)\b/i],
+  ['raw signature material', /\b(?:raw signature|signed transaction|serialized transaction)\b/i],
+  ['wallet or signer material', /\b(?:wallet private|wallet secret|signer key|safe owner key)\b/i],
+  ['live transaction request', /\b(?:broadcast|submit|send|execute)\s+(?:a\s+)?(?:transaction|tx|safe transaction|governance action)\b/i],
+  ['spending request', /\b(?:spend|transfer|approve|move)\s+(?:funds|tokens|assets|treasury|wallet)\b/i],
+  ['authority escalation request', /\b(?:grant|delegate|approve|authorize)\s+(?:authority|execution|spending|signing|wallet|safe|controller)\b/i],
+];
 
 function textSchema(description, minLength = 1) {
   return { type: 'string', minLength, description };
@@ -1794,6 +1824,10 @@ const MCP_TOOL_BY_NAME = new Map(MCP_CONTRIBUTION_TOOLS.map((tool) => [tool.name
 function reviewGateRecord() {
   return {
     productionMutationAllowed: MCP_GATEWAY.productionMutationAllowed,
+    contributorCapabilityGranted: false,
+    walletAuthorityGranted: false,
+    transactionSubmissionAllowed: false,
+    registryMutationAllowed: false,
     persistenceMode: MCP_GATEWAY.persistenceMode,
     status: 'review_required_before_publication_or_assignment',
     reviewers: ['owning lead', 'implementation validator', 'evidence and claims validator'],
@@ -1832,6 +1866,39 @@ function assertNoSecretFields(value, path = 'arguments') {
     if (nestedValue && typeof nestedValue === 'object') {
       assertNoSecretFields(nestedValue, fieldPath);
     }
+  }
+}
+
+function assertBoundedAuthorityPayload(value, path = 'arguments') {
+  if (value === null || value === undefined) return;
+  if (typeof value === 'string') {
+    for (const [label, pattern] of SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS) {
+      if (pattern.test(value)) {
+        throw invalidToolInput(`${path} contains ${label}; submit a review-only packet without secrets, wallet data, live transaction requests, or authority changes.`);
+      }
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertBoundedAuthorityPayload(item, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    const fieldPath = `${path}.${key}`;
+    const isSafetyAcknowledgment = [
+      'noSecretsIncluded',
+      'noLiveWriteAcknowledged',
+      'noOnchainActionRequested',
+    ].includes(key);
+    if (!isSafetyAcknowledgment && SECRET_FIELD_PATTERN.test(key)) {
+      throw invalidToolInput(`${fieldPath} looks like private credential material and cannot be submitted here.`);
+    }
+    if (!isSafetyAcknowledgment && AUTHORITY_FIELD_PATTERN.test(key) && nestedValue !== false && nestedValue !== null && nestedValue !== '[REDACTED]') {
+      throw invalidToolInput(`${fieldPath} is authority, wallet, signer, transaction, or controller material and requires a separate approved control-plane workflow.`);
+    }
+    assertBoundedAuthorityPayload(nestedValue, fieldPath);
   }
 }
 
@@ -1938,7 +2005,7 @@ function findQueuedRecord(id, preferredKind = 'any') {
   return null;
 }
 
-function callContributionTool(name, args = {}) {
+function callContributionTool(name, args = {}, authContext = null) {
   switch (name) {
     case 'list_contribution_opportunities': {
       const includeReviewRequirements = args.includeReviewRequirements !== false;
@@ -1998,7 +2065,7 @@ function callContributionTool(name, args = {}) {
     }
 
     case 'register_external_agent': {
-      assertNoSecretFields(args);
+      assertBoundedAuthorityPayload(args);
       const agentId = requireText(args, 'agentId');
       const record = createReviewRecord('registrations', 'reg', {
         agentId,
@@ -2009,6 +2076,7 @@ function callContributionTool(name, args = {}) {
         capabilities: args.capabilities,
         evidencePolicy: requireText(args, 'evidencePolicy'),
         identityProof: args.identityProof ?? null,
+        authenticatedSubject: authContext?.subject ?? null,
         publicRegistryMutation: 'blocked_until_approved',
       });
 
@@ -2021,7 +2089,7 @@ function callContributionTool(name, args = {}) {
     }
 
     case 'claim_contribution': {
-      assertNoSecretFields(args);
+      assertBoundedAuthorityPayload(args);
       const opportunityId = requireText(args, 'opportunityId');
       const opportunity = findOpportunity(opportunityId);
       if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
@@ -2032,6 +2100,7 @@ function callContributionTool(name, args = {}) {
         contributionSummary: requireText(args, 'contributionSummary'),
         expectedOutput: optionalText(args, 'expectedOutput') ?? null,
         evidencePlan: Array.isArray(args.evidencePlan) ? args.evidencePlan : [],
+        authenticatedSubject: authContext?.subject ?? null,
         assignmentMutation: 'blocked_until_owner_review',
         opportunityOwner: opportunity.owner,
       });
@@ -2045,7 +2114,7 @@ function callContributionTool(name, args = {}) {
     }
 
     case 'submit_contribution': {
-      assertNoSecretFields(args);
+      assertBoundedAuthorityPayload(args);
       const opportunityId = requireText(args, 'opportunityId');
       const opportunity = findOpportunity(opportunityId);
       if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
@@ -2058,6 +2127,7 @@ function callContributionTool(name, args = {}) {
         artifact: args.artifact,
         evidence: Array.isArray(args.evidence) ? args.evidence : [],
         requestedReviewers: Array.isArray(args.requestedReviewers) ? args.requestedReviewers : [opportunity.owner],
+        authenticatedSubject: authContext?.subject ?? null,
         publicationMutation: 'blocked_until_review_acceptance',
       });
       const attestation = createPendingAttestation(record.id, {
@@ -2089,13 +2159,14 @@ function callContributionTool(name, args = {}) {
     }
 
     case 'respond_to_review_feedback': {
-      assertNoSecretFields(args);
+      assertBoundedAuthorityPayload(args);
       const submissionId = requireText(args, 'submissionId');
       const record = createReviewRecord('feedbackResponses', 'fb', {
         submissionId,
         response: requireText(args, 'response'),
         changes: Array.isArray(args.changes) ? args.changes : [],
         evidence: Array.isArray(args.evidence) ? args.evidence : [],
+        authenticatedSubject: authContext?.subject ?? null,
         reviewerAcceptance: 'pending',
       });
 
@@ -2152,9 +2223,9 @@ function callContributionTool(name, args = {}) {
   }
 }
 
-export function callMcpTool(name, args = {}) {
+export function callMcpTool(name, args = {}, authContext = null) {
   if (!MCP_TOOL_BY_NAME.has(name)) throw invalidToolInput(`Unknown tool: ${name}`);
-  const data = callContributionTool(name, args);
+  const data = callContributionTool(name, args, authContext);
   const structuredContent = publicSafeContent(data);
 
   return {
@@ -3228,6 +3299,43 @@ function getRequestMediaType(req) {
   return getRequestHeader(req, 'content-type').split(';', 1)[0].trim().toLowerCase();
 }
 
+function getRequesterKey(req, routePath) {
+  const forwardedFor = getRequestHeader(req, 'x-forwarded-for').split(',', 1)[0].trim();
+  const address = forwardedFor || req.socket?.remoteAddress || 'unknown';
+  return `${routePath}:${address}`;
+}
+
+function checkContributionPostRateLimit(req, routePath, now = Date.now()) {
+  const maxRequests = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_MAX ?? CONTRIBUTION_POST_RATE_LIMIT_MAX);
+  const windowMs = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS ?? CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS);
+  if (!Number.isFinite(maxRequests) || maxRequests <= 0 || !Number.isFinite(windowMs) || windowMs <= 0) {
+    return { allowed: true };
+  }
+
+  const key = getRequesterKey(req, routePath);
+  const current = CONTRIBUTION_POST_RATE_BUCKETS.get(key);
+  const bucket = current && current.resetAt > now
+    ? current
+    : { count: 0, resetAt: now + windowMs };
+  bucket.count += 1;
+  CONTRIBUTION_POST_RATE_BUCKETS.set(key, bucket);
+
+  if (CONTRIBUTION_POST_RATE_BUCKETS.size > 10_000) {
+    for (const [bucketKey, bucketValue] of CONTRIBUTION_POST_RATE_BUCKETS.entries()) {
+      if (bucketValue.resetAt <= now) CONTRIBUTION_POST_RATE_BUCKETS.delete(bucketKey);
+    }
+  }
+
+  if (bucket.count > maxRequests) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
+    };
+  }
+
+  return { allowed: true };
+}
+
 function shouldRenderContributionIntentHtml(req) {
   return getRequestMediaType(req) === 'application/x-www-form-urlencoded' ||
     getRequestHeader(req, 'accept').toLowerCase().includes('text/html');
@@ -3512,6 +3620,12 @@ function validateContributionIntentRequest(payload) {
     }
   }
 
+  try {
+    assertBoundedAuthorityPayload(payload, 'body');
+  } catch (error) {
+    errors.push(error.message);
+  }
+
   return {
     ok: errors.length === 0,
     errors,
@@ -3758,10 +3872,53 @@ async function persistContributionIntentArtifacts(storagePaths, submissionRecord
   await appendFile(storagePaths.notificationsLogPath, `${JSON.stringify(notificationRecord)}\n`);
 }
 
+function assertPreparsedBodyShape(value, maxBytes, path = 'body', depth = 0, state = { properties: 0 }) {
+  if (depth > PREPARSED_BODY_MAX_DEPTH) {
+    throw Object.assign(new Error('Pre-parsed request body is too deeply nested.'), { statusCode: 413 });
+  }
+  if (Buffer.isBuffer(value)) {
+    if (value.byteLength > maxBytes) throw Object.assign(new Error('Request body exceeds the size limit.'), { statusCode: 413 });
+    return value;
+  }
+  if (typeof value === 'string') {
+    if (Buffer.byteLength(value, 'utf8') > maxBytes) {
+      throw Object.assign(new Error('Request body exceeds the size limit.'), { statusCode: 413 });
+    }
+    return value;
+  }
+  if (value === null || ['number', 'boolean'].includes(typeof value)) return value;
+  if (Array.isArray(value)) {
+    state.properties += value.length;
+    if (state.properties > PREPARSED_BODY_MAX_PROPERTIES) {
+      throw Object.assign(new Error('Pre-parsed request body has too many fields.'), { statusCode: 413 });
+    }
+    value.forEach((item, index) => assertPreparsedBodyShape(item, maxBytes, `${path}[${index}]`, depth + 1, state));
+  } else if (isPlainObject(value)) {
+    state.properties += Object.keys(value).length;
+    if (state.properties > PREPARSED_BODY_MAX_PROPERTIES) {
+      throw Object.assign(new Error('Pre-parsed request body has too many fields.'), { statusCode: 413 });
+    }
+    for (const [key, nestedValue] of Object.entries(value)) {
+      assertPreparsedBodyShape(nestedValue, maxBytes, `${path}.${key}`, depth + 1, state);
+    }
+  } else {
+    throw Object.assign(new Error(`Pre-parsed request body contains an unsupported value at ${path}.`), { statusCode: 400 });
+  }
+
+  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > maxBytes) {
+    throw Object.assign(new Error('Request body exceeds the size limit.'), { statusCode: 413 });
+  }
+  return value;
+}
+
 function readRequestBody(req, maxBytes = 1024 * 1024) {
-  if (typeof req.body === 'string') return Promise.resolve(req.body);
-  if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
-  if (req.body && typeof req.body === 'object') return Promise.resolve(req.body);
+  if (typeof req.body === 'string' || Buffer.isBuffer(req.body) || (req.body && typeof req.body === 'object')) {
+    try {
+      return Promise.resolve(assertPreparsedBodyShape(req.body, maxBytes));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
 
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -3825,6 +3982,39 @@ async function handleContributionIntentPost(
       return sendBody(res, 501, renderContributionIntentDisabledPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
     return sendJson(res, 501, responseBody, includeBody, responseTelemetry);
+  }
+
+  const rateLimit = checkContributionPostRateLimit(req, routePath);
+  if (!rateLimit.allowed) {
+    req.resume?.();
+    const responseBody = buildContributionIntentRejectedResponse(
+      'Contribution intent rejected because this client exceeded the review-intake rate limit.',
+      'Wait before retrying. Repeated submissions do not create contributor rights or review priority.',
+      ['Too many contribution-intent POST requests from the same client.'],
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: 429 };
+    const headers = { 'Retry-After': String(rateLimit.retryAfterSeconds) };
+    if (renderHtml) {
+      return sendBody(res, 429, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry, headers);
+    }
+    return sendJson(res, 429, responseBody, includeBody, responseTelemetry, headers);
+  }
+
+  const mediaType = getRequestMediaType(req);
+  if (mediaType !== 'application/json' && mediaType !== 'application/x-www-form-urlencoded') {
+    req.resume?.();
+    const responseBody = buildContributionIntentRejectedResponse(
+      'Contribution intent rejected because the request Content-Type is not supported.',
+      'Submit application/json or application/x-www-form-urlencoded data that matches the documented request schema.',
+      ['Content-Type must be application/json or application/x-www-form-urlencoded.'],
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: 415 };
+    if (renderHtml) {
+      return sendBody(res, 415, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, 415, responseBody, includeBody, responseTelemetry);
   }
 
   let rawBody = '';
@@ -5373,6 +5563,77 @@ function acceptsMcpPost(req) {
   return accepted.includes('application/json') && accepted.includes('text/event-stream');
 }
 
+function parseMcpWriteTokenConfig() {
+  const raw = process.env.MCP_WRITE_TOKENS;
+  if (!raw) return new Map();
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!isPlainObject(parsed)) return new Map();
+    return new Map(
+      Object.entries(parsed)
+        .filter(([, value]) => isPlainObject(value) && typeof value.subject === 'string' && Array.isArray(value.scopes))
+        .map(([token, value]) => [token, {
+          subject: value.subject,
+          scopes: value.scopes.filter((scope) => typeof scope === 'string'),
+        }]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+function getBearerToken(req) {
+  const authorization = getRequestHeader(req, 'authorization');
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function authError(statusCode, message, data = {}) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.jsonRpcCode = statusCode === 401 ? -32001 : -32003;
+  error.jsonRpcData = data;
+  return error;
+}
+
+function authorizeMcpWriteTool(req, toolName, args = {}) {
+  const requiredScope = MCP_WRITE_TOOL_SCOPES[toolName];
+  if (!requiredScope) return null;
+
+  const token = getBearerToken(req);
+  if (!token) {
+    throw authError(401, 'MCP write-like contribution tools require a bearer token.', {
+      requiredScope,
+    });
+  }
+
+  const tokenRecord = parseMcpWriteTokenConfig().get(token);
+  if (!tokenRecord) {
+    throw authError(401, 'MCP bearer token is not recognized.', {
+      requiredScope,
+    });
+  }
+  if (!tokenRecord.scopes.includes(requiredScope)) {
+    throw authError(403, 'MCP bearer token does not include the required contribution scope.', {
+      requiredScope,
+      grantedScopes: tokenRecord.scopes,
+    });
+  }
+  if (typeof args.agentId === 'string' && args.agentId.trim() !== tokenRecord.subject) {
+    throw authError(403, 'MCP bearer token subject must match arguments.agentId for write-like tools.', {
+      subject: tokenRecord.subject,
+      agentId: args.agentId.trim(),
+    });
+  }
+
+  return {
+    subject: tokenRecord.subject,
+    scopes: tokenRecord.scopes,
+    requiredScope,
+  };
+}
+
 function wantsEventStream(req) {
   return parseAcceptedTypes(req).includes('text/event-stream');
 }
@@ -5477,7 +5738,9 @@ function handleMcpJsonRpcMessage(message, req) {
       const params = message.params ?? {};
       if (typeof params.name !== 'string') throw invalidToolInput('tools/call params.name is required.');
       if (!MCP_TOOL_BY_NAME.has(params.name)) throw invalidToolInput(`Unknown tool: ${params.name}`);
-      return jsonRpcResult(message.id, callMcpTool(params.name, params.arguments ?? {}));
+      const args = params.arguments ?? {};
+      const authContext = authorizeMcpWriteTool(req, params.name, args);
+      return jsonRpcResult(message.id, callMcpTool(params.name, args, authContext));
     }
 
     default:
