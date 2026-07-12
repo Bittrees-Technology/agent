@@ -119,6 +119,7 @@ const CHECKS = [
   { method: 'GET', path: '/llms.txt/', expectedStatus: 301 },
   { method: 'GET', path: '/agents.json' },
   { method: 'GET', path: '/templates.json' },
+  { method: 'GET', path: '/onboarding.json' },
   { method: 'GET', path: '/idacc/releases.json' },
   { method: 'GET', path: '/contribution-intents' },
   { method: 'GET', path: '/gateway/contribution-intents' },

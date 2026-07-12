@@ -3,11 +3,25 @@ import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  JsonFileRegistryStore,
+  RegistryConflictError,
+  RegistryControlPlane,
+  RegistryRejectedError,
+  parseJsonEnvelope,
+} from './registry-control-plane.mjs';
+import {
+  ONBOARDING_CONTRACT_RESPONSE_SCHEMA,
+  buildOnboardingContractsData,
+} from './onboarding-contracts.mjs';
+
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const REGISTRY_STATE_PATH = process.env.REGISTRY_STATE_PATH ?? join(PROJECT_ROOT, 'var', 'registry', 'state.json');
+const LIVE_REGISTRY_CONTROL_PLANE = new RegistryControlPlane({ store: new JsonFileRegistryStore(REGISTRY_STATE_PATH) });
 const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
   'CONTRIBUTION_INTENTS_WRITE_ENABLED',
   'CONTRIBUTION_INTENTS_ENABLED',
@@ -161,12 +175,18 @@ function getContributionIntentStoragePaths() {
 }
 
 function buildContributionIntentSecurityGate() {
-  if (!isContributionIntentsWriteEnabled()) {
-    return CONTRIBUTION_INTENT_LAUNCH_POSTURE;
+  const accepted = isContributionIntentsWriteEnabled();
+
+  if (!accepted) {
+    return {
+      ...CONTRIBUTION_INTENT_LAUNCH_POSTURE,
+      accepted: false,
+    };
   }
 
   return {
     ...CONTRIBUTION_INTENT_LAUNCH_POSTURE,
+    accepted: true,
     mode: 'feature-flag-non-production-write-enabled',
     liveWritesEnabled: true,
     liveWriteReason:
@@ -176,6 +196,10 @@ function buildContributionIntentSecurityGate() {
       'Keep the write flag off for public production traffic until explicit approval.',
     ],
   };
+}
+
+function buildContributionIntakeGate() {
+  return buildContributionIntentSecurityGate();
 }
 
 export function normalizeCanonicalPath(pathname) {
@@ -573,6 +597,38 @@ export const IDENTITY_KEYS_PUBLIC_CONTRACT = {
       description: 'Submit transactions only through separately authorized signer/Safe policy and fresh scope checks.',
     },
   ],
+  rolloutGates: {
+    staging: {
+      status: 'blocked',
+      blocker: 'Pending public staging validation and review-gated approval.',
+      governanceSurface: 'https://gov.bittrees.org',
+      researchSurface: 'https://research.bittrees.org',
+    },
+    backupRestore: {
+      status: 'blocked',
+      blocker: 'Pending documented backup-and-restore rehearsal evidence.',
+      governanceSurface: 'https://gov.bittrees.org',
+      researchSurface: 'https://research.bittrees.org',
+    },
+    canaryFlag: {
+      status: 'blocked',
+      blocker: 'Pending a reviewed canary decision and rollback criteria.',
+      governanceSurface: 'https://gov.bittrees.org',
+      researchSurface: 'https://research.bittrees.org',
+    },
+    observability: {
+      status: 'blocked',
+      blocker: 'Pending public-safe monitoring and incident-evidence review.',
+      governanceSurface: 'https://gov.bittrees.org',
+      researchSurface: 'https://research.bittrees.org',
+    },
+    rollback: {
+      status: 'blocked',
+      blocker: 'Pending reviewed rollback rehearsal and accountable approval.',
+      governanceSurface: 'https://gov.bittrees.org',
+      researchSurface: 'https://research.bittrees.org',
+    },
+  },
   redactionPolicy: {
     publicOnly: ['public keys', 'fingerprints', 'proof hashes', 'timestamps', 'scope summaries', 'audit event ids'],
     neverExpose: [
@@ -1142,9 +1198,12 @@ export const CONTRIBUTION_WORKFLOW = [
   {
     id: 'submit-review-packet',
     step: 'Submit/review packet',
-    route: '/opportunities.json',
-    action: 'Route the packet to the owner named on the opportunity or source record before public reuse.',
-    output: 'owner-reviewed task or blocker',
+    route: CONTRIBUTION_INTENT_CONTRACT_PATH,
+    alternateRoutes: [GATEWAY_CONTRIBUTION_INTENT_PATH, MCP_GATEWAY.path],
+    action:
+      'Queue the packet through the contribution-intent contract, gateway form action, or review-gated MCP tool before public reuse.',
+    output: 'review-queued packet, receipt, owner-reviewed task, or blocker',
+    reviewGate: MCP_GATEWAY.reviewGate,
   },
   {
     id: 'see-status',
@@ -1305,6 +1364,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/templates.json',
     '/sources.json',
     '/opportunities.json',
+    '/onboarding.json',
     CONTRIBUTION_INTENT_CONTRACT_PATH,
     GATEWAY_CONTRIBUTION_INTENT_PATH,
     MCP_GATEWAY.path,
@@ -1331,6 +1391,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/templates.json',
       '/sources.json',
       '/opportunities.json',
+      '/onboarding.json',
       CONTRIBUTION_INTENT_CONTRACT_PATH,
       GATEWAY_CONTRIBUTION_INTENT_PATH,
       '/mcp.json',
@@ -2343,6 +2404,23 @@ const JSON_ROUTES = [
     },
   },
   {
+    path: '/onboarding.json',
+    label: 'Agent onboarding contracts',
+    description:
+      'Versioned onboarding schemas, role-application links, and validating example requests for the seven agent contribution flows.',
+    status: 'prelaunch-onboarding-contract-ready',
+    schema: ONBOARDING_CONTRACT_RESPONSE_SCHEMA,
+    data: () => buildOnboardingContractsData({
+      launchStatus: LAUNCH_STATUS,
+      contributionIntents: {
+        postPaths: Array.from(CONTRIBUTION_INTENT_POST_PATHS),
+        writeGate: buildContributionIntentSecurityGate(),
+      },
+      mcpGateway: MCP_GATEWAY,
+      reviewGate: reviewGateRecord(),
+    }),
+  },
+  {
     path: '/mcp.json',
     label: 'MCP gateway contract',
     description: 'Streamable HTTP MCP endpoint metadata, contribution tool schemas, review gates, and import snippets.',
@@ -2563,6 +2641,54 @@ function renderPageMetadata({ title, description, path, robots = 'noindex,nofoll
     <meta name="twitter:description" content="${escapeHtml(description)}" />`;
 }
 
+function renderOverflowSafeStyles() {
+  return `
+      main,
+      .topline,
+      .hero,
+      .band,
+      form,
+      table,
+      pre,
+      code,
+      .snippet,
+      .import-panel {
+        max-width: 100%;
+      }
+
+      .hero > *,
+      .band > *,
+      form > *,
+      .route-card > *,
+      .snippet > *,
+      .import-panel > * {
+        min-width: 0;
+      }
+
+      table {
+        table-layout: fixed;
+      }
+
+      th,
+      td,
+      code {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      pre {
+        max-width: 100%;
+        overflow: auto;
+      }
+
+      pre code {
+        display: block;
+        max-width: 100%;
+        white-space: pre-wrap;
+      }
+  `;
+}
+
 function renderLaneRows() {
   return CONTRIBUTION_LANES.map(
     (lane) => `
@@ -2638,7 +2764,7 @@ function renderMcpHarnessImportTabs() {
   ).join('');
   const labels = MCP_HARNESS_IMPORT_TABS.map(
     (tab) => `
-      <label for="mcp-tab-${escapeHtml(tab.id)}" role="tab">
+      <label for="mcp-tab-${escapeHtml(tab.id)}" role="tab" aria-controls="mcp-panel-${escapeHtml(tab.id)}">
         <strong>${escapeHtml(tab.label)}</strong>
         <span>${escapeHtml(tab.status)}</span>
       </label>
@@ -2870,6 +2996,8 @@ function renderHumanLookupStyles() {
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
         font-size: 0.9rem;
       }
+
+      ${renderOverflowSafeStyles()}
 
       a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
@@ -3653,8 +3781,9 @@ async function handleContributionIntentPost(
   routePath = CONTRIBUTION_INTENT_CONTRACT_PATH,
 ) {
   const renderHtml = shouldRenderContributionIntentHtml(req);
+  const intakeGate = buildContributionIntakeGate();
 
-  if (!isContributionIntentsWriteEnabled()) {
+  if (!intakeGate.accepted) {
     req.resume?.();
     const responseBody = buildContributionIntentDisabledResponse(routePath);
     const responseTelemetry = { ...telemetry, status: 501 };
@@ -4125,6 +4254,8 @@ export function renderLandingPage() {
         letter-spacing: 0;
       }
 
+      ${renderOverflowSafeStyles()}
+
       .intent-form-shell {
         display: grid;
         gap: 12px;
@@ -4403,6 +4534,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
         font-size: 0.9rem;
       }
+      ${renderOverflowSafeStyles()}
       .snippet {
         margin: 14px 0;
         padding: 14px;
@@ -4416,8 +4548,15 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
       }
       .import-tab-input {
         position: absolute;
-        opacity: 0;
-        pointer-events: none;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
       }
       .import-tab-labels {
         display: grid;
@@ -4471,6 +4610,12 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
       #mcp-tab-cursor:checked ~ .import-tab-labels label[for="mcp-tab-cursor"] {
         border-color: var(--green);
         box-shadow: inset 0 -3px 0 var(--green);
+      }
+      #mcp-tab-codex:focus-visible ~ .import-tab-labels label[for="mcp-tab-codex"],
+      #mcp-tab-claude-desktop:focus-visible ~ .import-tab-labels label[for="mcp-tab-claude-desktop"],
+      #mcp-tab-cursor:focus-visible ~ .import-tab-labels label[for="mcp-tab-cursor"] {
+        outline: 3px solid var(--green);
+        outline-offset: 3px;
       }
       #mcp-tab-codex:checked ~ .import-panels #mcp-panel-codex,
       #mcp-tab-claude-desktop:checked ~ .import-panels #mcp-panel-claude-desktop,
@@ -4777,6 +4922,60 @@ export function renderTermsOfUsePage() {
 </html>`;
 }
 
+const ROLLOUT_GATE_IDS = ['staging', 'backupRestore', 'canaryFlag', 'observability', 'rollback'];
+
+function rolloutGatePublicStrings(value, keys) {
+  if (!isPlainObject(value)) return [];
+
+  const values = [];
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === 'string' || typeof candidate === 'number' || typeof candidate === 'boolean') {
+      values.push(String(candidate));
+    } else if (Array.isArray(candidate)) {
+      values.push(...candidate.filter((item) => (
+        typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+      )).map(String));
+    }
+  }
+  return [...new Set(values.filter((value) => value.trim() !== ''))];
+}
+
+function rolloutGateSummaryItems(rolloutGates) {
+  if (!isPlainObject(rolloutGates)) return '';
+
+  return ROLLOUT_GATE_IDS.map((gateId) => {
+    const gate = isPlainObject(rolloutGates[gateId]) ? rolloutGates[gateId] : {};
+    const status = rolloutGatePublicStrings(gate, ['status', 'state', 'readiness', 'result'])[0] ?? 'not reported';
+    const blockers = rolloutGatePublicStrings(gate, [
+      'blocker',
+      'blockerState',
+      'blockingReason',
+      'blockers',
+      'summary',
+      'decision',
+    ]);
+    const references = rolloutGatePublicStrings(gate, ['reference', 'references', 'surface', 'surfaces', 'targets']);
+    const detail = [
+      `status: ${status}`,
+      ...blockers.map((blocker) => `blocker: ${blocker}`),
+      ...(references.length > 0 ? [`surfaces: ${references.join(', ')}`] : []),
+    ];
+
+    return `<li><code>${escapeHtml(gateId)}</code> — ${escapeHtml(detail.join('; '))}</li>`;
+  }).join('');
+}
+
+function rolloutGateBlockerItems(rolloutGates) {
+  const blockers = rolloutGatePublicStrings(rolloutGates, [
+    'blockerState',
+    'blocker',
+    'blockingReason',
+    'blockers',
+  ]);
+  return blockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join('');
+}
+
 export function renderIdentityKeysPage() {
   const sectionRows = IDENTITY_KEYS_PUBLIC_CONTRACT.sections
     .map(
@@ -4805,6 +5004,20 @@ export function renderIdentityKeysPage() {
   const approvalItems = LIVE_AGENT_REGISTRY.automatedManagement.requiresExplicitApproval
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
+  const rolloutGates = IDENTITY_KEYS_PUBLIC_CONTRACT.rolloutGates;
+  const rolloutGateState = rolloutGatePublicStrings(rolloutGates, [
+    'status',
+    'state',
+    'blockerState',
+    'decision',
+  ])[0] ?? (
+    ROLLOUT_GATE_IDS
+      .map((gateId) => rolloutGatePublicStrings(rolloutGates?.[gateId], ['status', 'state', 'readiness', 'result'])[0])
+      .find((status) => status?.toLowerCase() === 'blocked')
+      ?? 'not reported'
+  );
+  const rolloutGateItems = rolloutGateSummaryItems(rolloutGates);
+  const rolloutBlockerItems = rolloutGateBlockerItems(rolloutGates);
   const pageTitle = 'Identity and keys - agent.bittrees.org';
   const pageDescription = getRouteDescription(
     '/identity-keys',
@@ -4946,6 +5159,8 @@ export function renderIdentityKeysPage() {
         letter-spacing: 0;
       }
 
+      ${renderOverflowSafeStyles()}
+
       a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
       @media (max-width: 820px) {
@@ -4995,6 +5210,16 @@ export function renderIdentityKeysPage() {
           <ul>${automationItems}</ul>
           <p class="lede">Requires explicit approval:</p>
           <ul>${approvalItems}</ul>
+        </div>
+      </section>
+
+      <section class="band" aria-labelledby="rollout-gates-title">
+        <h2 id="rollout-gates-title">Contributor-signing rollout gates</h2>
+        <div>
+          <p class="lede">Blocker state: <code>${escapeHtml(rolloutGateState)}</code></p>
+          ${rolloutBlockerItems ? `<ul>${rolloutBlockerItems}</ul>` : ''}
+          <p class="lede">Gate summary:</p>
+          <ul>${rolloutGateItems}</ul>
         </div>
       </section>
 
@@ -5309,6 +5534,121 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
       includeBody,
       { ...telemetry, status: statusCode },
     );
+  }
+}
+
+function isRegistryApiPath(pathname) {
+  return pathname === '/v1/registry/agents'
+    || pathname === '/v1/registry/heartbeats'
+    || /^\/v1\/registry\/agents\/[^/]+$/.test(pathname);
+}
+
+function registryErrorStatus(error) {
+  if (error instanceof RegistryConflictError || error.code === 'version_conflict') return 409;
+  if (error.code === 'unknown_or_revoked_key' || error.code === 'invalid_signature' || error.code === 'stale_signature') return 401;
+  if (error.code === 'authority_mutation' || error.code === 'key_rotation_requires_approval' || error.code === 'revoked') return 403;
+  return 400;
+}
+
+function registryErrorBody(error) {
+  return {
+    $schema: 'agent.registry.error.v1',
+    error: error.code ?? 'registry_error',
+    message: error.message,
+    ...(error.details?.audit_event_id ? { audit_event_id: error.details.audit_event_id } : {}),
+    ...(error.details?.quarantine_id ? { quarantine_id: error.details.quarantine_id } : {}),
+  };
+}
+
+async function readRegistryEnvelope(req) {
+  const rawBody = await readRequestBody(req, 512 * 1024);
+  if (isPlainObject(rawBody)) return rawBody;
+  return parseJsonEnvelope(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody ?? ''));
+}
+
+async function recordRegistryParseFailure(controlPlane, routeKind, rawBody, error) {
+  const input = { invalid_json: true, route: routeKind, raw_body: String(rawBody ?? '').slice(0, 512 * 1024) };
+  try {
+    if (routeKind === 'heartbeat') await controlPlane.ingestSignedHeartbeat(input);
+    else await controlPlane.writeRegistry(input);
+  } catch {
+    // The control plane deliberately rejects the envelope after appending its
+    // audit/quarantine record; preserve the parser's public error below.
+  }
+  return error;
+}
+
+export async function handleRegistryRequest(
+  req,
+  res,
+  telemetry = { method: req.method ?? 'GET', path: req.url ?? '/v1/registry' },
+  controlPlane = LIVE_REGISTRY_CONTROL_PLANE,
+) {
+  const includeBody = req.method !== 'HEAD';
+  const pathname = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`).pathname;
+  const agentMatch = pathname.match(/^\/v1\/registry\/agents\/([^/]+)$/);
+  const agentId = agentMatch ? decodeURIComponent(agentMatch[1]) : undefined;
+
+  try {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      if (pathname === '/v1/registry/agents') {
+        return sendJson(res, 200, await controlPlane.registryFeed(), includeBody, { ...telemetry, status: 200 });
+      }
+      if (agentId) {
+        const record = await controlPlane.emitCanonicalRecord(agentId);
+        return sendJson(res, 200, record, includeBody, { ...telemetry, status: 200 });
+      }
+      return sendJson(res, 404, registryErrorBody(new Error('registry route not found')), includeBody, { ...telemetry, status: 404 });
+    }
+
+    if (req.method !== 'PUT' && req.method !== 'POST') {
+      req.resume?.();
+      return sendJson(res, 405, {
+        ...registryErrorBody(Object.assign(new Error('registry route method is not allowed'), { code: 'method_not_allowed' })),
+        allowedMethods: pathname === '/v1/registry/heartbeats' ? ['POST'] : ['GET', 'HEAD', 'PUT'],
+      }, includeBody, { ...telemetry, status: 405 }, { Allow: pathname === '/v1/registry/heartbeats' ? 'GET, HEAD, POST' : 'GET, HEAD, PUT' });
+    }
+
+    const mediaType = String(req.headers['content-type'] ?? '').toLowerCase();
+    if (!mediaType.includes('application/json')) {
+      req.resume?.();
+      return sendJson(res, 415, registryErrorBody(Object.assign(new Error('Content-Type must be application/json'), { code: 'unsupported_media_type' })), includeBody, { ...telemetry, status: 415 });
+    }
+
+    const isHeartbeat = pathname === '/v1/registry/heartbeats';
+    if ((!isHeartbeat && !agentId) || (isHeartbeat && req.method !== 'POST') || (!isHeartbeat && req.method !== 'PUT')) {
+      req.resume?.();
+      return sendJson(res, 405, registryErrorBody(Object.assign(new Error('registry route method is not allowed'), { code: 'method_not_allowed' })), includeBody, { ...telemetry, status: 405 });
+    }
+
+    let rawBody;
+    let payload;
+    try {
+      rawBody = await readRequestBody(req, 512 * 1024);
+      payload = isPlainObject(rawBody)
+        ? rawBody
+        : parseJsonEnvelope(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody ?? ''));
+    } catch (error) {
+      await recordRegistryParseFailure(controlPlane, isHeartbeat ? 'heartbeat' : 'registry_write', rawBody, error);
+      const statusCode = error.statusCode ?? (error.code === 'invalid_json' || error.code === 'duplicate_json_key' ? 400 : 413);
+      return sendJson(res, statusCode, registryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
+    }
+
+    if (!isHeartbeat) {
+      const submittedAgentId = payload?.agent_id ?? payload?.agentId;
+      if (submittedAgentId !== agentId) {
+        const error = Object.assign(new Error('agent_id must match the URL path'), { code: 'agent_binding_mismatch' });
+        return sendJson(res, 400, registryErrorBody(error), includeBody, { ...telemetry, status: 400 });
+      }
+    }
+
+    const result = isHeartbeat
+      ? await controlPlane.ingestSignedHeartbeat(payload)
+      : await controlPlane.writeRegistry(payload);
+    return sendJson(res, 200, result, includeBody, { ...telemetry, status: 200 });
+  } catch (error) {
+    const statusCode = registryErrorStatus(error);
+    return sendJson(res, statusCode, registryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
   }
 }
 

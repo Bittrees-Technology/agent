@@ -15,6 +15,7 @@ const routeChecks = [
   { path: '/templates.json', kind: 'json' },
   { path: '/sources.json', kind: 'json' },
   { path: '/opportunities.json', kind: 'json' },
+  { path: '/onboarding.json', kind: 'json' },
   { path: '/contribution-intents', kind: 'json' },
   { path: '/gateway/contribution-intents', kind: 'json' },
   { path: '/mcp', kind: 'html' },

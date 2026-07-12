@@ -23,6 +23,7 @@ The portal is intentionally noindex until the source registry and public Bittree
   - `/templates.json`
   - `/sources.json`
   - `/opportunities.json`
+  - `/onboarding.json`
   - `/mcp.json`
   - `/submission-status.json`
   - `/reputation.json`
@@ -71,6 +72,10 @@ The gateway supports MCP protocol version `2025-06-18` and exposes these tools:
 Write-like tools are review-gated stubs backed by process-local queue records. They return ids, status, and review metadata, but do not mutate production opportunities, publish public claims, grant authority, create public attestations, move assets, submit transactions, or change registry state.
 
 Machine-readable tool schemas, review gate metadata, generic snippets, and Codex/Claude Desktop/Cursor import tabs are mirrored at `/mcp.json`. Browser documentation is available at both `/mcp` and `/mcp-docs`.
+
+## Onboarding contracts
+
+`/onboarding.json` publishes the Plan `goal_plan_rzit49` onboarding contract: structured capability-description, contribution-workflow, and role-application-link JSON Schemas plus seven onboarding flow contracts. Each flow includes two validating example requests. The route is read-only and keeps the same noindex/nofollow launch gate, contribution-intent write gate, and MCP review-gate posture as the rest of the portal.
 
 Generic MCP client entry:
 
@@ -207,6 +212,7 @@ The build writes:
 - `dist/templates.json`
 - `dist/sources.json`
 - `dist/opportunities.json`
+- `dist/onboarding.json`
 - `dist/mcp.json`
 - `dist/submission-status.json`
 - `dist/reputation.json`

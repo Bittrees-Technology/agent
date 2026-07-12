@@ -47,6 +47,7 @@ import {
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
 } from '../src/portal.mjs';
+import { ONBOARDING_FLOW_CONTRACTS } from '../src/onboarding-contracts.mjs';
 
 async function withPortalServer(callback) {
   const server = createServer(createRequestHandler());
@@ -109,6 +110,33 @@ function withContributionIntentWriteFlags(envOverrides, callback) {
         process.env[flagName] = value;
       }
     }
+  }
+}
+
+const CONTRIBUTOR_SIGNING_ROLLOUT_GATE_IDS = [
+  'staging',
+  'backupRestore',
+  'canaryFlag',
+  'observability',
+  'rollback',
+];
+
+const PUBLIC_ROLLOUT_GATE_REDACTION_PATTERN = /rawPrivateKey|privateKey|private key|secretKey|secret key|mnemonic|seedPhrase|seed phrase|bearerToken|bearer token|oauthToken|sessionCookie|rawSignature/i;
+
+function assertContributorSigningRolloutGates(gates) {
+  assert.ok(gates && typeof gates === 'object' && !Array.isArray(gates), 'rolloutGates must be an object');
+  assert.deepEqual(
+    Object.keys(gates).sort(),
+    [...CONTRIBUTOR_SIGNING_ROLLOUT_GATE_IDS].sort(),
+    'rolloutGates must expose the complete contributor-signing gate set',
+  );
+
+  for (const gateId of CONTRIBUTOR_SIGNING_ROLLOUT_GATE_IDS) {
+    const serializedGate = JSON.stringify(gates[gateId]);
+    assert.equal(typeof gates[gateId], 'object', `${gateId} rollout gate must be an object`);
+    assert.match(serializedGate, /gov\.bittrees\.org/, `${gateId} must reference gov.bittrees.org`);
+    assert.match(serializedGate, /research\.bittrees\.org/, `${gateId} must reference research.bittrees.org`);
+    assert.doesNotMatch(serializedGate, PUBLIC_ROLLOUT_GATE_REDACTION_PATTERN, `${gateId} must not expose secret/key material`);
   }
 }
 
@@ -226,6 +254,84 @@ function assertPublicContentSafe(label, value) {
   }
 }
 
+function schemaTypeMatches(expectedType, value) {
+  if (expectedType === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (expectedType === 'array') return Array.isArray(value);
+  if (expectedType === 'integer') return Number.isInteger(value);
+  return typeof value === expectedType;
+}
+
+function validateSchemaValue(schema, value, path = '$') {
+  const errors = [];
+
+  if (!schema || typeof schema !== 'object') return errors;
+
+  if (schema.anyOf) {
+    const branchErrors = schema.anyOf.map((branch) => validateSchemaValue(branch, value, path));
+    if (branchErrors.some((branch) => branch.length === 0)) return errors;
+    return [`${path} did not match any allowed schema branch: ${branchErrors.flat().join('; ')}`];
+  }
+
+  if (Object.hasOwn(schema, 'const') && value !== schema.const) {
+    errors.push(`${path} expected const ${JSON.stringify(schema.const)} but received ${JSON.stringify(value)}`);
+  }
+
+  if (schema.enum && !schema.enum.includes(value)) {
+    errors.push(`${path} expected one of ${JSON.stringify(schema.enum)} but received ${JSON.stringify(value)}`);
+  }
+
+  if (schema.type) {
+    const allowedTypes = Array.isArray(schema.type) ? schema.type : [schema.type];
+    if (!allowedTypes.some((type) => schemaTypeMatches(type, value))) {
+      errors.push(`${path} expected type ${allowedTypes.join('|')} but received ${Array.isArray(value) ? 'array' : typeof value}`);
+      return errors;
+    }
+  }
+
+  if (typeof value === 'string') {
+    if (schema.minLength !== undefined && value.length < schema.minLength) {
+      errors.push(`${path} shorter than minLength ${schema.minLength}`);
+    }
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) {
+      errors.push(`${path} longer than maxLength ${schema.maxLength}`);
+    }
+    if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
+      errors.push(`${path} did not match pattern ${schema.pattern}`);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems) {
+      errors.push(`${path} shorter than minItems ${schema.minItems}`);
+    }
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) {
+      errors.push(`${path} longer than maxItems ${schema.maxItems}`);
+    }
+    if (schema.items) {
+      value.forEach((item, index) => {
+        errors.push(...validateSchemaValue(schema.items, item, `${path}[${index}]`));
+      });
+    }
+  }
+
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    for (const requiredField of schema.required ?? []) {
+      if (!Object.hasOwn(value, requiredField)) errors.push(`${path}.${requiredField} is required`);
+    }
+
+    const properties = schema.properties ?? {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (properties[key]) {
+        errors.push(...validateSchemaValue(properties[key], nestedValue, `${path}.${key}`));
+      } else if (schema.additionalProperties === false) {
+        errors.push(`${path}.${key} is not an allowed property`);
+      }
+    }
+  }
+
+  return errors;
+}
+
 test('llms.txt is a plain-text agent entry point', () => {
   const llms = buildLlmsTxt();
 
@@ -254,6 +360,42 @@ test('json routes are not placeholder success payloads', () => {
     assert.notEqual(response.status, 'placeholder', definition.path);
     assert.notEqual(response.data.status, 'placeholder', definition.path);
     assert.equal(response.route, definition.path);
+  }
+});
+
+test('onboarding route publishes schemas and validating example requests for all flows', () => {
+  const onboardingRoute = JSON_ROUTE_MAP.get('/onboarding.json');
+  const response = buildJsonResponse(onboardingRoute, '2026-07-06T00:00:00.000Z');
+
+  assert.equal(response.status, 'prelaunch-onboarding-contract-ready');
+  assert.equal(response.data.goalId, 'goal_plan_rzit49');
+  assert.equal(response.data.capabilityDescriptionSchema.$id.endsWith('/capability-description.v1.json'), true);
+  assert.equal(response.data.contributionWorkflowItemSchema.$id.endsWith('/contribution-workflow-item.v1.json'), true);
+  assert.equal(response.data.roleApplicationLinkSchema.$id.endsWith('/role-application-link.v1.json'), true);
+  assert.equal(response.data.flows.length, 7);
+  assert.equal(response.data.guardBehavior.contributionIntents.writeGate.liveWritesEnabled, false);
+  assert.equal(response.data.guardBehavior.contributionIntents.writeGate.accepted, false);
+  assert.equal(response.data.guardBehavior.mcpReviewGate.productionMutationAllowed, false);
+  assert.equal(response.data.guardBehavior.mcpProductionMutationAllowed, false);
+
+  for (const flow of response.data.flows) {
+    assert.equal(flow.exampleRequests.length, 2, `${flow.id} should ship exactly two example requests`);
+    assert.ok(flow.requestSchema.$id, `${flow.id} should publish a request schema id`);
+    assert.ok(flow.failureStates.length > 0, `${flow.id} should document failure states`);
+  }
+});
+
+test('onboarding example requests validate against committed flow schemas', () => {
+  assert.equal(ONBOARDING_FLOW_CONTRACTS.length, 7);
+
+  for (const flow of ONBOARDING_FLOW_CONTRACTS) {
+    assert.equal(flow.exampleRequests.length, 2, `${flow.id} should have two validation examples`);
+
+    for (const example of flow.exampleRequests) {
+      const errors = validateSchemaValue(flow.requestSchema, example.request);
+
+      assert.deepEqual(errors, [], `${flow.id}/${example.id} failed schema validation`);
+    }
   }
 });
 
@@ -306,6 +448,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
+  assert.ok(assetPaths.has('onboarding.json'));
   assert.equal(assetPaths.has('contribution-intents'), false);
   assert.equal(assetPaths.has('gateway/contribution-intents'), false);
   assert.equal(assetPaths.has('mcp/index.html'), false);
@@ -393,6 +536,24 @@ test('landing contribution intent CTA copy follows write flag posture', () => {
     assert.match(html, /local review record and receipt/);
     assert.match(html, /<button type="submit">Submit contribution intent<\/button>/);
     assert.doesNotMatch(html, /<button type="submit">Prepare offline contribution packet<\/button>/);
+  });
+});
+
+test('contribution intent contract security gate tracks the write flag', () => {
+  const contributionIntentRoute = JSON_ROUTE_MAP.get('/contribution-intents');
+
+  withContributionIntentWriteFlags({}, () => {
+    const response = buildJsonResponse(contributionIntentRoute, '2026-07-06T00:00:00.000Z');
+
+    assert.equal(response.data.contract.securityGate.accepted, false);
+    assert.equal(response.data.contract.securityGate.liveWritesEnabled, false);
+  });
+
+  withContributionIntentWriteFlags({ CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true' }, () => {
+    const response = buildJsonResponse(contributionIntentRoute, '2026-07-06T00:00:00.000Z');
+
+    assert.equal(response.data.contract.securityGate.accepted, true);
+    assert.equal(response.data.contract.securityGate.liveWritesEnabled, true);
   });
 });
 
@@ -586,9 +747,32 @@ test('identity and keys route exposes public contract without secret fields', ()
   assert.match(serialized, /blocked-without-explicit-controller-or-safe-approval/);
 });
 
+test('identity and keys JSON exposes the contributor-signing rollout gates with public references', () => {
+  const identityRoute = JSON_ROUTE_MAP.get('/identity-keys.json');
+  const response = buildJsonResponse(identityRoute, '2026-07-06T00:00:00.000Z');
+  const rolloutGates = response.data.identityKeys.rolloutGates;
+
+  assertContributorSigningRolloutGates(rolloutGates);
+});
+
+test('identity and keys HTML renders rollout-gate summary and blocker state without secret material', () => {
+  const html = renderIdentityKeysPage();
+
+  assert.match(html, /rollout[- ]gate|gate summary/i);
+  assert.match(html, /blocker[- ]state/i);
+
+  for (const gateId of CONTRIBUTOR_SIGNING_ROLLOUT_GATE_IDS) {
+    const renderedGateLabel = gateId.replace(/[A-Z]/g, (letter) => `[- /_]?${letter.toLowerCase()}`);
+    assert.match(html, new RegExp(renderedGateLabel, 'i'), `${gateId} gate should be rendered`);
+  }
+
+  assert.doesNotMatch(html, PUBLIC_ROLLOUT_GATE_REDACTION_PATTERN);
+});
+
 test('agents route advertises prelaunch registry management rather than manual-only intake', () => {
   const agentsRoute = JSON_ROUTE_MAP.get('/agents.json');
   const response = buildJsonResponse(agentsRoute, '2026-07-06T00:00:00.000Z');
+  const submitStep = response.data.contributionWorkflow.find((step) => step.id === 'submit-review-packet');
 
   assert.equal(response.status, 'prelaunch-registry-under-review');
   assert.equal(response.data.registryManagement.status, LIVE_AGENT_REGISTRY.status);
@@ -596,6 +780,8 @@ test('agents route advertises prelaunch registry management rather than manual-o
   assert.equal(response.data.intakePolicy.currentState, REGISTRY_PROFILE_PUBLICATION_NOTICE);
   assert.equal(response.data.identityKeys.route, '/identity-keys.json');
   assert.equal(response.data.contributionWorkflow.length, CONTRIBUTION_WORKFLOW.length);
+  assert.equal(submitStep.route, '/contribution-intents');
+  assert.deepEqual(submitStep.alternateRoutes, ['/gateway/contribution-intents', '/mcp']);
   assert.equal(response.data.agents.length, APPROVED_AGENT_PROFILES.length);
   assert.ok(response.data.agents.length > 0);
   assert.ok(
@@ -678,8 +864,10 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/reputation'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms-of-use'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding.json'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/sources.json'));
+  assert.ok(response.data.monitoring.schemaValidity.routes.includes('/onboarding.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/submission-status.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/reputation.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/terms-of-use.json'));
@@ -840,9 +1028,28 @@ test('mcp docs render Codex Claude Desktop and Cursor import tabs', () => {
   assert.match(html, /mcp-stdio-proxy\.mjs/);
   assert.match(html, /Cursor/);
   assert.match(html, /\.cursor\/mcp\.json/);
+  assert.match(html, /clip-path: inset\(50%\)/);
+  assert.match(html, /#mcp-tab-codex:focus-visible/);
+  assert.match(html, /aria-controls="mcp-panel-codex"/);
   assert.match(docsHtml, /<title>MCP docs - agent\.bittrees\.org<\/title>/);
   assert.match(docsHtml, /Human-readable setup documentation/);
   assert.match(docsHtml, /mcp-tab-codex/);
+});
+
+test('html pages constrain wide tables and code blocks', () => {
+  const pages = [
+    renderLandingPage(),
+    renderMcpGatewayPage(),
+    renderSubmissionStatusPage(),
+    renderReputationPage(),
+    renderIdentityKeysPage(),
+  ];
+
+  for (const html of pages) {
+    assert.match(html, /table-layout: fixed/);
+    assert.match(html, /overflow-wrap: anywhere/);
+    assert.match(html, /pre code \{/);
+  }
 });
 
 test('human status and reputation views render lookup results and caveats', () => {
