@@ -110,6 +110,9 @@ export const PORTAL_SECURITY_HEADERS = {
     "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests",
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
 };
 
 export const LAUNCH_STATUS = {
@@ -2638,7 +2641,34 @@ function renderPageMetadata({ title, description, path, robots = 'noindex,nofoll
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
-    <meta name="twitter:description" content="${escapeHtml(description)}" />`;
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <style>
+      .skip-link {
+        position: fixed;
+        z-index: 1000;
+        top: 8px;
+        left: 8px;
+        padding: 10px 14px;
+        color: #17201c;
+        background: #ffffff;
+        border: 2px solid #1f6b4f;
+        transform: translateY(-160%);
+      }
+
+      .skip-link:focus { transform: translateY(0); }
+
+      :where(a, button, input, select, textarea):focus-visible {
+        outline: 3px solid #1f6b4f;
+        outline-offset: 3px;
+      }
+
+      .error-summary {
+        border-left: 4px solid #9b2c2c;
+        padding: 12px 16px;
+        background: #fff5f5;
+        color: #571515;
+      }
+    </style>`;
 }
 
 function renderOverflowSafeStyles() {
@@ -3054,10 +3084,10 @@ function renderContributionIntentForm(payload = {}) {
   }));
 
   return `<div class="intent-form-shell">
-    <p class="form-notice">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
-    <p class="form-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
-    <p class="form-notice">${escapeHtml(ctaCopy.formNotice)}</p>
-    <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post">
+    <p class="form-notice" id="intent-rights-notice">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
+    <p class="form-notice" id="intent-privacy-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
+    <p class="form-notice" id="intent-write-notice">${escapeHtml(ctaCopy.formNotice)}</p>
+    <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post" aria-describedby="intent-rights-notice intent-privacy-notice intent-write-notice">
     <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
     <div class="form-grid">
       <label>
@@ -3610,7 +3640,8 @@ function renderContributionIntentPage({ title, heading, lead, body, path = CONTR
     ${renderPageMetadata({ title: pageTitle, description: lead, path })}
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <p><a href="/">agent.bittrees.org</a></p>
       <h1>${escapeHtml(heading)}</h1>
       <p>${escapeHtml(lead)}</p>
@@ -3655,7 +3686,10 @@ function renderContributionIntentValidationPage(response, payload = {}) {
     heading: 'Check the submission',
     lead: response.message,
     path: response.route,
-    body: `<ul>${errorItems}</ul>${renderContributionIntentForm(payload)}`,
+    body: `<section class="error-summary" role="alert" aria-labelledby="intent-error-title" tabindex="-1">
+      <h2 id="intent-error-title">There is a problem with the submission</h2>
+      <ul>${errorItems}</ul>
+    </section>${renderContributionIntentForm(payload)}`,
   });
 }
 
@@ -4357,7 +4391,8 @@ export function renderLandingPage() {
     </style>
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <header class="topline">
         <p class="brand">agent.bittrees.org</p>
         <span class="status">${escapeHtml(LAUNCH_STATUS.status)}</span>
@@ -4376,9 +4411,9 @@ export function renderLandingPage() {
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
         </div>
-        <div class="action-grid" aria-label="Machine-readable routes">
+        <nav class="action-grid" aria-label="Machine-readable routes">
           ${renderRouteCards()}
-        </div>
+        </nav>
       </section>
 
       <section class="band" aria-labelledby="workflow-title">
@@ -4637,7 +4672,8 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
     </style>
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <nav class="topnav" aria-label="MCP portal routes">
@@ -4727,7 +4763,8 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <span class="status">human-view-ready</span>
@@ -4751,7 +4788,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
         <form method="get" action="/submission-status">
           <label>
             Record id
-            <input name="id" value="${escapeHtml(id)}" placeholder="source-registry-hardening or sub_..." />
+            <input type="search" name="id" value="${escapeHtml(id)}" placeholder="source-registry-hardening or sub_..." />
           </label>
           <label>
             Kind
@@ -4815,7 +4852,8 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <span class="status">human-view-ready</span>
@@ -4838,7 +4876,7 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
         <form method="get" action="/reputation">
           <label>
             Agent id
-            <input name="agentId" value="${escapeHtml(agentId)}" placeholder="idacc-default-lead" />
+            <input type="search" name="agentId" value="${escapeHtml(agentId)}" placeholder="idacc-default-lead" />
           </label>
           <button type="submit">Check</button>
         </form>
@@ -4884,7 +4922,8 @@ export function renderTermsOfUsePage() {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <span class="status">${escapeHtml(termsStatus.status)}</span>
@@ -5172,7 +5211,8 @@ export function renderIdentityKeysPage() {
     </style>
   </head>
   <body>
-    <main>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <span class="status">${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.status)}</span>

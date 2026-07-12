@@ -671,6 +671,14 @@ try {
     failed += 1;
     console.error('  FAIL: invalid gateway form POST did not re-render the gateway form action.');
   }
+  if (!invalidFormRes.body.includes('class="error-summary" role="alert"')) {
+    failed += 1;
+    console.error('  FAIL: invalid gateway form POST did not expose an accessible error summary.');
+  }
+  if (!invalidFormRes.body.includes('aria-describedby="intent-rights-notice intent-privacy-notice intent-write-notice"')) {
+    failed += 1;
+    console.error('  FAIL: invalid gateway form POST did not associate the form with its safety notices.');
+  }
   checkHardeningHeaders(invalidFormRes.headers, 'invalid gateway form POST /gateway/contribution-intents');
 
   const formReq = mockRequest({

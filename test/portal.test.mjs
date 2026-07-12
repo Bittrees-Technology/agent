@@ -703,6 +703,26 @@ test('portal security headers enforce browser launch gate', () => {
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /frame-ancestors 'none'/);
   assert.equal(PORTAL_SECURITY_HEADERS['X-Frame-Options'], 'DENY');
   assert.equal(PORTAL_SECURITY_HEADERS['Referrer-Policy'], 'no-referrer');
+  assert.equal(PORTAL_SECURITY_HEADERS['Permissions-Policy'], 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
+  assert.equal(PORTAL_SECURITY_HEADERS['Cross-Origin-Opener-Policy'], 'same-origin');
+  assert.equal(PORTAL_SECURITY_HEADERS['Cross-Origin-Resource-Policy'], 'same-origin');
+});
+
+test('human pages expose a keyboard skip target and visible focus treatment', () => {
+  const pages = [
+    renderLandingPage(),
+    renderMcpGatewayPage(),
+    renderSubmissionStatusPage(),
+    renderReputationPage(),
+    renderIdentityKeysPage(),
+    renderTermsOfUsePage(),
+  ];
+
+  for (const html of pages) {
+    assert.match(html, /class="skip-link" href="#main-content"/);
+    assert.match(html, /<main id="main-content">/);
+    assert.match(html, /:where\(a, button, input, select, textarea\):focus-visible/);
+  }
 });
 
 test('vercel catch-all headers mirror the portal launch gate', () => {
