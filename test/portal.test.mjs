@@ -40,6 +40,7 @@ import {
   buildStaticAssets,
   callMcpTool,
   createRequestHandler,
+  handleRegistryRequest,
   renderIdentityKeysPage,
   renderLandingPage,
   renderMcpDocsPage,
@@ -1211,6 +1212,50 @@ test('public registry feed route is readable and keeps registry writes unavailab
     assert.equal(writeResponse.status, 405);
     assert.equal(writeBody.error, 'method_not_allowed');
   });
+});
+
+test('heartbeats route sanitizes unexpected filesystem failures instead of leaking them', async () => {
+  const filesystemFailure = Object.assign(
+    new Error("ENOENT: no such file or directory, mkdir '/var/task/var'"),
+    { code: 'ENOENT', errno: -2, syscall: 'mkdir', path: '/var/task/var' },
+  );
+  const brokenControlPlane = {
+    ingestSignedHeartbeat() {
+      throw filesystemFailure;
+    },
+  };
+
+  const req = new EventEmitter();
+  req.method = 'POST';
+  req.url = '/v1/registry/heartbeats';
+  req.headers = { host: 'agent.bittrees.org', 'content-type': 'application/json' };
+  req.body = {};
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  await handleRegistryRequest(req, res, undefined, brokenControlPlane);
+
+  assert.equal(res.statusCode, 500);
+  assert.doesNotMatch(res.body, /ENOENT/);
+  assert.doesNotMatch(res.body, /var\/task/);
+  assert.doesNotMatch(res.body, /mkdir/);
+
+  const body = JSON.parse(res.body);
+  assert.equal(body.$schema, 'agent.registry.error.v1');
+  assert.equal(body.error, 'internal_error');
+  assert.doesNotMatch(body.message, /ENOENT|var\/task|mkdir/);
 });
 
 test('workflow registration route requires authorized bearer token and queues review records', async () => {

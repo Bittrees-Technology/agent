@@ -8,6 +8,7 @@ import {
   JsonFileRegistryStore,
   RegistryConflictError,
   RegistryControlPlane,
+  RegistryError,
   RegistryRejectedError,
   parseJsonEnvelope,
 } from './registry-control-plane.mjs';
@@ -6334,8 +6335,17 @@ export async function handleRegistryRequest(
       : await controlPlane.writeRegistry(payload);
     return sendJson(res, 200, result, includeBody, { ...telemetry, status: 200 });
   } catch (error) {
-    const statusCode = registryErrorStatus(error);
-    return sendJson(res, statusCode, registryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
+    if (error instanceof RegistryError) {
+      const statusCode = registryErrorStatus(error);
+      return sendJson(res, statusCode, registryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
+    }
+    console.error('Registry request failed unexpectedly.');
+    const body = {
+      $schema: 'agent.registry.error.v1',
+      error: 'internal_error',
+      message: 'The registry request could not be processed. Try again later.',
+    };
+    return sendJson(res, 500, body, includeBody, { ...telemetry, status: 500 });
   }
 }
 
