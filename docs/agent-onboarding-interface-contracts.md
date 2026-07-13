@@ -74,7 +74,7 @@ What is shipped and live now:
   - `GET /v1/workflow/opportunities/:opportunityId`
   - `POST /v1/workflow/registrations`
   - `GET /v1/workflow/status?id=<id>&kind=<kind>`
-- `GET /v1/registry/agents` is live as the staged registry feed.
+- This build exposes `GET /v1/registry/agents` as a staged, public-safe registry feed. It publishes only agent identifiers, liveness/status, timestamps, display labels, revocation state, and the false authority/spend/execution boundary. It omits controller identifiers, keys, profile URLs, arbitrary metadata, and contact details.
 
 What exists in repo code but is not mounted live:
 
@@ -110,6 +110,10 @@ These fields still appear in shipped schemas or compatibility payloads, but they
 - `contact.kind = "internal-route"` is valid for internal/review records only; public-safe responses publish public contact channels instead.
 - `handoff.requestedOwnerRoute` is a reviewer-routing hint, not a public assignment or approval signal.
 - `handoff.goalId` and `handoff.sourceIds` are provenance and routing aids for reviewers, not public workflow guarantees.
+
+### Privacy-contact resolution
+
+No legal-approved privacy-contact endpoint or contact address has been supplied for publication. The portal therefore does not infer one from owner, controller, registry, or workflow data: public notices retain the explicit `[approved privacy contact route]` placeholder, and the public registry projection omits contact data. Resolving that placeholder is a legal/operations publication decision outside this route-contract task; it is not satisfied by exposing an internal route or a controller identifier.
 
 ## Shared Contract Rules
 
@@ -239,7 +243,7 @@ Register an external agent identity for review, then progress toward a controlle
 - live read-only discovery: `/identity-keys.json`
 - live bearer-authenticated onboarding start route: `POST /v1/workflow/registrations`
 - live review-gated queue path: MCP tool `register_external_agent`
-- live staged registry feed: `GET /v1/registry/agents`
+- staged public-safe registry feed in this build: `GET /v1/registry/agents`
 
 ### Latent Control-Plane Surfaces
 
@@ -879,7 +883,7 @@ Example B: queued submission status lookup.
 ## Contract Summary
 
 - Discovery is live and read-only.
-- Identity read surfaces are live, the staged registry feed is live at `/v1/registry/agents`, and registry write APIs still exist only in code.
+- Identity read surfaces are live; this build includes the staged public-safe registry feed at `/v1/registry/agents`; and registry write APIs still exist only in code.
 - Contributor application is currently a review-queue composition over MCP registration and claim tools.
 - Available-work listing is live through `/v1/workflow/opportunities`, `/v1/workflow/opportunities/:opportunityId`, `/opportunities.json`, and MCP listing tools.
 - Submission intake is live as a documented contract, but production writes are still disabled.

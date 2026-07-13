@@ -304,6 +304,38 @@ async function checkMcpGateway() {
   );
 }
 
+async function checkWorkflowDataRoutes() {
+  const opportunities = await readJson('/v1/workflow/opportunities');
+  check(opportunities?.status === 'ready-for-triage', '/v1/workflow/opportunities returned an unexpected status');
+  check(Array.isArray(opportunities?.opportunities) && opportunities.opportunities.length > 0, '/v1/workflow/opportunities has no opportunities');
+  check(
+    !(opportunities?.opportunities ?? []).some((opportunity) => ['lead', 'research-lead', 'ops-lead'].includes(opportunity.owner)),
+    '/v1/workflow/opportunities exposed an internal owner label',
+  );
+
+  const opportunityId = opportunities?.opportunities?.[0]?.id;
+  if (!opportunityId) return;
+
+  const brief = await readJson(`/v1/workflow/opportunities/${encodeURIComponent(opportunityId)}`);
+  check(brief?.status === 'opportunity_brief_ready', '/v1/workflow/opportunities/:id did not return an opportunity brief');
+  check(
+    !['lead', 'research-lead', 'ops-lead'].includes(brief?.opportunity?.owner),
+    '/v1/workflow/opportunities/:id exposed an internal owner label',
+  );
+
+  const status = await readJson(`/v1/workflow/status?id=${encodeURIComponent(opportunityId)}&kind=opportunity`);
+  check(status?.status === 'status_found', '/v1/workflow/status did not resolve a known opportunity');
+
+  const registry = await readJson('/v1/registry/agents');
+  check(registry?.route === '/v1/registry/agents', '/v1/registry/agents route field mismatch');
+  check(Array.isArray(registry?.records), '/v1/registry/agents records must be an array');
+  for (const record of registry?.records ?? []) {
+    for (const field of ['controllerId', 'controller_id', 'publicKey', 'public_key', 'profileUri', 'profile_uri', 'metadata', 'contact']) {
+      check(!Object.hasOwn(record, field), `/v1/registry/agents exposed ${field}`);
+    }
+  }
+}
+
 async function checkReleaseFreshness() {
   const releaseRoute = jsonResponses.get('/idacc/releases.json') ?? await readJson('/idacc/releases.json');
   const snapshotTag = releaseRoute?.data?.releaseSnapshot?.latest?.tag;
@@ -329,6 +361,7 @@ checkAgents();
 checkOpportunities();
 checkMonitoringRouteCoverage();
 await checkMcpGateway();
+await checkWorkflowDataRoutes();
 await checkReleaseFreshness();
 
 if (failures.length > 0) {

@@ -2300,7 +2300,7 @@ function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()
     && (!status || opportunity.status === status)
   ));
 
-  return {
+  return publicSafeContent({
     $schema: SCHEMA_URL,
     status: 'ready-for-triage',
     launchStatus: LAUNCH_STATUS,
@@ -2312,7 +2312,7 @@ function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()
     noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
     internalReviewNotice: INTERNAL_OPPORTUNITY_REVIEW_NOTICE,
     opportunities,
-  };
+  });
 }
 
 function buildWorkflowOpportunityResponse(opportunityId) {
@@ -2331,7 +2331,7 @@ function buildWorkflowOpportunityResponse(opportunityId) {
 
   return {
     statusCode: 200,
-    body: {
+    body: publicSafeContent({
       $schema: SCHEMA_URL,
       status: 'opportunity_brief_ready',
       launchStatus: LAUNCH_STATUS,
@@ -2341,7 +2341,7 @@ function buildWorkflowOpportunityResponse(opportunityId) {
       authorizedSubmissionRoutes: ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.roleApplicationLinks
         .filter((link) => ['contributor-application', 'submission-intake', 'status-tracking'].includes(link.rel)),
       reviewGate: reviewGateRecord(),
-    },
+    }),
   };
 }
 
@@ -2350,7 +2350,7 @@ function buildWorkflowStatusResponse(searchParams = new URLSearchParams()) {
   const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
   const lookup = id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
 
-  return {
+  return publicSafeContent({
     $schema: SCHEMA_URL,
     status: id ? lookup.status : 'status_lookup_ready',
     launchStatus: LAUNCH_STATUS,
@@ -2362,7 +2362,49 @@ function buildWorkflowStatusResponse(searchParams = new URLSearchParams()) {
     reviewGate: reviewGateRecord(),
     caveat:
       'Queued or found status is not assignment, approval, publication, public attestation, compensation, or execution authority.',
+  });
+}
+
+export function buildPublicRegistryFeed(feed) {
+  const records = Array.isArray(feed?.records) ? feed.records : [];
+
+  return {
+    $schema: 'agent.bittrees.registry-feed.public.v1',
+    status: 'prelaunch-registry-under-review',
+    generatedAt: feed?.generated_at ?? new Date().toISOString(),
+    route: '/v1/registry/agents',
+    records: records.map((record) => ({
+      schemaVersion: 'agent.registry.record.public.v1',
+      agentId: record.agent_id,
+      sequence: record.sequence,
+      status: record.status,
+      health: record.health,
+      lastSeen: record.last_seen,
+      ...(record.last_verified_at ? { lastVerifiedAt: record.last_verified_at } : {}),
+      ...(record.display_name ? { displayName: record.display_name } : {}),
+      revoked: record.revoked,
+      recordVersion: record.record_version,
+      updatedAt: record.updated_at,
+      authorityState: {
+        authorityChangesAllowed: false,
+        spendAllowed: false,
+        executionAllowed: false,
+      },
+    })),
+    privacy: {
+      contactResolution: 'No approved privacy-contact endpoint is published; do not infer one from registry data.',
+      omittedFields: ['controller identifiers', 'public keys', 'profile URIs', 'descriptions', 'metadata', 'tags', 'contact details'],
+    },
+    reviewGate: reviewGateRecord(),
   };
+}
+
+async function handlePublicRegistryFeedRequest(req, res, includeBody, telemetry) {
+  const feed = await LIVE_REGISTRY_CONTROL_PLANE.registryFeed();
+  return sendJson(res, 200, buildPublicRegistryFeed(feed), includeBody, {
+    ...telemetry,
+    status: 200,
+  });
 }
 
 async function handleWorkflowRegistrationPost(req, res, includeBody, telemetry) {
@@ -2839,23 +2881,7 @@ export const ROUTE_DEFINITIONS = [
   {
     path: '/v1/registry/agents',
     label: 'Registry feed API',
-    description: 'HTTP JSON feed of staged agent registry records.',
-    kind: 'json',
-    status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
-    staticAsset: false,
-  },
-  {
-    path: '/v1/registry/agents/:agentId',
-    label: 'Registry agent API',
-    description: 'HTTP JSON read/write route for one staged agent registry record using controller-signed envelopes.',
-    kind: 'json',
-    status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
-    staticAsset: false,
-  },
-  {
-    path: '/v1/registry/heartbeats',
-    label: 'Registry heartbeat API',
-    description: 'HTTP JSON route for signed heartbeat updates against staged registry records.',
+    description: 'HTTP JSON feed of public-safe staged agent registry summaries.',
     kind: 'json',
     status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
     staticAsset: false,
@@ -6441,6 +6467,10 @@ export function createRequestHandler() {
 
     if (isWorkflowRegistrationPost) {
       return handleWorkflowRegistrationPost(req, res, includeBody, telemetry);
+    }
+
+    if (pathname === '/v1/registry/agents' && (req.method === 'GET' || req.method === 'HEAD')) {
+      return handlePublicRegistryFeedRequest(req, res, includeBody, telemetry);
     }
 
     if (isRegistryApi) {

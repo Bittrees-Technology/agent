@@ -36,6 +36,7 @@ import {
   buildJsonResponse,
   buildLlmsTxt,
   buildPortalManifest,
+  buildPublicRegistryFeed,
   buildStaticAssets,
   callMcpTool,
   createRequestHandler,
@@ -1089,6 +1090,10 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.ok(listBody.roleApplicationLinks.some((link) => link.href === 'https://agent.bittrees.org/v1/workflow/registrations'));
     assert.ok(listBody.roleApplicationLinks.some((link) => link.href === 'https://agent.bittrees.org/v1/workflow/status'));
     assert.ok(listBody.opportunities.length >= 1);
+    assert.equal(
+      listBody.opportunities.some((opportunity) => ['lead', 'research-lead', 'ops-lead'].includes(opportunity.owner)),
+      false,
+    );
 
     const opportunityId = listBody.opportunities[0].id;
     const briefResponse = await fetch(`${baseUrl}/v1/workflow/opportunities/${opportunityId}`);
@@ -1097,6 +1102,7 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.equal(briefResponse.status, 200);
     assert.equal(briefBody.status, 'opportunity_brief_ready');
     assert.equal(briefBody.opportunity.id, opportunityId);
+    assert.equal(['lead', 'research-lead', 'ops-lead'].includes(briefBody.opportunity.owner), false);
     assert.equal(briefBody.mcpTool, 'get_contribution_brief');
     assert.ok(briefBody.authorizedSubmissionRoutes.some((link) => link.href === '/contribution-intents'));
     assert.ok(briefBody.authorizedSubmissionRoutes.some((link) => link.href === '/v1/workflow/status'));
@@ -1132,8 +1138,78 @@ test('onboarding page and registry feed are mounted routes', async () => {
     const registryBody = await registryResponse.json();
 
     assert.equal(registryResponse.status, 200);
-    assert.equal(registryBody.schema_version, 'agent.registry.feed.v1');
+    assert.equal(registryBody.$schema, 'agent.bittrees.registry-feed.public.v1');
+    assert.equal(registryBody.route, '/v1/registry/agents');
     assert.ok(Array.isArray(registryBody.records));
+  });
+});
+
+test('public registry feed omits controller, contact, and arbitrary record metadata', () => {
+  const response = buildPublicRegistryFeed({
+    generated_at: '2026-07-13T00:00:00.000Z',
+    records: [{
+      schema_version: 'agent.registry.record.public.v1',
+      agent_id: 'public-agent',
+      controller_id: 'private-controller',
+      sequence: 2,
+      status: 'active',
+      health: 'online',
+      last_seen: '2026-07-13T00:00:00.000Z',
+      last_verified_at: '2026-07-13T00:00:00.000Z',
+      display_name: 'Public Agent',
+      profile_uri: 'https://example.invalid/private-profile',
+      metadata: { contact: 'private@example.invalid' },
+      tags: ['internal'],
+      revoked: false,
+      record_version: 2,
+      updated_at: '2026-07-13T00:00:00.000Z',
+      authority_state: {
+        authority_changes_allowed: false,
+        spend_allowed: false,
+        execution_allowed: false,
+      },
+    }],
+  });
+
+  assert.equal(response.route, '/v1/registry/agents');
+  assert.deepEqual(response.records, [{
+    schemaVersion: 'agent.registry.record.public.v1',
+    agentId: 'public-agent',
+    sequence: 2,
+    status: 'active',
+    health: 'online',
+    lastSeen: '2026-07-13T00:00:00.000Z',
+    lastVerifiedAt: '2026-07-13T00:00:00.000Z',
+    displayName: 'Public Agent',
+    revoked: false,
+    recordVersion: 2,
+    updatedAt: '2026-07-13T00:00:00.000Z',
+    authorityState: {
+      authorityChangesAllowed: false,
+      spendAllowed: false,
+      executionAllowed: false,
+    },
+  }]);
+});
+
+test('public registry feed route is readable and keeps registry writes unavailable', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const feedResponse = await fetch(`${baseUrl}/v1/registry/agents`);
+    const feed = await feedResponse.json();
+
+    assert.equal(feedResponse.status, 200);
+    assert.equal(feed.route, '/v1/registry/agents');
+    assert.deepEqual(feed.records, []);
+
+    const writeResponse = await fetch(`${baseUrl}/v1/registry/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const writeBody = await writeResponse.json();
+
+    assert.equal(writeResponse.status, 405);
+    assert.equal(writeBody.error, 'method_not_allowed');
   });
 });
 

@@ -120,6 +120,10 @@ const CHECKS = [
   { method: 'GET', path: '/agents.json' },
   { method: 'GET', path: '/templates.json' },
   { method: 'GET', path: '/onboarding.json' },
+  { method: 'GET', path: '/v1/workflow/opportunities' },
+  { method: 'GET', path: '/v1/workflow/opportunities/source-registry-hardening' },
+  { method: 'GET', path: '/v1/workflow/status?id=source-registry-hardening&kind=opportunity' },
+  { method: 'GET', path: '/v1/registry/agents' },
   { method: 'GET', path: '/idacc/releases.json' },
   { method: 'GET', path: '/contribution-intents' },
   { method: 'GET', path: '/gateway/contribution-intents' },
@@ -308,6 +312,39 @@ for (const check of CHECKS) {
     } catch (error) {
       failed += 1;
       console.error(`  FAIL: /identity-keys.json response was not valid JSON: ${error.message}`);
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/v1/workflow/opportunities') {
+    try {
+      const parsedBody = JSON.parse(res.body);
+      const rawOwner = (parsedBody.opportunities ?? []).some((opportunity) => (
+        ['lead', 'research-lead', 'ops-lead'].includes(opportunity.owner)
+      ));
+
+      if (parsedBody.status !== 'ready-for-triage' || rawOwner) {
+        failed += 1;
+        console.error('  FAIL: workflow opportunities response is not public-safe and contract-ready.');
+      }
+    } catch (error) {
+      failed += 1;
+      console.error(`  FAIL: /v1/workflow/opportunities response was not valid JSON: ${error.message}`);
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/v1/registry/agents') {
+    try {
+      const parsedBody = JSON.parse(res.body);
+      const prohibitedFields = ['controllerId', 'controller_id', 'publicKey', 'public_key', 'profileUri', 'profile_uri', 'metadata', 'contact'];
+      const hasProhibitedField = parsedBody.records?.some((record) => prohibitedFields.some((field) => Object.hasOwn(record, field)));
+
+      if (parsedBody.route !== '/v1/registry/agents' || !Array.isArray(parsedBody.records) || hasProhibitedField) {
+        failed += 1;
+        console.error('  FAIL: registry feed is not a public-safe agent-readable projection.');
+      }
+    } catch (error) {
+      failed += 1;
+      console.error(`  FAIL: /v1/registry/agents response was not valid JSON: ${error.message}`);
     }
   }
 
