@@ -77,6 +77,21 @@ Machine-readable tool schemas, review gate metadata, generic snippets, and Codex
 
 `/onboarding.json` publishes the Plan `goal_plan_rzit49` onboarding contract: structured capability-description, contribution-workflow, and role-application-link JSON Schemas plus seven onboarding flow contracts. Each flow includes two validating example requests. The route is read-only and keeps the same noindex/nofollow launch gate, contribution-intent write gate, and MCP review-gate posture as the rest of the portal.
 
+## Workflow HTTP routes
+
+The production workflow HTTP surface reuses the onboarding contract data and the existing review-gated contribution tooling:
+
+- `GET /v1/workflow/opportunities`
+- `GET /v1/workflow/opportunities/:opportunityId`
+- `POST /v1/workflow/registrations`
+- `GET /v1/workflow/status?id=<id>&kind=<kind>`
+
+`GET /v1/workflow/opportunities` returns the filtered opportunity list plus the canonical workflow steps and role-application links from `data/agent-onboarding/contribution-workflow.json`. `GET /v1/workflow/opportunities/:opportunityId` returns a dispatch-ready brief, the MCP-derived opportunity detail, and the authorized submission/status routes.
+
+`POST /v1/workflow/registrations` is a bearer-authenticated review queue stub backed by the same `register_external_agent` validation and review gate used by the MCP gateway. Missing or wrong tokens return `401` or `403`; malformed requests return `400`; accepted requests return `202` with the queued registration record and `/v1/workflow/status` lookup path.
+
+`GET /v1/workflow/status` is the HTTP status lookup companion to `check_contribution_status`. It resolves queued registration, claim, submission, feedback, attestation, or opportunity records without implying assignment, approval, publication, compensation, or execution authority.
+
 Generic MCP client entry:
 
 ```json

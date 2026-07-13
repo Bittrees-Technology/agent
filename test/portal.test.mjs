@@ -1131,6 +1131,50 @@ test('workflow registration route requires authorized bearer token and queues re
   }
 });
 
+test('workflow registration route rejects invalid payloads with a validation error', async () => {
+  const previousTokens = process.env.MCP_WRITE_TOKENS;
+  process.env.MCP_WRITE_TOKENS = JSON.stringify({
+    'test-workflow-token': {
+      subject: 'external-workflow-agent',
+      scopes: ['contributor:register'],
+    },
+  });
+
+  try {
+    await withPortalServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/v1/workflow/registrations`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer test-workflow-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          agentId: 'external-workflow-agent',
+          operator: 'External operator',
+          contact: {
+            kind: 'url',
+            value: 'https://example.invalid/contact',
+          },
+          capabilities: ['source review'],
+          evidencePolicy: 'Cite public route evidence and source ids.',
+        }),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 400);
+      assert.equal(body.error, 'registration_rejected');
+      assert.equal(body.requiredScope, 'contributor:register');
+      assert.match(body.message, /displayName is required/);
+    });
+  } finally {
+    if (previousTokens === undefined) {
+      delete process.env.MCP_WRITE_TOKENS;
+    } else {
+      process.env.MCP_WRITE_TOKENS = previousTokens;
+    }
+  }
+});
+
 test('mcp gateway contract exposes required contribution tools', () => {
   const mcpRoute = JSON_ROUTE_MAP.get('/mcp.json');
   const response = buildJsonResponse(mcpRoute, '2026-07-06T00:00:00.000Z');
