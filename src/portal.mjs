@@ -475,10 +475,81 @@ export const LIVE_AGENT_REGISTRY = {
   ],
 };
 
+const CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS = Object.freeze([
+  'https://gov.bittrees.org/',
+  'https://research.bittrees.org/',
+]);
+
+const CONTRIBUTOR_SIGNING_ROLLOUT_GATES = Object.freeze([
+  {
+    id: 'staging',
+    label: 'Staging',
+    status: 'no-go',
+    appliesTo: CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS,
+    requiredEvidence: [
+      'An isolated staging environment exists for the target sites.',
+      'Staging smoke checks capture the portal and contract outputs without live writes.',
+      'Read-only posture and noindex,nofollow headers remain in place.',
+    ],
+    blocker: 'No staging evidence has been recorded for the contributor-signing rollout yet.',
+  },
+  {
+    id: 'backup-restore',
+    label: 'Backup / restore',
+    status: 'no-go',
+    appliesTo: CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS,
+    requiredEvidence: [
+      'Backup destination, cadence, and retention are documented.',
+      'A restore drill is recorded with a validated recovery path.',
+      'The restore owner and recovery objective are named.',
+    ],
+    blocker: 'No backup and restore drill evidence has been published yet.',
+  },
+  {
+    id: 'canary-flag',
+    label: 'Canary / flag',
+    status: 'no-go',
+    appliesTo: CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS,
+    requiredEvidence: [
+      'The rollout flag or allowlist is documented and disabled by default.',
+      'The canary cohort is scoped to a bounded subset of traffic or accounts.',
+      'A flag-off rollback path is documented and tested.',
+    ],
+    blocker: 'No canary or feature-flag evidence is recorded yet.',
+  },
+  {
+    id: 'observability',
+    label: 'Observability',
+    status: 'no-go',
+    appliesTo: CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS,
+    requiredEvidence: [
+      'Metrics, logs, traces, and alert routes are named.',
+      'Monitoring evidence is linked to the rollout surfaces.',
+      'Operational review steps or escalation ownership are recorded.',
+    ],
+    blocker: 'No observability evidence has been linked to the rollout surfaces yet.',
+  },
+  {
+    id: 'rollback',
+    label: 'Rollback',
+    status: 'no-go',
+    appliesTo: CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS,
+    requiredEvidence: [
+      'Rollback steps are written and reverse the rollout cleanly.',
+      'Rollback ownership and success criteria are documented.',
+      'A rollback rehearsal or dry-run is captured.',
+    ],
+    blocker: 'No rollback drill or rollback runbook evidence is available yet.',
+  },
+]);
+
+const CONTRIBUTOR_SIGNING_ROLLOUT_SUMMARY =
+  'Contributor-signing rollout remains NO-GO until staging, backup/restore, canary/flag, observability, and rollback evidence is published for gov.bittrees.org and research.bittrees.org.';
+
 export const IDENTITY_KEYS_PUBLIC_CONTRACT = {
   status: 'prelaunch-contract-under-review',
   purpose:
-    'Public contract for agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.',
+    'Public contract for agent identity, public keys, delegated scopes, trust evidence, audit metadata, rollout gates, and onchain execution readiness.',
   publicationPolicy:
     'Publish proof metadata and public-key material only. Keep signing, custody, API-key creation, reveal, export, rotation, and revocation inside authenticated control-plane tooling.',
   sections: [
@@ -550,6 +621,18 @@ export const IDENTITY_KEYS_PUBLIC_CONTRACT = {
       ],
     },
   ],
+  launchGate: {
+    currentState: LAUNCH_STATUS.publicLaunchGate,
+    rolloutSummary: CONTRIBUTOR_SIGNING_ROLLOUT_SUMMARY,
+    rolloutTargets: CONTRIBUTOR_SIGNING_ROLLOUT_TARGETS,
+    rolloutGates: CONTRIBUTOR_SIGNING_ROLLOUT_GATES,
+    blockersBeforeFullyAutomatedRegistry: [
+      'Back a registry writer with authenticated control-plane tooling.',
+      'Verify controller-signed challenge flow end to end.',
+      'Add redaction tests around logs, telemetry, and audit export.',
+      'Connect optional onchain providers with least privilege, allowlists, and request logs.',
+    ],
+  },
   proofStates: ['verified', 'self-attested', 'stale', 'untrusted-gateway', 'not-checked'],
   onchainExecutionReadiness: [
     {
@@ -1238,38 +1321,38 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-09T14:21:30Z',
+  checkedAt: '2026-07-13T20:23:36Z',
   latest: {
-    tag: 'v0.1.627',
-    name: 'v0.1.627',
-    publishedAt: '2026-07-09T14:18:44Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.627',
-    tagCommitSha: 'fc181ae0a9672539da54d69508b6af12c43087a1',
+    tag: 'v0.1.638',
+    name: 'v0.1.638',
+    publishedAt: '2026-07-13T15:21:19Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.638',
+    tagCommitSha: 'df41416356d9ab99509c25d91cbc45324695107d',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-09T14:21:30Z.',
-      'Release notes: Automated release of outstanding ID Agents Control Center code.',
+      'Latest public GitHub release observed by the portal update on 2026-07-13T20:23:36Z.',
+      'Release notes: prevent orphaned version tags.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.627 on 2026-07-09T14:21:30Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.638 on 2026-07-13T20:23:36Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.627 resolved refs/tags/v0.1.627 at fc181ae0a9672539da54d69508b6af12c43087a1.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.627',
+        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.638 resolved refs/tags/v0.1.638 at df41416356d9ab99509c25d91cbc45324695107d.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.638',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.627-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.638-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.627/ID-Agents-Control-Center-0.1.627-arm64.zip',
-        sizeBytes: 102707303,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.638/ID-Agents-Control-Center-0.1.638-arm64.zip',
+        sizeBytes: 102728091,
         contentType: 'application/zip',
-        sha256: '28d9959bf3f8890af04a833dda0185328c3681dfc2b15f891c4d7ae3eb8cb59d',
+        sha256: '2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:28d9959bf3f8890af04a833dda0185328c3681dfc2b15f891c4d7ae3eb8cb59d',
+            'sha256:2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779',
           localVerification:
-            'GitHub Releases API asset digest field observed on 2026-07-09T14:21:30Z; no local zip download was performed during this snapshot refresh.',
+            'GitHub Releases API asset digest field observed on 2026-07-13T20:23:36Z; no local zip download was performed during this snapshot refresh.',
         },
       },
     ],
@@ -1284,7 +1367,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.627-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.638-arm64.zip',
   },
 };
 
@@ -2181,7 +2264,8 @@ const JSON_ROUTES = [
   {
     path: '/identity-keys.json',
     label: 'Identity and keys',
-    description: 'Prelaunch-readiness contract for agent identity, public keys, trust evidence, and onchain execution gates.',
+    description:
+      'Prelaunch-readiness contract for agent identity, public keys, rollout gates, trust evidence, and onchain execution gates.',
     status: 'prelaunch-contract-under-review',
     schema: {
       $schema: SCHEMA_URL,
@@ -2195,15 +2279,7 @@ const JSON_ROUTES = [
       launchStatus: LAUNCH_STATUS,
       registryManagement: LIVE_AGENT_REGISTRY,
       identityKeys: IDENTITY_KEYS_PUBLIC_CONTRACT,
-      launchGate: {
-        currentState: LAUNCH_STATUS.publicLaunchGate,
-        blockersBeforeFullyAutomatedRegistry: [
-          'Back a registry writer with authenticated control-plane tooling.',
-          'Verify controller-signed challenge flow end to end.',
-          'Add redaction tests around logs, telemetry, and audit export.',
-          'Connect optional onchain providers with least privilege, allowlists, and request logs.',
-        ],
-      },
+      launchGate: IDENTITY_KEYS_PUBLIC_CONTRACT.launchGate,
     },
   },
   {
@@ -2419,7 +2495,8 @@ export const ROUTE_DEFINITIONS = [
   {
     path: '/identity-keys',
     label: 'Identity and keys page',
-    description: 'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
+    description:
+      'Human-readable prelaunch-readiness page for managed agent identity, keys, rollout gates, and onchain execution gates.',
     kind: 'html',
     status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
   },
@@ -4687,6 +4764,23 @@ export function renderIdentityKeysPage() {
       `,
     )
     .join('');
+  const rolloutGateRows = IDENTITY_KEYS_PUBLIC_CONTRACT.launchGate.rolloutGates
+    .map(
+      (gate) => `
+        <tr>
+          <td>${escapeHtml(gate.label)}</td>
+          <td>${escapeHtml(gate.status)}</td>
+          <td>${escapeHtml(gate.appliesTo.join(', '))}</td>
+          <td>${escapeHtml(gate.requiredEvidence.join(' '))}</td>
+          <td>${escapeHtml(gate.blocker)}</td>
+        </tr>
+      `,
+    )
+    .join('');
+  const rolloutTargets = IDENTITY_KEYS_PUBLIC_CONTRACT.launchGate.rolloutTargets.join(', ');
+  const launchBlockerItems = IDENTITY_KEYS_PUBLIC_CONTRACT.launchGate.blockersBeforeFullyAutomatedRegistry
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join('');
   const automationItems = LIVE_AGENT_REGISTRY.automatedManagement.allowedWithoutHumanReview
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
@@ -4696,7 +4790,7 @@ export function renderIdentityKeysPage() {
   const pageTitle = 'Identity and keys - agent.bittrees.org';
   const pageDescription = getRouteDescription(
     '/identity-keys',
-    'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
+    'Human-readable prelaunch-readiness page for managed agent identity, keys, rollout gates, and onchain execution gates.',
   );
 
   return `<!doctype html>
@@ -4898,6 +4992,28 @@ export function renderIdentityKeysPage() {
           </thead>
           <tbody>${readinessRows}</tbody>
         </table>
+      </section>
+
+      <section class="band" aria-labelledby="rollout-title">
+        <h2 id="rollout-title">Contributor-signing rollout gates</h2>
+        <div>
+          <p class="lede">${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.launchGate.rolloutSummary)}</p>
+          <p class="lede">Targets: ${escapeHtml(rolloutTargets)}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Gate</th>
+                <th>Status</th>
+                <th>Applies to</th>
+                <th>Required evidence</th>
+                <th>Blocker</th>
+              </tr>
+            </thead>
+            <tbody>${rolloutGateRows}</tbody>
+          </table>
+          <p class="lede">General launch blockers still in force:</p>
+          <ul>${launchBlockerItems}</ul>
+        </div>
       </section>
     </main>
   </body>

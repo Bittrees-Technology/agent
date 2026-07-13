@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 
-import { createRequestHandler } from './portal.mjs';
+import { createRequestHandler } from './app.mjs';
 
 const port = Number(process.env.PORT ?? '3000');
 const host = process.env.HOST ?? '0.0.0.0';

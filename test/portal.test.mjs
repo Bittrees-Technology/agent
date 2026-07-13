@@ -504,6 +504,8 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
   assert.match(html, /Identity and keys\./);
   assert.match(html, /agent-signed-staged-state-with-guarded-authority-changes/);
   assert.match(html, /blocked-without-explicit-controller-or-safe-approval/);
+  assert.match(html, /Contributor-signing rollout gates/);
+  assert.match(html, /Backup \/ restore/);
   assert.doesNotMatch(html, /rawPrivateKey|secretKey|mnemonic|seedPhrase/);
 });
 
@@ -517,6 +519,17 @@ test('identity and keys route exposes public contract without secret fields', ()
   assert.ok(
     IDENTITY_KEYS_PUBLIC_CONTRACT.onchainExecutionReadiness.some((level) => level.level === 'simulate'),
     'expected simulation readiness level',
+  );
+  assert.match(response.data.identityKeys.launchGate.currentState, /owning reviewer approves/);
+  assert.match(response.data.identityKeys.launchGate.currentState, /Prelaunch review surface/);
+  assert.equal(response.data.identityKeys.launchGate.rolloutGates.length, 5);
+  assert.ok(
+    response.data.identityKeys.launchGate.rolloutGates.some((gate) => gate.id === 'staging'),
+    'expected staging rollout gate',
+  );
+  assert.ok(
+    response.data.identityKeys.launchGate.rolloutTargets.includes('https://gov.bittrees.org/'),
+    'expected gov target in rollout gates',
   );
   assert.ok(
     response.data.identityKeys.sections.some((section) => section.id === 'public-operational-keys'),
@@ -1050,11 +1063,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.627');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.638');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
   assert.match(asset.sha256, /^[a-f0-9]{64}$/);
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'fc181ae0a9672539da54d69508b6af12c43087a1');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'df41416356d9ab99509c25d91cbc45324695107d');
   assert.match(asset.sha256Provenance.localVerification, /GitHub Releases API asset digest/);
   assert.equal(response.data.releases.length, 1);
 });

@@ -120,6 +120,9 @@ const CHECKS = [
   { method: 'GET', path: '/agents.json' },
   { method: 'GET', path: '/templates.json' },
   { method: 'GET', path: '/idacc/releases.json' },
+  { method: 'GET', path: '/v1/contributions' },
+  { method: 'GET', path: '/v1/contributions/submissions' },
+  { method: 'GET', path: '/v1/contributions/submissions/review-decisions' },
   { method: 'GET', path: '/contribution-intents' },
   { method: 'GET', path: '/gateway/contribution-intents' },
   { method: 'GET', path: '/mcp' },
@@ -237,6 +240,11 @@ for (const check of CHECKS) {
       console.error('  FAIL: /identity-keys did not render the execution gate policy.');
     }
 
+    if (!res.body.includes('Contributor-signing rollout gates')) {
+      failed += 1;
+      console.error('  FAIL: /identity-keys did not render the contributor-signing rollout gates section.');
+    }
+
     if (/rawPrivateKey|secretKey|mnemonic|seedPhrase/.test(res.body)) {
       failed += 1;
       console.error('  FAIL: /identity-keys rendered a forbidden secret field name.');
@@ -282,6 +290,27 @@ for (const check of CHECKS) {
       if (parsedBody.data?.registryManagement?.identityKeysRoute !== '/identity-keys.json') {
         failed += 1;
         console.error('  FAIL: /identity-keys.json registry management does not point back to the identity route.');
+      }
+
+      if (!String(parsedBody.data?.identityKeys?.launchGate?.currentState ?? '').includes('owning reviewer approves')) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json missing launch gate current state.');
+      }
+
+      const rolloutGates = parsedBody.data?.identityKeys?.launchGate?.rolloutGates ?? [];
+      if (rolloutGates.length !== 5) {
+        failed += 1;
+        console.error(`  FAIL: /identity-keys.json expected 5 rollout gates, received ${rolloutGates.length}.`);
+      }
+
+      if (!rolloutGates.some((gate) => gate.id === 'staging')) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json missing staging rollout gate.');
+      }
+
+      if (!parsedBody.data?.identityKeys?.launchGate?.rolloutTargets?.includes('https://gov.bittrees.org/')) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json missing gov rollout target.');
       }
 
       const publicKeySection = parsedBody.data?.identityKeys?.sections?.some(

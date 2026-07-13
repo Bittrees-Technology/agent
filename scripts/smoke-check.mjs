@@ -15,6 +15,9 @@ const routeChecks = [
   { path: '/templates.json', kind: 'json' },
   { path: '/sources.json', kind: 'json' },
   { path: '/opportunities.json', kind: 'json' },
+  { path: '/v1/contributions', kind: 'json' },
+  { path: '/v1/contributions/submissions', kind: 'json' },
+  { path: '/v1/contributions/submissions/review-decisions', kind: 'json' },
   { path: '/contribution-intents', kind: 'json' },
   { path: '/gateway/contribution-intents', kind: 'json' },
   { path: '/mcp', kind: 'html' },
@@ -76,6 +79,7 @@ async function checkRoute(path, kind) {
   });
   const text = await response.text();
   const robots = response.headers.get('x-robots-tag') ?? '';
+  let json = null;
 
   check(response.status === 200, `${path} returned ${response.status}`);
   checkSecurityHeaders(response, path);
@@ -84,7 +88,7 @@ async function checkRoute(path, kind) {
 
   if (kind === 'json') {
     try {
-      const json = JSON.parse(text);
+      json = JSON.parse(text);
       jsonResponses.set(path, json);
       check(json.route === path, `${path} route field mismatch`);
       check(json.status && json.status !== 'placeholder', `${path} has placeholder or missing status`);
@@ -115,6 +119,22 @@ async function checkRoute(path, kind) {
     check(text.includes('Agent reputation'), '/reputation missing title');
     check(text.includes('get_agent_reputation'), '/reputation missing MCP tool reference');
     check(text.includes('Reputation is an evidence signal'), '/reputation missing authority caveat');
+  }
+
+  if (path === '/identity-keys') {
+    check(text.includes('Identity and keys'), '/identity-keys missing title');
+    check(text.includes('blocked-without-explicit-controller-or-safe-approval'), '/identity-keys missing execution gate');
+    check(text.includes('Contributor-signing rollout gates'), '/identity-keys missing contributor-signing rollout gates');
+    check(text.includes('Backup / restore'), '/identity-keys missing backup / restore gate');
+  }
+
+  if (path === '/identity-keys.json') {
+    const rolloutGates = json?.data?.identityKeys?.launchGate?.rolloutGates ?? [];
+    check(Array.isArray(rolloutGates) && rolloutGates.length === 5, '/identity-keys.json missing contributor-signing rollout gates');
+    check(
+      json?.data?.identityKeys?.launchGate?.rolloutTargets?.includes('https://gov.bittrees.org/'),
+      '/identity-keys.json missing gov rollout target',
+    );
   }
 }
 

@@ -1,4 +1,4 @@
-import { createRequestHandler } from '../src/portal.mjs';
+import { createRequestHandler } from '../src/app.mjs';
 
 const handleRequest = createRequestHandler();
 

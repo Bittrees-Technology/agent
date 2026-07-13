@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { MCP_GATEWAY, PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, createRequestHandler, handleMcpRequest, normalizeCanonicalPath } from '../src/portal.mjs';
+import { createRequestHandler as createAppRequestHandler } from '../src/app.mjs';
+import { MCP_GATEWAY, PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, handleMcpRequest, normalizeCanonicalPath } from '../src/portal.mjs';
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const distDir = join(rootDir, 'dist');
@@ -11,7 +12,8 @@ const port = Number(process.env.PORT ?? '3000');
 const host = process.env.HOST ?? '0.0.0.0';
 const canonicalRoutePaths = new Set([ROBOTS_TXT_PATH, ...ROUTE_DEFINITIONS.map((definition) => definition.path), '/portal-manifest.json']);
 const routeDefinitionsByPath = new Map(ROUTE_DEFINITIONS.map((definition) => [definition.path, definition]));
-const dynamicPortalHandler = createRequestHandler();
+const dynamicAppHandler = createAppRequestHandler();
+const dynamicPortalPathPrefixes = ['/v1/contributions', '/v1/workflow', '/v1/registry'];
 const dynamicPortalRoutePaths = new Set(['/contribution-intents', '/gateway/contribution-intents']);
 const extensionlessStaticRoutePaths = new Set(
   ROUTE_DEFINITIONS
@@ -52,6 +54,10 @@ function resolveAssetPath(requestUrl) {
   }
 
   return assetPath;
+}
+
+function isDynamicPortalPath(pathname) {
+  return dynamicPortalPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 function getContentType(assetPath, requestPathname) {
@@ -117,8 +123,8 @@ const server = createServer(async (req, res) => {
     });
   }
 
-  if (dynamicPortalRoutePaths.has(normalizedPath)) {
-    return dynamicPortalHandler(req, res);
+  if (isDynamicPortalPath(normalizedPath) || dynamicPortalRoutePaths.has(normalizedPath)) {
+    return dynamicAppHandler(req, res);
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {

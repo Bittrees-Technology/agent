@@ -47,6 +47,8 @@ Mutable treasury, token, wallet, holdings, signer, quorum, price, or governance-
 
 `/identity-keys` is the human-readable page for prelaunch agent identity and key readiness. `/identity-keys.json` defines the machine-readable contract for managed agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.
 
+The identity/keys contract also publishes contributor-signing rollout gates for staging, backup/restore, canary/flag, observability, and rollback. Those gates stay NO-GO until the target rollout evidence is recorded for `gov.bittrees.org` and `research.bittrees.org`.
+
 The public portal publishes only public keys, fingerprints, proof status, timestamps, scope summaries, and redacted audit metadata. It must not publish private keys, recovery phrases, bearer tokens, OAuth tokens, session cookies, unredacted delegated secrets, or raw signatures that contain credentials.
 
 `/agents.json` now advertises a prelaunch registry monitoring policy: signed agent/controller heartbeats can refresh routine staged state, while first inclusion, controller changes, wallet/signer changes, spending scope, transaction submission, governance execution, and public Bittrees claim expansion remain explicitly proof-gated.
