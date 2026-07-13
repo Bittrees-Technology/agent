@@ -9,6 +9,8 @@ const routeChecks = [
   { path: '/identity-keys', kind: 'html' },
   { path: '/submission-status', kind: 'html' },
   { path: '/reputation', kind: 'html' },
+  { path: '/terms-of-use', kind: 'html' },
+  { path: '/onboarding', kind: 'html' },
   { path: '/llms.txt', kind: 'text' },
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },
@@ -16,6 +18,10 @@ const routeChecks = [
   { path: '/sources.json', kind: 'json' },
   { path: '/opportunities.json', kind: 'json' },
   { path: '/onboarding.json', kind: 'json' },
+  { path: '/v1/workflow/opportunities', kind: 'api-json' },
+  { path: '/v1/workflow/opportunities/contribution-template-pilot', kind: 'api-json' },
+  { path: '/v1/workflow/status?id=source-registry-hardening&kind=opportunity', kind: 'api-json' },
+  { path: '/v1/registry/agents', kind: 'api-json' },
   { path: '/contribution-intents', kind: 'json' },
   { path: '/gateway/contribution-intents', kind: 'json' },
   { path: '/mcp', kind: 'html' },
@@ -23,6 +29,7 @@ const routeChecks = [
   { path: '/mcp.json', kind: 'json' },
   { path: '/submission-status.json', kind: 'json' },
   { path: '/reputation.json', kind: 'json' },
+  { path: '/terms-of-use.json', kind: 'json' },
   { path: '/idacc/releases.json', kind: 'json' },
   { path: '/monitoring.json', kind: 'json' },
 ];
@@ -95,6 +102,19 @@ async function checkRoute(path, kind) {
     }
   }
 
+  if (kind === 'api-json') {
+    try {
+      const json = JSON.parse(text);
+      jsonResponses.set(path, json);
+      check(
+        json.status || json.schema_version || json.schemaVersion,
+        `${path} missing status or schema version`,
+      );
+    } catch (error) {
+      check(false, `${path} did not parse as JSON: ${error.message}`);
+    }
+  }
+
   if (path === '/') {
     check(text.includes('Contribution workflow'), '/ missing contribution workflow');
     check(!text.includes('staging-ready'), '/ still contains staging-ready');
@@ -116,6 +136,25 @@ async function checkRoute(path, kind) {
     check(text.includes('Agent reputation'), '/reputation missing title');
     check(text.includes('get_agent_reputation'), '/reputation missing MCP tool reference');
     check(text.includes('Reputation is an evidence signal'), '/reputation missing authority caveat');
+  }
+
+  if (path === '/terms-of-use') {
+    check(text.includes('Terms of Use are pending legal approval'), '/terms-of-use missing legal approval status');
+  }
+
+  if (path === '/onboarding') {
+    check(text.includes('Agent onboarding'), '/onboarding missing title');
+    check(text.includes('/onboarding.json'), '/onboarding missing contract route reference');
+  }
+}
+
+function checkMonitoringRouteCoverage() {
+  const monitoring = jsonResponses.get('/monitoring.json');
+  if (!monitoring) return;
+
+  const checkedPaths = new Set(routeChecks.map((route) => route.path));
+  for (const path of monitoring.data?.monitoring?.routeStatusChecks ?? []) {
+    check(checkedPaths.has(path), `/monitoring.json advertises ${path} but smoke-check.mjs does not probe it`);
   }
 }
 
@@ -287,6 +326,7 @@ for (const route of routeChecks) {
 checkSources();
 checkAgents();
 checkOpportunities();
+checkMonitoringRouteCoverage();
 await checkMcpGateway();
 await checkReleaseFreshness();
 

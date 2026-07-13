@@ -43,6 +43,7 @@ import {
   renderLandingPage,
   renderMcpDocsPage,
   renderMcpGatewayPage,
+  renderOnboardingPage,
   renderReputationPage,
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
@@ -490,6 +491,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('submission-status/index.html'));
   assert.ok(assetPaths.has('reputation/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
+  assert.ok(assetPaths.has('onboarding/index.html'));
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
@@ -513,6 +515,7 @@ test('html pages emit description and Open Graph metadata', () => {
     ['/submission-status', renderSubmissionStatusPage()],
     ['/reputation', renderReputationPage()],
     ['/terms-of-use', renderTermsOfUsePage()],
+    ['/onboarding', renderOnboardingPage()],
     ['/mcp', renderMcpGatewayPage()],
     ['/mcp-docs', renderMcpDocsPage()],
   ]);
@@ -1029,6 +1032,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/submission-status'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/reputation'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms-of-use'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding.json'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
@@ -1070,6 +1074,25 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.equal(statusBody.status, 'status_found');
     assert.equal(statusBody.lookup.result.kind, 'opportunity');
     assert.equal(statusBody.humanRoute, '/submission-status');
+  });
+});
+
+test('onboarding page and registry feed are mounted routes', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const onboardingResponse = await fetch(`${baseUrl}/onboarding`);
+    const onboardingBody = await onboardingResponse.text();
+
+    assert.equal(onboardingResponse.status, 200);
+    assert.match(onboardingResponse.headers.get('content-type') ?? '', /^text\/html/);
+    assert.match(onboardingBody, /Agent onboarding/);
+    assert.match(onboardingBody, /\/onboarding\.json/);
+
+    const registryResponse = await fetch(`${baseUrl}/v1/registry/agents`);
+    const registryBody = await registryResponse.json();
+
+    assert.equal(registryResponse.status, 200);
+    assert.equal(registryBody.schema_version, 'agent.registry.feed.v1');
+    assert.ok(Array.isArray(registryBody.records));
   });
 });
 

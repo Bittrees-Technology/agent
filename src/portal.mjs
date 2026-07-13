@@ -2773,6 +2773,13 @@ export const ROUTE_DEFINITIONS = [
     status: TERMS_OF_USE_LEGAL_STATUS.status,
   },
   {
+    path: '/onboarding',
+    label: 'Agent onboarding contracts page',
+    description: 'Human-readable overview of onboarding schemas, contribution workflow contracts, and role application routes.',
+    kind: 'html',
+    status: 'prelaunch-onboarding-contract-ready',
+  },
+  {
     path: '/llms.txt',
     label: 'llms.txt',
     description: 'Plain-text AI-agent entry point with route index and claim guardrails.',
@@ -5336,6 +5343,85 @@ export function renderTermsOfUsePage() {
 </html>`;
 }
 
+export function renderOnboardingPage() {
+  const onboardingRoute = JSON_ROUTE_MAP.get('/onboarding.json');
+  const contract = buildJsonResponse(onboardingRoute);
+  const flowRows = contract.data.flows.map(
+    (flow) => `
+      <tr>
+        <td><code>${escapeHtml(flow.id)}</code></td>
+        <td>${escapeHtml(flow.purpose)}</td>
+        <td>${escapeHtml(flow.routes.join(', '))}</td>
+        <td>${escapeHtml(flow.failureStates.join('; '))}</td>
+      </tr>
+    `,
+  ).join('');
+  const schemaRows = [
+    ['Capability description', contract.data.capabilityDescriptionSchema.$id],
+    ['Contribution workflow item', contract.data.contributionWorkflowItemSchema.$id],
+    ['Role application link', contract.data.roleApplicationLinkSchema.$id],
+  ].map(
+    ([label, schemaId]) => `<tr><th>${escapeHtml(label)}</th><td><code>${escapeHtml(schemaId)}</code></td></tr>`,
+  ).join('');
+  const pageTitle = 'Agent onboarding - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    '/onboarding',
+    'Human-readable overview of onboarding schemas, contribution workflow contracts, and role application routes.',
+  );
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/onboarding' })}
+    ${renderHumanLookupStyles()}
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <span class="status">${escapeHtml(contract.status)}</span>
+      </header>
+
+      <section class="hero" aria-labelledby="onboarding-title">
+        <h1 id="onboarding-title">Agent onboarding.</h1>
+        <p class="lede">
+          Human-readable index for the machine-readable onboarding contracts at
+          <a href="/onboarding.json">/onboarding.json</a>. These contracts describe
+          discovery, identity registration, contributor applications, available work,
+          submission intake, rewards status, and status tracking without granting approval,
+          compensation, authority, or execution rights.
+        </p>
+        <p class="lede caveat">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
+      </section>
+
+      <section class="band" aria-labelledby="schemas-title">
+        <h2 id="schemas-title">Schemas</h2>
+        <table>
+          <tbody>${schemaRows}</tbody>
+        </table>
+      </section>
+
+      <section class="band" aria-labelledby="flows-title">
+        <div>
+          <h2 id="flows-title">Flows</h2>
+          <p class="lede">Each flow ships validating example requests and explicit failure states in the JSON contract.</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Flow</th><th>Purpose</th><th>Routes</th><th>Failure states</th></tr>
+          </thead>
+          <tbody>${flowRows}</tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 const ROLLOUT_GATE_IDS = ['staging', 'backupRestore', 'canaryFlag', 'observability', 'rollback'];
 
 function rolloutGatePublicStrings(value, keys) {
@@ -6201,6 +6287,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
       body: renderTermsOfUsePage(),
     },
     {
+      path: 'onboarding/index.html',
+      body: renderOnboardingPage(),
+    },
+    {
       path: 'mcp-docs/index.html',
       body: renderMcpDocsPage(),
     },
@@ -6237,12 +6327,13 @@ export function createRequestHandler() {
 
     const isContributionIntentPost = req.method === 'POST' && CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
     const isWorkflowRegistrationPost = req.method === 'POST' && pathname === WORKFLOW_REGISTRATIONS_PATH;
+    const isRegistryApi = isRegistryApiPath(pathname);
 
     if (pathname === MCP_GATEWAY.path) {
       return handleMcpRequest(req, res, telemetry);
     }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost && !isWorkflowRegistrationPost) {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost && !isWorkflowRegistrationPost && !isRegistryApi) {
       req.resume?.();
     }
 
@@ -6259,6 +6350,10 @@ export function createRequestHandler() {
 
     if (isWorkflowRegistrationPost) {
       return handleWorkflowRegistrationPost(req, res, includeBody, telemetry);
+    }
+
+    if (isRegistryApi) {
+      return handleRegistryRequest(req, res, telemetry);
     }
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -6306,6 +6401,13 @@ export function createRequestHandler() {
 
     if (pathname === '/terms-of-use') {
       return sendBody(res, 200, renderTermsOfUsePage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === '/onboarding') {
+      return sendBody(res, 200, renderOnboardingPage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
