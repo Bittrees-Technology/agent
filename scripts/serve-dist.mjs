@@ -13,6 +13,15 @@ const canonicalRoutePaths = new Set([ROBOTS_TXT_PATH, ...ROUTE_DEFINITIONS.map((
 const routeDefinitionsByPath = new Map(ROUTE_DEFINITIONS.map((definition) => [definition.path, definition]));
 const dynamicPortalHandler = createRequestHandler();
 const dynamicPortalRoutePaths = new Set(['/contribution-intents', '/gateway/contribution-intents']);
+// API namespaces are implemented only by createRequestHandler. Delegate their
+// full namespaces rather than enumerating today's endpoints, so dist-mode stays
+// aligned with source-mode as the workflow and registry contracts grow.
+const dynamicPortalRoutePrefixes = ['/v1/workflow/', '/v1/registry/'];
+
+function isDynamicPortalPath(pathname) {
+  return dynamicPortalRoutePaths.has(pathname)
+    || dynamicPortalRoutePrefixes.some((prefix) => pathname.startsWith(prefix));
+}
 const extensionlessStaticRoutePaths = new Set(
   ROUTE_DEFINITIONS
     .filter((definition) => definition.kind !== 'html' && definition.staticAsset !== false && !extname(definition.path))
@@ -117,7 +126,7 @@ const server = createServer(async (req, res) => {
     });
   }
 
-  if (dynamicPortalRoutePaths.has(normalizedPath)) {
+  if (isDynamicPortalPath(normalizedPath)) {
     return dynamicPortalHandler(req, res);
   }
 

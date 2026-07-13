@@ -1976,11 +1976,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.636');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.638');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
-  assert.equal(asset.sha256, 'fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '2a9e2196233b782a07fae9f870b915c56300379b');
-  assert.match(asset.sha256Provenance.localVerification, /Downloaded the 102723823-byte GitHub release asset/);
+  assert.equal(asset.sha256, '2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'df41416356d9ab99509c25d91cbc45324695107d');
+  assert.match(asset.sha256Provenance.localVerification, /102728091-byte asset/);
   assert.equal(response.data.releases.length, 1);
 });

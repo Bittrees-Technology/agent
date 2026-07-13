@@ -1326,38 +1326,38 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-12T23:23:47Z',
+  checkedAt: '2026-07-13T15:47:14Z',
   latest: {
-    tag: 'v0.1.636',
-    name: 'v0.1.636',
-    publishedAt: '2026-07-11T14:11:16Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.636',
-    tagCommitSha: '2a9e2196233b782a07fae9f870b915c56300379b',
+    tag: 'v0.1.638',
+    name: 'v0.1.638',
+    publishedAt: '2026-07-13T15:21:19Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.638',
+    tagCommitSha: 'df41416356d9ab99509c25d91cbc45324695107d',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-12T23:23:47Z.',
-      'Release notes: idctl-desktop extracts signing guardrail smoke checks, docs add an identity-keys verification note, and identity adds wallet binding plus chain status.',
+      'Latest public GitHub release observed by the portal update on 2026-07-13T15:47:14Z.',
+      'Release notes: prevent orphaned version tags.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.636, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.636 on 2026-07-12T23:23:47Z.',
+        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.638, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.638 on 2026-07-13T15:47:14Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.636 resolved refs/tags/v0.1.636 at 2a9e2196233b782a07fae9f870b915c56300379b.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.636',
+        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.638 resolved refs/tags/v0.1.638 at df41416356d9ab99509c25d91cbc45324695107d.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.638',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.636-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.638-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.636/ID-Agents-Control-Center-0.1.636-arm64.zip',
-        sizeBytes: 102723823,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.638/ID-Agents-Control-Center-0.1.638-arm64.zip',
+        sizeBytes: 102728091,
         contentType: 'application/zip',
-        sha256: 'fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285',
+        sha256: '2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285',
+            'sha256:2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779',
           localVerification:
-            'Downloaded the 102723823-byte GitHub release asset and verified shasum -a 256 as fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285 on 2026-07-12.',
+            'GitHub release API and expanded assets page reported sha256:2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779 for the 102728091-byte asset on 2026-07-13.',
         },
       },
     ],
@@ -1372,7 +1372,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.636-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.638-arm64.zip',
   },
 };
 
