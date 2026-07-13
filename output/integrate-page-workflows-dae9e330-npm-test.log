@@ -1,0 +1,101 @@
+
+> @bittrees/agent-mcp@0.1.0 test
+> node --test
+
+✔ mcp stdio proxy forwards JSON-RPC lines to streamable http gateway (119.54375ms)
+✔ llms.txt is a plain-text agent entry point (1.339709ms)
+✔ json routes are not placeholder success payloads (4.530292ms)
+✔ onboarding route publishes schemas and validating example requests for all flows (1.27575ms)
+✔ onboarding example requests validate against committed flow schemas (0.967125ms)
+✔ source guardrails include approved and excluded Bittrees claims (0.064417ms)
+{"timestamp":"2026-07-13T00:08:39.992Z","method":"GET","path":"/sources.json","status":200}
+✔ sources JSON only serves explicitly public-safe source records (15.722541ms)
+✔ static build includes all advertised routes (5.033458ms)
+✔ html pages emit description and Open Graph metadata (0.595167ms)
+{"timestamp":"2026-07-13T00:08:40.006Z","method":"GET","path":"/terms-of-use","status":200}
+{"timestamp":"2026-07-13T00:08:40.007Z","method":"GET","path":"/terms-of-use.json","status":200}
+✔ Terms of Use routes are blocked pending legal-approved content (6.126667ms)
+✔ landing contribution intent CTA copy follows write flag posture (0.493709ms)
+✔ landing page stacks route cards before tablet overflow widths (0.146625ms)
+✔ contribution intent contract security gate tracks the write flag (0.748083ms)
+✔ legal disclaimers and privacy notice are present across public route outputs (7.993417ms)
+✔ portal outputs do not emit old readiness or approved-profile labels (7.847542ms)
+{"timestamp":"2026-07-13T00:08:40.032Z","method":"GET","path":"/contribution-intents","status":200}
+{"timestamp":"2026-07-13T00:08:40.035Z","method":"POST","path":"/contribution-intents","status":501}
+{"timestamp":"2026-07-13T00:08:40.036Z","method":"GET","path":"/gateway/contribution-intents","status":200}
+{"timestamp":"2026-07-13T00:08:40.037Z","method":"POST","path":"/gateway/contribution-intents","status":501}
+{"timestamp":"2026-07-13T00:08:40.037Z","method":"GET","path":"/mcp","status":200}
+{"timestamp":"2026-07-13T00:08:40.038Z","method":"POST","path":"/mcp","status":200}
+✔ post-capable routes stay dynamic and return disabled responses for POST (13.104834ms)
+{"timestamp":"2026-07-13T00:08:40.039Z","method":"POST","path":"/gateway/contribution-intents","status":415}
+✔ contribution intent POST rejects unsupported media types when writes are enabled (1.528ms)
+{"timestamp":"2026-07-13T00:08:40.041Z","method":"POST","path":"/contribution-intents","status":400}
+✔ contribution intent POST rejects wallet transaction and authority escalation text (1.85425ms)
+{"timestamp":"2026-07-13T00:08:40.043Z","method":"POST","path":"/gateway/contribution-intents","status":202}
+{"timestamp":"2026-07-13T00:08:40.044Z","method":"POST","path":"/gateway/contribution-intents","status":202}
+{"timestamp":"2026-07-13T00:08:40.045Z","method":"POST","path":"/gateway/contribution-intents","status":429}
+✔ contribution intent POST rate limits repeated write attempts (3.590584ms)
+✔ portal security headers enforce browser launch gate (0.051583ms)
+✔ human pages expose a keyboard skip target and visible focus treatment (0.279667ms)
+✔ vercel catch-all headers mirror the portal launch gate (0.313167ms)
+✔ identity and keys page renders the prelaunch readiness contract (0.122917ms)
+✔ identity and keys route exposes public contract without secret fields (0.280166ms)
+✔ identity and keys JSON exposes the contributor-signing rollout gates with public references (0.283792ms)
+✔ identity and keys HTML renders rollout-gate summary and blocker state without secret material (0.245291ms)
+✔ agents route advertises prelaunch registry management rather than manual-only intake (0.643666ms)
+✔ source registry is review-ready with citation and freshness metadata (0.210959ms)
+✔ opportunities are actionable work items (0.180375ms)
+✔ homepage and monitoring expose contribution workflow (3.060708ms)
+{"timestamp":"2026-07-13T00:08:40.053Z","method":"GET","path":"/v1/workflow/opportunities","status":200}
+{"timestamp":"2026-07-13T00:08:40.053Z","method":"GET","path":"/v1/workflow/opportunities/source-registry-hardening","status":200}
+{"timestamp":"2026-07-13T00:08:40.054Z","method":"GET","path":"/v1/workflow/status","status":200}
+✔ workflow API supports discovery brief and status journeys (3.624ms)
+{"timestamp":"2026-07-13T00:08:40.056Z","method":"POST","path":"/v1/workflow/registrations","status":401}
+{"timestamp":"2026-07-13T00:08:40.056Z","method":"POST","path":"/v1/workflow/registrations","status":202}
+✔ workflow registration route requires authorized bearer token and queues review records (1.994958ms)
+✔ mcp gateway contract exposes required contribution tools (0.470584ms)
+✔ public MCP review gates use role labels without internal reviewer routes (0.815167ms)
+✔ public contribution surfaces hide internal role and route literals (5.685542ms)
+✔ mcp docs render Codex Claude Desktop and Cursor import tabs (0.147833ms)
+✔ html pages constrain wide tables and code blocks (0.253833ms)
+✔ human status and reputation views render lookup results and caveats (0.337875ms)
+✔ mcp tool calls are review-gated and structured (0.212375ms)
+✔ mcp write-like tools reject authority wallet and transaction material (0.23475ms)
+{"timestamp":"2026-07-13T00:08:40.066Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-13T00:08:40.067Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-13T00:08:40.068Z","method":"POST","path":"/mcp","status":200}
+✔ mcp streamable http endpoint initializes and serves tools (3.106667ms)
+{"timestamp":"2026-07-13T00:08:40.069Z","method":"POST","path":"/mcp","status":401}
+{"timestamp":"2026-07-13T00:08:40.070Z","method":"POST","path":"/mcp","status":403}
+{"timestamp":"2026-07-13T00:08:40.070Z","method":"POST","path":"/mcp","status":403}
+{"timestamp":"2026-07-13T00:08:40.071Z","method":"POST","path":"/mcp","status":200}
+✔ mcp HTTP write-like tools require scoped bearer tokens bound to agentId (2.947459ms)
+✔ mcp stdio proxy forwards JSON-RPC lines to streamable http gateway (106.379041ms)
+{"timestamp":"2026-07-13T00:08:40.178Z","method":"POST","path":"/mcp","status":403}
+{"timestamp":"2026-07-13T00:08:40.179Z","method":"GET","path":"/mcp","status":405}
+{"timestamp":"2026-07-13T00:08:40.179Z","method":"POST","path":"/mcp","status":200}
+{"timestamp":"2026-07-13T00:08:40.179Z","method":"POST","path":"/mcp","status":413}
+{"timestamp":"2026-07-13T00:08:40.179Z","method":"POST","path":"/mcp","status":413}
+✔ mcp endpoint rejects browser-origin mismatch and server-initiated sse get (1.421542ms)
+✔ mcp endpoint accepts pre-parsed JSON request bodies (0.259708ms)
+✔ mcp endpoint rejects oversized and deeply nested pre-parsed bodies (0.427208ms)
+{"timestamp":"2026-07-13T00:08:40.182Z","method":"POST","path":"/mcp","status":413}
+✔ mcp endpoint rejects oversized request bodies with 413 (2.871667ms)
+✔ idacc release snapshot includes verifiable download metadata (0.205791ms)
+✔ rejects duplicate JSON keys before canonicalization (1.488041ms)
+✔ signed heartbeat accepts camelCase aliases, updates liveness only, and is idempotent (4.754334ms)
+✔ invalid heartbeat is quarantined and cannot mutate identity or authority (0.872584ms)
+✔ authenticated registry writes are versioned, idempotent, and fail closed on authority fields (1.552667ms)
+✔ same expected version yields one commit and one audited conflict (1.172917ms)
+✔ file persistence validates on write and rejects a tampered stored projection (12.751458ms)
+✔ signing bytes are canonical and do not include the signature member (0.412875ms)
+✔ expiry and replay gates quarantine stale or reused authentication (1.027042ms)
+✔ revocation blocks later signed heartbeats and quarantine redacts untrusted secrets (1.213166ms)
+ℹ tests 57
+ℹ suites 0
+ℹ pass 57
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5398.215708

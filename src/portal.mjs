@@ -40,6 +40,11 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   CONTRIBUTION_INTENT_CONTRACT_PATH,
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
+const WORKFLOW_API_BASE_PATH = '/v1/workflow';
+const WORKFLOW_OPPORTUNITIES_PATH = `${WORKFLOW_API_BASE_PATH}/opportunities`;
+const WORKFLOW_REGISTRATIONS_PATH = `${WORKFLOW_API_BASE_PATH}/registrations`;
+const WORKFLOW_STATUS_PATH = `${WORKFLOW_API_BASE_PATH}/status`;
+const WORKFLOW_OPPORTUNITY_PATH_PATTERN = /^\/v1\/workflow\/opportunities\/([^/]+)$/;
 const CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS ?? 60_000);
 const CONTRIBUTION_POST_RATE_LIMIT_MAX = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_MAX ?? 30);
 const CONTRIBUTION_POST_RATE_BUCKETS = new Map();
@@ -1318,38 +1323,38 @@ export const OPPORTUNITIES = [
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-10T15:15:20Z',
+  checkedAt: '2026-07-12T23:23:47Z',
   latest: {
-    tag: 'v0.1.635',
-    name: 'v0.1.635',
-    publishedAt: '2026-07-10T08:43:53Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.635',
-    tagCommitSha: 'ce9fe147608a5c0b96714dbfe3e7236c8bcbd0fa',
+    tag: 'v0.1.636',
+    name: 'v0.1.636',
+    publishedAt: '2026-07-11T14:11:16Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.636',
+    tagCommitSha: '2a9e2196233b782a07fae9f870b915c56300379b',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-10T15:15:20Z.',
-      'Release notes: idctl gates GPT-5.6 Codex model IDs on the installed CLI version.',
+      'Latest public GitHub release observed by the portal update on 2026-07-12T23:23:47Z.',
+      'Release notes: idctl-desktop extracts signing guardrail smoke checks, docs add an identity-keys verification note, and identity adds wallet binding plus chain status.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.635, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.635 on 2026-07-10T15:15:20Z.',
+        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.636, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.636 on 2026-07-12T23:23:47Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.635 resolved refs/tags/v0.1.635 at ce9fe147608a5c0b96714dbfe3e7236c8bcbd0fa.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.635',
+        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.636 resolved refs/tags/v0.1.636 at 2a9e2196233b782a07fae9f870b915c56300379b.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.636',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.635-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.636-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.635/ID-Agents-Control-Center-0.1.635-arm64.zip',
-        sizeBytes: 102717187,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.636/ID-Agents-Control-Center-0.1.636-arm64.zip',
+        sizeBytes: 102723823,
         contentType: 'application/zip',
-        sha256: '39f843311bd4cec7e8ee1e1ca0db84352acb7e5eb667951e076fbce3eeaf8c3c',
+        sha256: 'fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:39f843311bd4cec7e8ee1e1ca0db84352acb7e5eb667951e076fbce3eeaf8c3c',
+            'sha256:fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285',
           localVerification:
-            'Downloaded the 102717187-byte GitHub release asset and verified shasum -a 256 as 39f843311bd4cec7e8ee1e1ca0db84352acb7e5eb667951e076fbce3eeaf8c3c on 2026-07-10.',
+            'Downloaded the 102723823-byte GitHub release asset and verified shasum -a 256 as fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285 on 2026-07-12.',
         },
       },
     ],
@@ -1364,7 +1369,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.635-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.636-arm64.zip',
   },
 };
 
@@ -1387,6 +1392,10 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/sources.json',
     '/opportunities.json',
     '/onboarding.json',
+    WORKFLOW_OPPORTUNITIES_PATH,
+    `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
+    `${WORKFLOW_STATUS_PATH}?id=source-registry-hardening&kind=opportunity`,
+    '/v1/registry/agents',
     CONTRIBUTION_INTENT_CONTRACT_PATH,
     GATEWAY_CONTRIBUTION_INTENT_PATH,
     MCP_GATEWAY.path,
@@ -1414,6 +1423,10 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/sources.json',
       '/opportunities.json',
       '/onboarding.json',
+      WORKFLOW_OPPORTUNITIES_PATH,
+      `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
+      `${WORKFLOW_STATUS_PATH}?id=source-registry-hardening&kind=opportunity`,
+      '/v1/registry/agents',
       CONTRIBUTION_INTENT_CONTRACT_PATH,
       GATEWAY_CONTRIBUTION_INTENT_PATH,
       '/mcp.json',
@@ -2267,6 +2280,120 @@ function buildSubmissionStatusViewContract() {
   };
 }
 
+function buildWorkflowLinks() {
+  return ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.roleApplicationLinks.map((link) => ({
+    ...link,
+    href: new URL(link.href, PORTAL_BASE_URL).toString(),
+  }));
+}
+
+function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()) {
+  const lane = readSearchParam(searchParams, 'lane').trim();
+  const priority = readSearchParam(searchParams, 'priority').trim();
+  const status = readSearchParam(searchParams, 'status').trim();
+  const opportunities = OPPORTUNITIES.filter((opportunity) => (
+    (!lane || opportunity.lane === lane)
+    && (!priority || opportunity.priority === priority)
+    && (!status || opportunity.status === status)
+  ));
+
+  return {
+    $schema: SCHEMA_URL,
+    status: 'ready-for-triage',
+    launchStatus: LAUNCH_STATUS,
+    generatedAt: new Date().toISOString(),
+    filters: { lane: lane || null, priority: priority || null, status: status || null },
+    workflow: ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.workflow,
+    roleApplicationLinks: buildWorkflowLinks(),
+    reviewGate: reviewGateRecord(),
+    noRightsCreatedDisclaimer: NO_RIGHTS_CREATED_DISCLAIMER,
+    internalReviewNotice: INTERNAL_OPPORTUNITY_REVIEW_NOTICE,
+    opportunities,
+  };
+}
+
+function buildWorkflowOpportunityResponse(opportunityId) {
+  const opportunity = findOpportunity(opportunityId);
+  if (!opportunity) {
+    return {
+      statusCode: 404,
+      body: {
+        $schema: SCHEMA_URL,
+        error: 'opportunity_not_found',
+        message: `No contribution opportunity exists for id: ${opportunityId}`,
+        availableOpportunityIds: OPPORTUNITIES.map((item) => item.id),
+      },
+    };
+  }
+
+  return {
+    statusCode: 200,
+    body: {
+      $schema: SCHEMA_URL,
+      status: 'opportunity_brief_ready',
+      launchStatus: LAUNCH_STATUS,
+      opportunity,
+      mcpTool: 'get_contribution_brief',
+      mcpResult: callMcpTool('get_contribution_brief', { opportunityId }).structuredContent,
+      authorizedSubmissionRoutes: ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.roleApplicationLinks
+        .filter((link) => ['contributor-application', 'submission-intake', 'status-tracking'].includes(link.rel)),
+      reviewGate: reviewGateRecord(),
+    },
+  };
+}
+
+function buildWorkflowStatusResponse(searchParams = new URLSearchParams()) {
+  const id = readSearchParam(searchParams, 'id').trim();
+  const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
+  const lookup = id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
+
+  return {
+    $schema: SCHEMA_URL,
+    status: id ? lookup.status : 'status_lookup_ready',
+    launchStatus: LAUNCH_STATUS,
+    query: { id: id || null, kind },
+    lookup,
+    acceptedKinds: STATUS_LOOKUP_KINDS,
+    knownOpportunityIds: OPPORTUNITIES.map((opportunity) => opportunity.id),
+    humanRoute: '/submission-status',
+    reviewGate: reviewGateRecord(),
+    caveat:
+      'Queued or found status is not assignment, approval, publication, public attestation, compensation, or execution authority.',
+  };
+}
+
+async function handleWorkflowRegistrationPost(req, res, includeBody, telemetry) {
+  let payload;
+  try {
+    payload = parseJsonRequestBody(await readRequestBody(req, 512 * 1024));
+  } catch (error) {
+    return sendJson(res, 400, {
+      $schema: SCHEMA_URL,
+      error: 'invalid_json',
+      message: error.message,
+    }, includeBody, { ...telemetry, status: 400 });
+  }
+
+  try {
+    const authContext = authorizeMcpWriteTool(req, 'register_external_agent', payload);
+    return sendJson(res, 202, {
+      $schema: SCHEMA_URL,
+      ...callMcpTool('register_external_agent', payload, authContext).structuredContent,
+      authorizedRoute: WORKFLOW_REGISTRATIONS_PATH,
+      statusLookup: WORKFLOW_STATUS_PATH,
+    }, includeBody, { ...telemetry, status: 202 });
+  } catch (error) {
+    const status = error.statusCode ?? 400;
+    return sendJson(res, status, {
+      $schema: SCHEMA_URL,
+      error: status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : 'registration_rejected',
+      message: error.message,
+      data: error.jsonRpcData,
+      requiredScope: MCP_WRITE_TOOL_SCOPES.register_external_agent,
+    }, includeBody, { ...telemetry, status });
+  }
+}
+
 function buildReputationViewContract() {
   return {
     status: 'human-view-ready',
@@ -2667,6 +2794,62 @@ export const ROUTE_DEFINITIONS = [
     kind: 'html',
     status: MCP_GATEWAY.status,
   },
+  {
+    path: WORKFLOW_OPPORTUNITIES_PATH,
+    label: 'Workflow opportunities API',
+    description: 'HTTP JSON list of contribution opportunities with optional lane, priority, and status filters.',
+    kind: 'json',
+    status: 'ready-for-triage',
+    staticAsset: false,
+  },
+  {
+    path: `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`,
+    label: 'Workflow opportunity brief API',
+    description: 'HTTP JSON brief for one opportunity, including acceptance criteria, sources, and review path.',
+    kind: 'json',
+    status: 'ready-for-triage',
+    staticAsset: false,
+  },
+  {
+    path: WORKFLOW_REGISTRATIONS_PATH,
+    label: 'Workflow registration API',
+    description: 'Bearer-authenticated HTTP JSON route for queueing an external-agent registration review packet.',
+    kind: 'json',
+    status: 'review-gated queue',
+    staticAsset: false,
+  },
+  {
+    path: WORKFLOW_STATUS_PATH,
+    label: 'Workflow status API',
+    description: 'HTTP JSON status lookup for opportunity, registration, claim, submission, feedback, or attestation records.',
+    kind: 'json',
+    status: 'human-view-ready',
+    staticAsset: false,
+  },
+  {
+    path: '/v1/registry/agents',
+    label: 'Registry feed API',
+    description: 'HTTP JSON feed of staged agent registry records.',
+    kind: 'json',
+    status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
+    staticAsset: false,
+  },
+  {
+    path: '/v1/registry/agents/:agentId',
+    label: 'Registry agent API',
+    description: 'HTTP JSON read/write route for one staged agent registry record using controller-signed envelopes.',
+    kind: 'json',
+    status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
+    staticAsset: false,
+  },
+  {
+    path: '/v1/registry/heartbeats',
+    label: 'Registry heartbeat API',
+    description: 'HTTP JSON route for signed heartbeat updates against staged registry records.',
+    kind: 'json',
+    status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
+    staticAsset: false,
+  },
   ...JSON_ROUTES.map((route) => ({ ...route, kind: 'json' })),
 ];
 
@@ -2819,7 +3002,7 @@ function renderRouteCards() {
 }
 
 function renderWorkflowItems() {
-  return CONTRIBUTION_WORKFLOW.map(
+  return ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.workflow.map(
     (item, index) => `
       <li>
         <span>${index + 1}</span>
@@ -2827,6 +3010,7 @@ function renderWorkflowItems() {
           <strong>${escapeHtml(item.step)}</strong>
           <p>${escapeHtml(item.action)}</p>
           <a href="${escapeHtml(item.route)}">${escapeHtml(item.route)}</a>
+          <p>${escapeHtml(item.reviewGate)}</p>
         </div>
       </li>
     `,
@@ -4567,7 +4751,7 @@ export function renderLandingPage() {
         padding: 0 16px;
       }
 
-      @media (max-width: 820px) {
+      @media (max-width: 900px) {
         main { width: min(100% - 28px, 1180px); padding-top: 18px; }
         .topline,
         .hero,
@@ -4575,6 +4759,7 @@ export function renderLandingPage() {
         .topline { align-items: flex-start; }
         h1 { max-width: 100%; }
         .route-card { align-items: flex-start; flex-direction: column; }
+        .route-card span { white-space: normal; text-align: left; }
         .workflow-list,
         .form-grid { grid-template-columns: 1fr; }
       }
@@ -6051,12 +6236,13 @@ export function createRequestHandler() {
     }
 
     const isContributionIntentPost = req.method === 'POST' && CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
+    const isWorkflowRegistrationPost = req.method === 'POST' && pathname === WORKFLOW_REGISTRATIONS_PATH;
 
     if (pathname === MCP_GATEWAY.path) {
       return handleMcpRequest(req, res, telemetry);
     }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost) {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost && !isWorkflowRegistrationPost) {
       req.resume?.();
     }
 
@@ -6071,14 +6257,19 @@ export function createRequestHandler() {
       return handleContributionIntentPost(req, res, includeBody, telemetry, pathname);
     }
 
+    if (isWorkflowRegistrationPost) {
+      return handleWorkflowRegistrationPost(req, res, includeBody, telemetry);
+    }
+
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       return sendJson(res, 405, {
         $schema: SCHEMA_URL,
         error: 'method_not_allowed',
         message:
-          'Only GET and HEAD are supported by this portal, except gated POST contribution-intent intake paths.',
+          'Only GET and HEAD are supported by this portal, except gated POST contribution-intent and workflow registration intake paths.',
         allowedMethods: ['GET', 'HEAD'],
         contributionIntentPostPaths: Array.from(CONTRIBUTION_INTENT_POST_PATHS),
+        workflowRegistrationPostPath: WORKFLOW_REGISTRATIONS_PATH,
       }, includeBody, {
         ...telemetry,
         status: 405,
@@ -6131,6 +6322,29 @@ export function createRequestHandler() {
 
     if (pathname === '/llms.txt') {
       return sendBody(res, 200, buildLlmsTxt(), 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === WORKFLOW_OPPORTUNITIES_PATH) {
+      return sendJson(res, 200, buildWorkflowOpportunitiesResponse(requestUrl.searchParams), includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    const workflowOpportunityMatch = pathname.match(WORKFLOW_OPPORTUNITY_PATH_PATTERN);
+    if (workflowOpportunityMatch) {
+      const response = buildWorkflowOpportunityResponse(decodeURIComponent(workflowOpportunityMatch[1]));
+      return sendJson(res, response.statusCode, response.body, includeBody, {
+        ...telemetry,
+        status: response.statusCode,
+      });
+    }
+
+    if (pathname === WORKFLOW_STATUS_PATH) {
+      return sendJson(res, 200, buildWorkflowStatusResponse(requestUrl.searchParams), includeBody, {
         ...telemetry,
         status: 200,
       });

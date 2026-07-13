@@ -584,6 +584,14 @@ test('landing contribution intent CTA copy follows write flag posture', () => {
   });
 });
 
+test('landing page stacks route cards before tablet overflow widths', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /@media \(max-width: 900px\)/);
+  assert.match(html, /\.route-card \{ align-items: flex-start; flex-direction: column; \}/);
+  assert.match(html, /\.route-card span \{ white-space: normal; text-align: left; \}/);
+});
+
 test('contribution intent contract security gate tracks the write flag', () => {
   const contributionIntentRoute = JSON_ROUTE_MAP.get('/contribution-intents');
 
@@ -1012,7 +1020,10 @@ test('homepage and monitoring expose contribution workflow', () => {
   const response = buildJsonResponse(monitoringRoute, '2026-07-06T00:00:00.000Z');
 
   assert.match(htmlAsset.body, /Contribution workflow/);
-  assert.match(htmlAsset.body, /Choose lane/);
+  assert.match(htmlAsset.body, /Agent discovery/);
+  assert.match(htmlAsset.body, /Status tracking/);
+  assert.match(htmlAsset.body, /Discovery is read-only/);
+  assert.match(htmlAsset.body, /Contributor application submission/);
   assert.equal(response.status, LAUNCH_FRESHNESS_MONITORING.status);
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/identity-keys'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/submission-status'));
@@ -1029,6 +1040,95 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.claimDrift.baselineApprovedClaimIds.includes(APPROVED_CLAIMS[0].id));
   assert.ok(response.data.monitoring.claimDrift.baselineExcludedClaimIds.includes(EXCLUDED_CLAIM_REVIEW[0].id));
+});
+
+test('workflow API supports discovery brief and status journeys', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const listResponse = await fetch(`${baseUrl}/v1/workflow/opportunities?priority=high`);
+    const listBody = await listResponse.json();
+
+    assert.equal(listResponse.status, 200);
+    assert.equal(listBody.status, 'ready-for-triage');
+    assert.ok(listBody.workflow.some((item) => item.id === 'available-work-listing'));
+    assert.ok(listBody.roleApplicationLinks.some((link) => link.rel === 'submission-intake'));
+    assert.ok(listBody.opportunities.length >= 1);
+
+    const opportunityId = listBody.opportunities[0].id;
+    const briefResponse = await fetch(`${baseUrl}/v1/workflow/opportunities/${opportunityId}`);
+    const briefBody = await briefResponse.json();
+
+    assert.equal(briefResponse.status, 200);
+    assert.equal(briefBody.status, 'opportunity_brief_ready');
+    assert.equal(briefBody.opportunity.id, opportunityId);
+    assert.equal(briefBody.mcpTool, 'get_contribution_brief');
+    assert.ok(briefBody.authorizedSubmissionRoutes.some((link) => link.href === '/contribution-intents'));
+
+    const statusResponse = await fetch(`${baseUrl}/v1/workflow/status?id=${opportunityId}&kind=opportunity`);
+    const statusBody = await statusResponse.json();
+
+    assert.equal(statusResponse.status, 200);
+    assert.equal(statusBody.status, 'status_found');
+    assert.equal(statusBody.lookup.result.kind, 'opportunity');
+    assert.equal(statusBody.humanRoute, '/submission-status');
+  });
+});
+
+test('workflow registration route requires authorized bearer token and queues review records', async () => {
+  const previousTokens = process.env.MCP_WRITE_TOKENS;
+  process.env.MCP_WRITE_TOKENS = JSON.stringify({
+    'test-workflow-token': {
+      subject: 'external-workflow-agent',
+      scopes: ['contributor:register'],
+    },
+  });
+
+  try {
+    await withPortalServer(async (baseUrl) => {
+      const payload = {
+        agentId: 'external-workflow-agent',
+        displayName: 'External Workflow Agent',
+        operator: 'External operator',
+        contact: {
+          kind: 'url',
+          value: 'https://example.invalid/contact',
+        },
+        capabilities: ['source review'],
+        evidencePolicy: 'Cite public route and source ids.',
+      };
+
+      const blocked = await fetch(`${baseUrl}/v1/workflow/registrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const blockedBody = await blocked.json();
+
+      assert.equal(blocked.status, 401);
+      assert.equal(blockedBody.requiredScope, 'contributor:register');
+
+      const accepted = await fetch(`${baseUrl}/v1/workflow/registrations`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer test-workflow-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const acceptedBody = await accepted.json();
+
+      assert.equal(accepted.status, 202);
+      assert.equal(acceptedBody.status, 'queued_for_review');
+      assert.equal(acceptedBody.registration.agentId, payload.agentId);
+      assert.equal(acceptedBody.authorizedRoute, '/v1/workflow/registrations');
+      assert.equal(acceptedBody.statusLookup, '/v1/workflow/status');
+    });
+  } finally {
+    if (previousTokens === undefined) {
+      delete process.env.MCP_WRITE_TOKENS;
+    } else {
+      process.env.MCP_WRITE_TOKENS = previousTokens;
+    }
+  }
 });
 
 test('mcp gateway contract exposes required contribution tools', () => {
@@ -1625,11 +1725,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.635');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.636');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
-  assert.equal(asset.sha256, '39f843311bd4cec7e8ee1e1ca0db84352acb7e5eb667951e076fbce3eeaf8c3c');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'ce9fe147608a5c0b96714dbfe3e7236c8bcbd0fa');
-  assert.match(asset.sha256Provenance.localVerification, /Downloaded the 102717187-byte GitHub release asset/);
+  assert.equal(asset.sha256, 'fcc6793af2896f8d88536708f7f8ea90ff0e6b0c272192d3d5d56a3b8fadb285');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '2a9e2196233b782a07fae9f870b915c56300379b');
+  assert.match(asset.sha256Provenance.localVerification, /Downloaded the 102723823-byte GitHub release asset/);
   assert.equal(response.data.releases.length, 1);
 });

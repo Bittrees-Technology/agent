@@ -1,0 +1,5 @@
+
+> @bittrees/agent-mcp@0.1.0 build
+> node scripts/build.mjs
+
+built dist/ with 21 static assets

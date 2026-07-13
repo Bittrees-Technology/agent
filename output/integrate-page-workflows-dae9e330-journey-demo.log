@@ -1,0 +1,17 @@
+{"timestamp":"2026-07-13T00:09:31.966Z","method":"GET","path":"/onboarding.json","status":200}
+200 GET /onboarding.json: prelaunch-onboarding-contract-ready
+machine-readable onboarding flows: 7
+{"timestamp":"2026-07-13T00:09:31.971Z","method":"GET","path":"/v1/workflow/opportunities","status":200}
+200 GET /v1/workflow/opportunities?priority=high: ready-for-triage
+opportunity discovery count: 3
+{"timestamp":"2026-07-13T00:09:31.972Z","method":"GET","path":"/v1/workflow/opportunities/source-registry-hardening","status":200}
+200 GET /v1/workflow/opportunities/source-registry-hardening: opportunity_brief_ready
+requirement inspection brief: source-registry-hardening via get_contribution_brief
+{"timestamp":"2026-07-13T00:09:31.975Z","method":"POST","path":"/v1/workflow/registrations","status":202}
+202 POST /v1/workflow/registrations: queued_for_review
+{"timestamp":"2026-07-13T00:09:31.976Z","method":"GET","path":"/v1/workflow/status","status":200}
+200 GET /v1/workflow/status?id=reg_de950d54-5bac-43ed-807b-5a03ca65f71c&kind=registration: status_found
+status inspection: status_found for undefined
+{"timestamp":"2026-07-13T00:09:31.977Z","method":"POST","path":"/mcp","status":200}
+200 POST /mcp tools/list: 10 tools
+journey demo passed
