@@ -2894,6 +2894,7 @@ function renderPageMetadata({ title, description, path, robots = 'noindex,nofoll
 
   return `<meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="${escapeHtml(robots)}" />
+    <meta name="theme-color" content="#f6f7f2" />
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
     <meta property="og:site_name" content="agent.bittrees.org" />
     <meta property="og:type" content="website" />
@@ -2976,6 +2977,54 @@ function renderOverflowSafeStyles() {
         display: block;
         max-width: 100%;
         white-space: pre-wrap;
+      }
+  `;
+}
+
+const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
+  { path: '/', label: 'Home' },
+  { path: '/identity-keys', label: 'Identity' },
+  { path: '/mcp', label: 'Gateway' },
+  { path: '/mcp-docs', label: 'Docs' },
+  { path: '/submission-status', label: 'Status' },
+  { path: '/reputation', label: 'Reputation' },
+  { path: '/terms-of-use', label: 'Terms' },
+]);
+
+function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
+  const links = PRIMARY_PORTAL_NAV_ITEMS.map(({ path, label }) => {
+    const currentAttribute = path === currentPath ? ' aria-current="page"' : '';
+    return `<a href="${escapeHtml(path)}"${currentAttribute}>${escapeHtml(label)}</a>`;
+  }).join('');
+
+  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${links}</nav>`;
+}
+
+function renderPrimaryPortalNavStyles() {
+  return `
+      .topline-meta {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px 18px;
+      }
+
+      .topnav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .topnav a { color: var(--ink); }
+
+      .topnav a[aria-current="page"] {
+        color: var(--green);
+        text-decoration: none;
       }
   `;
 }
@@ -3149,6 +3198,7 @@ function renderHumanLookupStyles() {
 
       .topline {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 20px;
         align-items: center;
@@ -3160,6 +3210,13 @@ function renderHumanLookupStyles() {
         font-size: 1.15rem;
         font-weight: 750;
       }
+
+      .brand a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      ${renderPrimaryPortalNavStyles()}
 
       .status {
         display: inline-flex;
@@ -3303,6 +3360,8 @@ function renderHumanLookupStyles() {
         .topline,
         .band,
         form { grid-template-columns: 1fr; align-items: stretch; }
+        .topline { align-items: flex-start; }
+        .topline-meta { justify-content: flex-start; }
         h1 { max-width: 100%; }
       }
     </style>
@@ -4464,6 +4523,7 @@ export function renderLandingPage() {
 
       .topline {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 20px;
         align-items: center;
@@ -4476,6 +4536,13 @@ export function renderLandingPage() {
         font-size: 1.15rem;
         font-weight: 750;
       }
+
+      .brand a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      ${renderPrimaryPortalNavStyles()}
 
       .status {
         display: inline-flex;
@@ -4764,6 +4831,7 @@ export function renderLandingPage() {
         .hero,
         .band { grid-template-columns: 1fr; }
         .topline { align-items: flex-start; }
+        .topline-meta { justify-content: flex-start; }
         h1 { max-width: 100%; }
         .route-card { align-items: flex-start; flex-direction: column; }
         .route-card span { white-space: normal; text-align: left; }
@@ -4776,8 +4844,11 @@ export function renderLandingPage() {
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <main id="main-content">
       <header class="topline">
-        <p class="brand">agent.bittrees.org</p>
-        <span class="status">${escapeHtml(LAUNCH_STATUS.status)}</span>
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav('/')}
+          <span class="status">${escapeHtml(LAUNCH_STATUS.status)}</span>
+        </div>
       </header>
       <p class="legal-notice">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
 
@@ -4902,6 +4973,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
       }
       .topline {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 20px;
         align-items: flex-start;
@@ -4914,16 +4986,11 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
-      .topnav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 12px;
-        color: var(--muted);
-        font-size: 0.9rem;
-        font-weight: 700;
+      .brand a {
+        color: inherit;
+        text-decoration: none;
       }
-      .topnav a { color: var(--ink); }
+      ${renderPrimaryPortalNavStyles()}
       h1 {
         margin: 0 0 14px;
         max-width: 760px;
@@ -5047,6 +5114,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
       @media (max-width: 720px) {
         main { width: min(100% - 28px, 1120px); }
         .topline { flex-direction: column; }
+        .topline-meta { justify-content: flex-start; }
         .import-tab-labels { grid-template-columns: 1fr; }
         .import-panel dl div { grid-template-columns: 1fr; }
         th, td { display: block; width: 100%; }
@@ -5058,12 +5126,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
     <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <nav class="topnav" aria-label="MCP portal routes">
-          <a href="/mcp">Gateway</a>
-          <a href="/mcp-docs">Docs</a>
-          <a href="/submission-status">Status</a>
-          <a href="/reputation">Reputation</a>
-        </nav>
+        <div class="topline-meta">${renderPrimaryPortalNav(pagePath)}</div>
       </header>
 
       <section class="hero" aria-labelledby="mcp-title">
@@ -5149,7 +5212,10 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
     <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">human-view-ready</span>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav('/submission-status')}
+          <span class="status">human-view-ready</span>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="status-title">
@@ -5238,7 +5304,10 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
     <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">human-view-ready</span>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav('/reputation')}
+          <span class="status">human-view-ready</span>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="reputation-title">
@@ -5308,7 +5377,10 @@ export function renderTermsOfUsePage() {
     <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">${escapeHtml(termsStatus.status)}</span>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav('/terms-of-use')}
+          <span class="status">${escapeHtml(termsStatus.status)}</span>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="terms-of-use-title">
@@ -5566,6 +5638,7 @@ export function renderIdentityKeysPage() {
 
       .topline {
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 20px;
         align-items: center;
@@ -5577,6 +5650,13 @@ export function renderIdentityKeysPage() {
         font-size: 1.15rem;
         font-weight: 750;
       }
+
+      .brand a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      ${renderPrimaryPortalNavStyles()}
 
       .status {
         display: inline-flex;
@@ -5667,6 +5747,7 @@ export function renderIdentityKeysPage() {
         main { width: min(100% - 28px, 1120px); padding-top: 18px; }
         .topline,
         .band { grid-template-columns: 1fr; align-items: flex-start; }
+        .topline-meta { justify-content: flex-start; }
         h1 { max-width: 100%; }
       }
     </style>
@@ -5676,7 +5757,10 @@ export function renderIdentityKeysPage() {
     <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.status)}</span>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav('/identity-keys')}
+          <span class="status">${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.status)}</span>
+        </div>
       </header>
 
       <section class="hero" aria-labelledby="identity-title">

@@ -79,18 +79,22 @@ Machine-readable tool schemas, review gate metadata, generic snippets, and Codex
 
 ## Workflow HTTP routes
 
-The production workflow HTTP surface reuses the onboarding contract data and the existing review-gated contribution tooling:
+The workflow HTTP surface reuses the onboarding contract data and the existing review-gated contribution tooling:
 
 - `GET /v1/workflow/opportunities`
 - `GET /v1/workflow/opportunities/:opportunityId`
 - `POST /v1/workflow/registrations`
 - `GET /v1/workflow/status?id=<id>&kind=<kind>`
 
-`GET /v1/workflow/opportunities` returns the filtered opportunity list plus the canonical workflow steps and role-application links from `data/agent-onboarding/contribution-workflow.json`. `GET /v1/workflow/opportunities/:opportunityId` returns a dispatch-ready brief, the MCP-derived opportunity detail, and the authorized submission/status routes.
+`GET /v1/workflow/opportunities` accepts optional `lane`, `priority`, and `status` query filters and returns the filtered opportunity list plus the canonical workflow steps, absolute role-application links, review gate, and launch caveats from `data/agent-onboarding/contribution-workflow.json`.
 
-`POST /v1/workflow/registrations` is a bearer-authenticated review queue stub backed by the same `register_external_agent` validation and review gate used by the MCP gateway. Missing or wrong tokens return `401` or `403`; malformed requests return `400`; accepted requests return `202` with the queued registration record and `/v1/workflow/status` lookup path.
+`GET /v1/workflow/opportunities/:opportunityId` is the requirement-inspection route. It returns `200` with `status: "opportunity_brief_ready"`, the opportunity summary, the MCP-derived brief, and the authorized contributor-application, submission-intake, and status-tracking links. Unknown ids return `404` with `error: "opportunity_not_found"` and `availableOpportunityIds`.
 
-`GET /v1/workflow/status` is the HTTP status lookup companion to `check_contribution_status`. It resolves queued registration, claim, submission, feedback, attestation, or opportunity records without implying assignment, approval, publication, compensation, or execution authority.
+`POST /v1/workflow/registrations` is the onboarding-start route. It is a bearer-authenticated review queue stub backed by the same `register_external_agent` validation and review gate used by the MCP gateway. The JSON body must include `agentId`, `displayName`, `operator`, `contact`, `capabilities`, and `evidencePolicy`. Missing or wrong tokens return `401` or `403`; malformed or incomplete requests return `400`; accepted requests return `202` with the queued registration record, `authorizedRoute`, and `statusLookup`.
+
+`GET /v1/workflow/status` is the canonical onboarding/status-tracking route. It accepts `id` plus optional `kind` (`any`, `opportunity`, `registration`, `claim`, `submission`, `feedback`, or `attestation`). With no `id`, it returns the ready-state contract; with an `id`, it returns `status_found` or `not_found`, the nested MCP-backed `lookup`, the accepted kinds, and the human fallback route `/submission-status`. Unknown `kind` values normalize to `any` instead of returning a validation error.
+
+Internal-only and review-routing fields still exist in the published schemas, but they are not public guarantees: `contact.kind = "internal-route"` is for review-gated/internal records only, and `handoff.requestedOwnerRoute`, `handoff.goalId`, and `handoff.sourceIds` remain review-routing or provenance fields rather than public assignment, approval, or authority signals.
 
 Generic MCP client entry:
 

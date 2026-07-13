@@ -423,6 +423,26 @@ test('onboarding route publishes schemas and validating example requests for all
   assert.equal(response.data.guardBehavior.contributionIntents.writeGate.accepted, false);
   assert.equal(response.data.guardBehavior.mcpReviewGate.productionMutationAllowed, false);
   assert.equal(response.data.guardBehavior.mcpProductionMutationAllowed, false);
+  assert.ok(response.data.guardBehavior.internalOnlyFieldNotes.some((note) => note.includes('internal-route')));
+  assert.ok(response.data.guardBehavior.internalOnlyFieldNotes.some((note) => note.includes('handoff.goalId')));
+
+  const flowById = new Map(response.data.flows.map((flow) => [flow.id, flow]));
+  assert.deepEqual(flowById.get('identity-registration').routes, ['/identity-keys.json', '/v1/workflow/registrations', '/mcp']);
+  assert.deepEqual(
+    flowById.get('available-work-listing').routes,
+    ['/v1/workflow/opportunities', '/v1/workflow/opportunities/:opportunityId', '/opportunities.json', '/mcp'],
+  );
+  assert.deepEqual(
+    flowById.get('status-tracking').routes,
+    ['/v1/workflow/status', '/submission-status', '/submission-status.json', '/mcp'],
+  );
+  assert.deepEqual(
+    flowById.get('identity-registration').requestSchema.required,
+    ['channel', 'path', 'method', 'action', 'agentId', 'displayName', 'operator', 'contact', 'capabilities', 'evidencePolicy', 'reviewGateAcknowledged'],
+  );
+  assert.deepEqual(flowById.get('status-tracking').requestSchema.required, ['channel', 'reviewGateAcknowledged']);
+  assert.deepEqual(flowById.get('status-tracking').requestSchema.properties.query.required, ['id']);
+  assert.equal(flowById.get('status-tracking').requestSchema.properties.query.properties.kind.default, 'any');
 
   for (const flow of response.data.flows) {
     assert.equal(flow.exampleRequests.length, 2, `${flow.id} should ship exactly two example requests`);
@@ -1054,7 +1074,12 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.equal(listResponse.status, 200);
     assert.equal(listBody.status, 'ready-for-triage');
     assert.ok(listBody.workflow.some((item) => item.id === 'available-work-listing'));
+    assert.ok(listBody.workflow.some((item) => item.route === '/v1/workflow/opportunities'));
+    assert.ok(listBody.workflow.some((item) => item.route === '/v1/workflow/opportunities/:opportunityId'));
     assert.ok(listBody.roleApplicationLinks.some((link) => link.rel === 'submission-intake'));
+    assert.ok(listBody.roleApplicationLinks.some((link) => link.href === 'https://agent.bittrees.org/v1/workflow/opportunities'));
+    assert.ok(listBody.roleApplicationLinks.some((link) => link.href === 'https://agent.bittrees.org/v1/workflow/registrations'));
+    assert.ok(listBody.roleApplicationLinks.some((link) => link.href === 'https://agent.bittrees.org/v1/workflow/status'));
     assert.ok(listBody.opportunities.length >= 1);
 
     const opportunityId = listBody.opportunities[0].id;
@@ -1066,6 +1091,7 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.equal(briefBody.opportunity.id, opportunityId);
     assert.equal(briefBody.mcpTool, 'get_contribution_brief');
     assert.ok(briefBody.authorizedSubmissionRoutes.some((link) => link.href === '/contribution-intents'));
+    assert.ok(briefBody.authorizedSubmissionRoutes.some((link) => link.href === '/v1/workflow/status'));
 
     const statusResponse = await fetch(`${baseUrl}/v1/workflow/status?id=${opportunityId}&kind=opportunity`);
     const statusBody = await statusResponse.json();
@@ -1074,6 +1100,13 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.equal(statusBody.status, 'status_found');
     assert.equal(statusBody.lookup.result.kind, 'opportunity');
     assert.equal(statusBody.humanRoute, '/submission-status');
+
+    const normalizedStatusResponse = await fetch(`${baseUrl}/v1/workflow/status?id=${opportunityId}&kind=bogus`);
+    const normalizedStatusBody = await normalizedStatusResponse.json();
+
+    assert.equal(normalizedStatusResponse.status, 200);
+    assert.equal(normalizedStatusBody.query.kind, 'any');
+    assert.equal(normalizedStatusBody.status, 'status_found');
   });
 });
 
@@ -1371,6 +1404,28 @@ test('html pages constrain wide tables and code blocks', () => {
     assert.match(html, /table-layout: fixed/);
     assert.match(html, /overflow-wrap: anywhere/);
     assert.match(html, /pre code \{/);
+  }
+});
+
+test('human pages expose shared primary navigation and route metadata', () => {
+  const pages = [
+    { path: '/', label: 'Home', html: renderLandingPage() },
+    { path: '/mcp', label: 'Gateway', html: renderMcpGatewayPage() },
+    { path: '/mcp-docs', label: 'Docs', html: renderMcpDocsPage() },
+    { path: '/identity-keys', label: 'Identity', html: renderIdentityKeysPage() },
+    { path: '/submission-status', label: 'Status', html: renderSubmissionStatusPage() },
+    { path: '/reputation', label: 'Reputation', html: renderReputationPage() },
+    { path: '/terms-of-use', label: 'Terms', html: renderTermsOfUsePage() },
+  ];
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  for (const page of pages) {
+    assert.match(page.html, /aria-label="Primary portal routes"/);
+    assert.match(
+      page.html,
+      new RegExp(`<a href="${escapeRegex(page.path)}" aria-current="page">${escapeRegex(page.label)}<\\/a>`),
+    );
+    assert.match(page.html, /<meta name="theme-color" content="#f6f7f2" \/>/);
   }
 });
 

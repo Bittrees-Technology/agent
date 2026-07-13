@@ -2,7 +2,7 @@
   "schema": "agent.bittrees.contribution-workflow-data.v1",
   "workflowItemSchema": "https://agent.bittrees.org/schemas/onboarding/contribution-workflow-item.v1.json",
   "roleApplicationLinkSchema": "https://agent.bittrees.org/schemas/onboarding/role-application-link.v1.json",
-  "generatedAt": "2026-07-12T20:39:39.978Z",
+  "generatedAt": "2026-07-13T00:00:00.000Z",
   "provenance": {
     "designContract": "docs/agent-onboarding-interface-contracts.md",
     "goalId": "goal_plan_rzit49",
@@ -26,35 +26,37 @@
     {
       "id": "identity-registration",
       "step": "Identity registration",
-      "route": "/mcp",
-      "action": "Queue an external profile with register_external_agent or submit a controller-signed registry envelope.",
+      "route": "/v1/workflow/registrations",
+      "action": "Queue an external profile through the workflow registration API or the underlying register_external_agent review queue.",
       "output": "Registration queued for identity and authority review.",
       "alternateRoutes": [
         "/identity-keys.json",
-        "/v1/registry/agents/:agentId",
-        "/v1/registry/heartbeats"
+        "/mcp"
       ],
-      "reviewGate": "Controller, identity, endpoint, signer, wallet, and authority changes require explicit review."
+      "reviewGate": "Bearer-scoped queue access is required, and identity, controller, signer, wallet, and authority changes remain review-gated."
     },
     {
       "id": "contributor-application-submission",
       "step": "Contributor application submission",
-      "route": "/mcp",
-      "action": "Submit a compatibility application packet through registration, claim, contribution-intent, and status routes.",
-      "output": "Contributor application queued for lane and capability review.",
+      "route": "/v1/workflow/opportunities/:opportunityId",
+      "action": "Inspect the opportunity-specific brief, then use the listed compatibility queue routes for claim, intake, or follow-up status.",
+      "output": "Opportunity-specific requirements, review caveats, and next routes for claim or submission.",
       "alternateRoutes": [
+        "/mcp",
         "/contribution-intents",
-        "/submission-status.json"
+        "/v1/workflow/status"
       ],
       "reviewGate": "The application remains queued until the owning lead reviews identity, lane fit, capability, and evidence policy."
     },
     {
       "id": "available-work-listing",
       "step": "Available work listing",
-      "route": "/opportunities.json",
-      "action": "List contribution opportunities and fetch a review-ready brief before requesting or submitting work.",
-      "output": "Available contribution opportunities and acceptance criteria.",
+      "route": "/v1/workflow/opportunities",
+      "action": "List contribution opportunities, filters, workflow steps, and canonical role-application links before selecting a brief or queue action.",
+      "output": "Filtered contribution opportunities plus canonical workflow and role-application links.",
       "alternateRoutes": [
+        "/v1/workflow/opportunities/:opportunityId",
+        "/opportunities.json",
         "/mcp"
       ],
       "reviewGate": "Opportunity visibility is not assignment, payment, publication approval, or execution authority."
@@ -192,11 +194,10 @@
     {
       "rel": "identity-registration",
       "flowId": "identity-registration",
-      "href": "/mcp",
+      "href": "/v1/workflow/registrations",
       "method": "POST",
-      "toolName": "register_external_agent",
       "status": "review-gated queue",
-      "reviewGate": "Owner review is required before public registry inclusion or authority changes."
+      "reviewGate": "A valid bearer token is required, and owner review is still required before public registry inclusion or authority changes."
     },
     {
       "rel": "contributor-application",
@@ -210,7 +211,7 @@
     {
       "rel": "available-work",
       "flowId": "available-work-listing",
-      "href": "/opportunities.json",
+      "href": "/v1/workflow/opportunities",
       "method": "GET",
       "status": "ready for triage",
       "reviewGate": "Visibility is not assignment, compensation, publication approval, or execution authority."
@@ -234,7 +235,7 @@
     {
       "rel": "status-tracking",
       "flowId": "status-tracking",
-      "href": "/submission-status.json",
+      "href": "/v1/workflow/status",
       "method": "GET",
       "status": "live read-only",
       "reviewGate": "Found or queued status is not approval, publication, attestation, or compensation."
