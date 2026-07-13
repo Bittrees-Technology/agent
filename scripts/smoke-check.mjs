@@ -11,6 +11,7 @@ const routeChecks = [
   { path: '/reputation', kind: 'html' },
   { path: '/terms-of-use', kind: 'html' },
   { path: '/onboarding', kind: 'html' },
+  { path: '/tou', kind: 'html' },
   { path: '/llms.txt', kind: 'text' },
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },

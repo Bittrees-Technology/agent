@@ -19,6 +19,8 @@ import {
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
+const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
+const TERMS_OF_USE_SHORT_ROUTE = '/tou';
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
@@ -1384,6 +1386,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/submission-status',
     '/reputation',
     '/terms-of-use',
+    '/tou',
     '/onboarding',
     '/llms.txt',
     '/agents.json',
@@ -6375,6 +6378,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
       body: renderOnboardingPage(),
     },
     {
+      path: 'tou/index.html',
+      body: renderTermsOfUsePage(),
+    },
+    {
       path: 'mcp-docs/index.html',
       body: renderMcpDocsPage(),
     },
@@ -6483,7 +6490,7 @@ export function createRequestHandler() {
       });
     }
 
-    if (pathname === '/terms-of-use') {
+    if (pathname === TERMS_OF_USE_PAGE_ROUTE || pathname === TERMS_OF_USE_SHORT_ROUTE) {
       return sendBody(res, 200, renderTermsOfUsePage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,

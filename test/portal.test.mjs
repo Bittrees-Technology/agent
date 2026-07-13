@@ -512,6 +512,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('reputation/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
   assert.ok(assetPaths.has('onboarding/index.html'));
+  assert.ok(assetPaths.has('tou/index.html'));
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
@@ -571,6 +572,7 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
 
   await withPortalServer(async (baseUrl) => {
     const pageResponse = await fetch(`${baseUrl}/terms-of-use`);
+    const shortRouteResponse = await fetch(`${baseUrl}/tou`);
     const contractResponse = await fetch(`${baseUrl}/terms-of-use.json`);
     const contractBody = await contractResponse.json();
 
@@ -578,6 +580,11 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
     assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
     assert.match(await pageResponse.text(), /pending legal approval/);
+
+    assert.equal(shortRouteResponse.status, 200);
+    assert.match(shortRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
+    assert.equal(shortRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(await shortRouteResponse.text(), /Terms of Use are pending legal approval/);
 
     assert.equal(contractResponse.status, 200);
     assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
@@ -1053,6 +1060,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/reputation'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms-of-use'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/tou'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding.json'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
