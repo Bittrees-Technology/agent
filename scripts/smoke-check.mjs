@@ -10,6 +10,7 @@ const routeChecks = [
   { path: '/submission-status', kind: 'html' },
   { path: '/reputation', kind: 'html' },
   { path: '/terms-of-use', kind: 'html' },
+  { path: '/privacy', kind: 'html' },
   { path: '/onboarding', kind: 'html' },
   { path: '/tou', kind: 'html' },
   { path: '/llms.txt', kind: 'text' },
@@ -31,6 +32,7 @@ const routeChecks = [
   { path: '/submission-status.json', kind: 'json' },
   { path: '/reputation.json', kind: 'json' },
   { path: '/terms-of-use.json', kind: 'json' },
+  { path: '/privacy.json', kind: 'json' },
   { path: '/idacc/releases.json', kind: 'json' },
   { path: '/monitoring.json', kind: 'json' },
 ];
@@ -139,14 +141,53 @@ async function checkRoute(path, kind) {
     check(text.includes('Reputation is an evidence signal'), '/reputation missing authority caveat');
   }
 
+  if (path === '/identity-keys') {
+    for (const expectedText of [
+      'blocked-not-completed',
+      '0/68 executed',
+      '0 transaction hashes',
+      '67 names uncreated',
+      'onchainlead wallet-record mismatch',
+      'future-agent-provisioning-required',
+    ]) {
+      check(text.includes(expectedText), `/identity-keys missing ENS rollout status text: ${expectedText}`);
+    }
+    check(
+      !/live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i.test(text),
+      '/identity-keys implies the ENS rollout was complete or executable',
+    );
+  }
+
   if (path === '/terms-of-use') {
     check(text.includes('Terms of Use are pending legal approval'), '/terms-of-use missing legal approval status');
+  }
+
+  if (path === '/privacy') {
+    check(text.includes('Privacy policy and contact are pending legal approval'), '/privacy missing legal approval status');
+    check(text.includes('not a substitute for a final policy'), '/privacy overstates the pending policy');
   }
 
   if (path === '/onboarding') {
     check(text.includes('Agent onboarding'), '/onboarding missing title');
     check(text.includes('/onboarding.json'), '/onboarding missing contract route reference');
   }
+}
+
+async function checkStaticStatusDelegation() {
+  const path = '/submission-status/index.html?id=smoke-status&kind=submission';
+  const response = await fetch(routeUrl(path), {
+    redirect: 'manual',
+    headers: { 'User-Agent': 'agent.bittrees.org-smoke-check' },
+  });
+  const location = response.headers.get('location') ?? '';
+  const redirected = location ? new URL(location, baseUrl) : null;
+
+  check(response.status === 301, `${path} returned ${response.status}; expected 301 delegation`);
+  check(redirected?.pathname === '/submission-status', `${path} did not delegate to /submission-status`);
+  check(redirected?.search === '?id=smoke-status&kind=submission', `${path} did not preserve lookup query`);
+  checkSecurityHeaders(response, path);
+  check((response.headers.get('x-robots-tag') ?? '').toLowerCase().includes('noindex'), `${path} missing noindex header`);
+  check((response.headers.get('x-robots-tag') ?? '').toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
 }
 
 function checkMonitoringRouteCoverage() {
@@ -156,6 +197,49 @@ function checkMonitoringRouteCoverage() {
   const checkedPaths = new Set(routeChecks.map((route) => route.path));
   for (const path of monitoring.data?.monitoring?.routeStatusChecks ?? []) {
     check(checkedPaths.has(path), `/monitoring.json advertises ${path} but smoke-check.mjs does not probe it`);
+  }
+}
+
+async function checkErrorPaths() {
+  const monitoring = jsonResponses.get('/monitoring.json');
+  const errorPathChecks = monitoring?.data?.monitoring?.errorPathChecks ?? [];
+  check(errorPathChecks.length > 0, '/monitoring.json has no error-path checks');
+
+  for (const expectation of errorPathChecks) {
+    const response = await fetch(routeUrl(expectation.path), {
+      method: expectation.method,
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'agent.bittrees.org-smoke-check',
+      },
+      ...(expectation.request === 'empty-json' ? { body: '{}' } : {}),
+    });
+    const text = await response.text();
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (error) {
+      check(false, `${expectation.method} ${expectation.path} error response was not JSON: ${error.message}`);
+      continue;
+    }
+
+    check(
+      response.status === expectation.expectedStatus,
+      `${expectation.method} ${expectation.path} returned ${response.status}; expected ${expectation.expectedStatus}`,
+    );
+    checkSecurityHeaders(response, `${expectation.method} ${expectation.path}`);
+    if (expectation.expectedError) {
+      check(body.error === expectation.expectedError, `${expectation.method} ${expectation.path} error code mismatch`);
+    }
+    if (expectation.expectedSchema) {
+      check(body.$schema === expectation.expectedSchema, `${expectation.method} ${expectation.path} schema mismatch`);
+    }
+    if (expectation.expectedJsonRpcCode !== undefined) {
+      check(body.error?.code === expectation.expectedJsonRpcCode, `${expectation.method} ${expectation.path} JSON-RPC error mismatch`);
+    }
+    for (const forbiddenText of expectation.forbiddenResponseText ?? []) {
+      check(!text.includes(forbiddenText), `${expectation.method} ${expectation.path} leaked forbidden text ${forbiddenText}`);
+    }
   }
 }
 
@@ -356,10 +440,12 @@ for (const route of routeChecks) {
   await checkRoute(route.path, route.kind);
 }
 
+await checkStaticStatusDelegation();
 checkSources();
 checkAgents();
 checkOpportunities();
 checkMonitoringRouteCoverage();
+await checkErrorPaths();
 await checkMcpGateway();
 await checkWorkflowDataRoutes();
 await checkReleaseFreshness();

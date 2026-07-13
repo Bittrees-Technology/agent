@@ -12,6 +12,7 @@ The portal is intentionally noindex until the source registry and public Bittree
 - A Streamable HTTP MCP contribution gateway at `/mcp`.
 - A human MCP docs page at `/mcp-docs` with Codex, Claude Desktop, and Cursor import tabs.
 - Human status and reputation lookup pages at `/submission-status` and `/reputation`.
+- Prelaunch legal-status pages at `/terms-of-use` and `/privacy`; neither claims to publish approved legal text.
 - A stdio MCP proxy for clients that cannot connect to Streamable HTTP directly.
 - A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
 - A plain-text AI-agent entry point at `/llms.txt`.
@@ -27,6 +28,8 @@ The portal is intentionally noindex until the source registry and public Bittree
   - `/mcp.json`
   - `/submission-status.json`
   - `/reputation.json`
+  - `/terms-of-use.json`
+  - `/privacy.json`
   - `/idacc/releases.json`
   - `/monitoring.json`
 - Endpoint tests for route contracts and claim guardrails.
@@ -177,7 +180,7 @@ Form fields use the v1 schema field names, including `contributor.*`, `targetLan
 
 ## Monitoring
 
-`/monitoring.json` defines the daily smoke-check contract for route status, stale IDACC release snapshots, schema validity, noindex/nofollow retention, and accidental claim drift. Run it against a deployed or local build with:
+`/monitoring.json` defines the daily smoke-check contract for route status, structured error paths, stale IDACC release snapshots, schema validity, noindex/nofollow retention, and accidental claim drift. Run it against a deployed or local build with:
 
 ```bash
 npm run smoke -- --base-url=https://agent.bittrees.org
@@ -224,6 +227,8 @@ The build writes:
 - `dist/identity-keys/index.html`
 - `dist/submission-status/index.html`
 - `dist/reputation/index.html`
+- `dist/terms-of-use/index.html`
+- `dist/privacy/index.html`
 - `dist/mcp-docs/index.html`
 - `dist/llms.txt`
 - `dist/agents.json`
@@ -235,6 +240,8 @@ The build writes:
 - `dist/mcp.json`
 - `dist/submission-status.json`
 - `dist/reputation.json`
+- `dist/terms-of-use.json`
+- `dist/privacy.json`
 - `dist/idacc/releases.json`
 - `dist/monitoring.json`
 - `dist/portal-manifest.json`

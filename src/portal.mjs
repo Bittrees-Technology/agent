@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,12 +17,21 @@ import {
   ONBOARDING_CONTRACT_RESPONSE_SCHEMA,
   buildOnboardingContractsData,
 } from './onboarding-contracts.mjs';
+import { createContributionService, loadStatusProjection } from './contributions/service.mjs';
+import {
+  ContributorPortalWorkflow,
+  ContributorPortalWorkflowError,
+  JsonPortalWorkflowStore,
+  WORKFLOW_SCOPES,
+} from './contributor-signing/portal-workflow.mjs';
 
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
 const TERMS_OF_USE_SHORT_ROUTE = '/tou';
+const PRIVACY_PAGE_ROUTE = '/privacy';
+const SUBMISSION_STATUS_STATIC_ASSET_ROUTE = '/submission-status/index.html';
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
@@ -30,8 +40,16 @@ const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
 const ONBOARDING_CONTRIBUTION_WORKFLOW_DATA = JSON.parse(
   readFileSync(new URL('../data/agent-onboarding/contribution-workflow.json', import.meta.url), 'utf8'),
 );
-const REGISTRY_STATE_PATH = process.env.REGISTRY_STATE_PATH ?? join(PROJECT_ROOT, 'var', 'registry', 'state.json');
+const DEFAULT_REGISTRY_STATE_PATH = process.env.VERCEL === '1'
+  ? join(tmpdir(), 'agent-bittrees', 'registry', 'state.json')
+  : join(PROJECT_ROOT, 'var', 'registry', 'state.json');
+const REGISTRY_STATE_PATH = process.env.REGISTRY_STATE_PATH ?? DEFAULT_REGISTRY_STATE_PATH;
 const LIVE_REGISTRY_CONTROL_PLANE = new RegistryControlPlane({ store: new JsonFileRegistryStore(REGISTRY_STATE_PATH) });
+// Status pages and workflow routes read through this service projection. The
+// service is intentionally process-local in this portal adapter; production
+// persistence is supplied by the service repository without changing the
+// public projection shape.
+export const LIVE_CONTRIBUTION_SERVICE = createContributionService();
 const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
   'CONTRIBUTION_INTENTS_WRITE_ENABLED',
   'CONTRIBUTION_INTENTS_ENABLED',
@@ -44,10 +62,27 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
 const WORKFLOW_API_BASE_PATH = '/v1/workflow';
+// Backward-compatible alias for the originally declared contract path; the
+// implementation lives under WORKFLOW_API_BASE_PATH (see the reconciliation
+// note in output/), so this is rewritten to it before any route matching.
+const CONTRIBUTIONS_API_ALIAS_BASE_PATH = '/v1/contributions';
 const WORKFLOW_OPPORTUNITIES_PATH = `${WORKFLOW_API_BASE_PATH}/opportunities`;
+const WORKFLOW_CONTEXT_PATH = `${WORKFLOW_API_BASE_PATH}/context`;
 const WORKFLOW_REGISTRATIONS_PATH = `${WORKFLOW_API_BASE_PATH}/registrations`;
+const WORKFLOW_CLAIMS_PATH = `${WORKFLOW_API_BASE_PATH}/claims`;
+const WORKFLOW_SUBMISSIONS_PATH = `${WORKFLOW_API_BASE_PATH}/submissions`;
+const WORKFLOW_REVIEWS_PATH = `${WORKFLOW_API_BASE_PATH}/reviews`;
+const WORKFLOW_FEEDBACK_PATH = `${WORKFLOW_API_BASE_PATH}/feedback`;
 const WORKFLOW_STATUS_PATH = `${WORKFLOW_API_BASE_PATH}/status`;
 const WORKFLOW_OPPORTUNITY_PATH_PATTERN = /^\/v1\/workflow\/opportunities\/([^/]+)$/;
+const WORKFLOW_BRIEF_PATH_PATTERN = /^\/v1\/workflow\/brief\/([^/]+)$/;
+const WORKFLOW_WRITE_PATHS = new Set([
+  WORKFLOW_REGISTRATIONS_PATH,
+  WORKFLOW_CLAIMS_PATH,
+  WORKFLOW_SUBMISSIONS_PATH,
+  WORKFLOW_REVIEWS_PATH,
+  WORKFLOW_FEEDBACK_PATH,
+]);
 const CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS ?? 60_000);
 const CONTRIBUTION_POST_RATE_LIMIT_MAX = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_MAX ?? 30);
 const CONTRIBUTION_POST_RATE_BUCKETS = new Map();
@@ -56,6 +91,7 @@ const MCP_WRITE_TOOL_SCOPES = Object.freeze({
   claim_contribution: 'contributor:claim',
   submit_contribution: 'contributor:submit',
   respond_to_review_feedback: 'contributor:feedback',
+  review_contribution: 'contributor:review',
 });
 const PREPARSED_BODY_MAX_DEPTH = 16;
 const PREPARSED_BODY_MAX_PROPERTIES = 5000;
@@ -531,9 +567,65 @@ export const LIVE_AGENT_REGISTRY = {
 export const IDENTITY_KEYS_PUBLIC_CONTRACT = {
   status: 'prelaunch-contract-under-review',
   purpose:
-    'Public contract for agent identity, public keys, delegated scopes, trust evidence, audit metadata, and onchain execution readiness.',
+    'Public contract for agent identity, public keys, delegated scopes, trust evidence, audit metadata, and blocked onchain execution gates.',
   publicationPolicy:
     'Publish proof metadata and public-key material only. Keep signing, custody, API-key creation, reveal, export, rotation, and revocation inside authenticated control-plane tooling.',
+  ensPrimaryNameRollout: {
+    status: 'blocked-not-completed',
+    scope: 'ENS primary-name rollout for the managed contributor fleet.',
+    backlogPolicy:
+      'Unresolved execution work stays in the existing ENS rollout task; this route reports status only.',
+    completionEvidence: {
+      cohortAgentCount: 68,
+      executedAgentCount: 0,
+      executionProgress: '0/68 executed',
+      transactionHashCount: 0,
+      transactionHashes: [],
+      uncreatedNameCount: 67,
+      receiptEvidence: 'No creation, forward-record, reverse/primary-name, or bidirectional verification receipts are recorded.',
+    },
+    walletRecordMismatch: {
+      id: 'onchainlead-wallet-record-mismatch',
+      status: 'blocking-mismatch',
+      detail:
+        'onchainlead wallet-record mismatch blocks completion evidence until the authoritative agent-to-name-to-wallet mapping is reconciled.',
+    },
+    requiredExecutionGates: [
+      {
+        id: 'authorized-controller-signer',
+        status: 'blocked',
+        requirement: 'Identify the authorized controller signer for the parent-name creation path.',
+      },
+      {
+        id: 'isolated-custody-attestations',
+        status: 'blocked',
+        requirement: 'Provide isolated custody attestations for every first-cohort wallet.',
+      },
+      {
+        id: 'numeric-spend-cap',
+        status: 'blocked',
+        requirement: 'Set a numeric gas/spend cap and transaction-count cap before execution.',
+      },
+      {
+        id: 'broadcaster-authority',
+        status: 'blocked',
+        requirement: 'Identify the authorized broadcaster and bind it to the approved signer policy.',
+      },
+    ],
+    futureAgentProvisioning: {
+      status: 'future-agent-provisioning-required',
+      requirement:
+        'Future agents start unprovisioned and fail closed until exact mapping, forward resolution, isolated custody, spend cap, receipt, and reverse resolution evidence are persisted.',
+      requiredEvidence: [
+        'exact agent-to-ENS-name-to-wallet mapping',
+        'forward resolution match',
+        'isolated signer/custody evidence',
+        'numeric gas/spend cap',
+        'successful receipt',
+        'reverse resolution back to the exact name at a pinned block',
+      ],
+    },
+  },
   sections: [
     {
       id: 'identity-summary',
@@ -1323,6 +1415,15 @@ export const OPPORTUNITIES = [
   },
 ];
 
+const DEFAULT_WORKFLOW_STATE_PATH = process.env.VERCEL === '1'
+  ? join(tmpdir(), 'agent-bittrees', 'workflow', 'state.json')
+  : join(PROJECT_ROOT, 'var', 'workflow', 'state.json');
+const WORKFLOW_STATE_PATH = process.env.PORTAL_WORKFLOW_STATE_PATH ?? DEFAULT_WORKFLOW_STATE_PATH;
+export const LIVE_CONTRIBUTOR_PORTAL_WORKFLOW = new ContributorPortalWorkflow({
+  store: new JsonPortalWorkflowStore({ path: WORKFLOW_STATE_PATH, opportunities: OPPORTUNITIES }),
+  opportunities: OPPORTUNITIES,
+});
+
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
@@ -1388,6 +1489,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/reputation',
     '/terms-of-use',
     '/tou',
+    '/privacy',
     '/onboarding',
     '/llms.txt',
     '/agents.json',
@@ -1408,6 +1510,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/submission-status.json',
     '/reputation.json',
     '/terms-of-use.json',
+    '/privacy.json',
     '/idacc/releases.json',
     '/monitoring.json',
   ],
@@ -1437,6 +1540,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/submission-status.json',
       '/reputation.json',
       '/terms-of-use.json',
+      '/privacy.json',
       '/idacc/releases.json',
       '/monitoring.json',
     ],
@@ -1447,6 +1551,42 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     baselineApprovedClaimIds: APPROVED_CLAIMS.map((claim) => claim.id),
     baselineExcludedClaimIds: EXCLUDED_CLAIM_REVIEW.map((claim) => claim.id),
   },
+  errorPathChecks: [
+    {
+      method: 'GET',
+      path: '/does-not-exist',
+      expectedStatus: 404,
+      expectedError: 'not_found',
+    },
+    {
+      method: 'GET',
+      path: `${WORKFLOW_OPPORTUNITIES_PATH}/not-a-real-opportunity`,
+      expectedStatus: 404,
+      expectedError: 'opportunity_not_found',
+    },
+    {
+      method: 'POST',
+      path: WORKFLOW_REGISTRATIONS_PATH,
+      request: 'empty-json',
+      expectedStatus: 401,
+      expectedError: 'unauthorized',
+    },
+    {
+      method: 'POST',
+      path: '/v1/registry/heartbeats',
+      request: 'empty-json',
+      expectedStatus: 400,
+      expectedSchema: 'agent.registry.error.v1',
+      forbiddenResponseText: ['ENOENT', '/var/task', 'mkdir'],
+    },
+    {
+      method: 'POST',
+      path: MCP_GATEWAY.path,
+      request: 'empty-json',
+      expectedStatus: 400,
+      expectedJsonRpcCode: -32600,
+    },
+  ],
   smokeCommand: 'npm run smoke -- --base-url=https://agent.bittrees.org',
 };
 
@@ -1460,6 +1600,18 @@ export const TERMS_OF_USE_LEGAL_STATUS = {
   reason: 'Legal-approved Terms of Use content has not been supplied to the portal.',
   requiredNextAction:
     'Legal/general-counsel must author and approve the final Terms of Use before this route can publish terms.',
+};
+
+export const PRIVACY_LEGAL_STATUS = {
+  status: 'blocked-pending-legal-approved-content',
+  contentStatus: 'pending-legal-approved-content',
+  pageRoute: PRIVACY_PAGE_ROUTE,
+  jsonRoute: '/privacy.json',
+  legalContentOwner: 'legal/general-counsel',
+  publicationStatus: 'not-published',
+  reason: 'A legal-approved privacy policy and public privacy-contact route have not been supplied to the portal.',
+  requiredNextAction:
+    'Legal/general-counsel must approve the privacy policy and public contact route before this page can publish a final policy.',
 };
 
 export const MCP_IMPORT_SNIPPETS = [
@@ -2136,6 +2288,39 @@ function callContributionTool(name, args = {}, authContext = null) {
       const opportunity = findOpportunity(opportunityId);
       if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
 
+      // Authenticated MCP callers use the domain service so retries are
+      // actor-bound and idempotent. Existing unauthenticated direct calls are
+      // retained as a compatibility fixture for the read-only legacy surface;
+      // the HTTP/MCP boundary never permits that path.
+      if (authContext?.subject) {
+        const serviceResult = LIVE_CONTRIBUTION_SERVICE.submit({
+          actor: authContext,
+          idempotencyKey: optionalText(args, 'idempotencyKey'),
+          payload: {
+            title: requireText(args, 'title'),
+            summary: optionalText(args, 'summary') ?? '',
+            opportunityId,
+            lane: opportunity.lane,
+            claimId: optionalText(args, 'claimId'),
+            sourceIds: Array.isArray(args.evidence) ? args.evidence : [],
+            artifacts: args.artifact ? [args.artifact] : [],
+          },
+        });
+        const submission = {
+          id: serviceResult.receiptId,
+          status: serviceResult.status,
+          created: serviceResult.created,
+          replayed: serviceResult.replayed,
+          projection: serviceResult.projection,
+        };
+        return {
+          status: 'submission_queued_for_review',
+          reviewGate: reviewGateRecord(),
+          submission,
+          nextAction: 'Reviewer acceptance is required before publication, assignment, reputation credit, or attestation.',
+        };
+      }
+
       const record = createReviewRecord('submissions', 'sub', {
         agentId: requireText(args, 'agentId'),
         opportunityId,
@@ -2165,6 +2350,8 @@ function callContributionTool(name, args = {}, authContext = null) {
     case 'check_contribution_status': {
       const id = requireText(args, 'id');
       const kind = optionalText(args, 'kind') ?? 'any';
+      const serviceProjection = loadStatusProjection(LIVE_CONTRIBUTION_SERVICE, { id, kind, actor: authContext });
+      if (serviceProjection.status === 'status_found') return serviceProjection;
       const found = findQueuedRecord(id, kind);
 
       return {
@@ -2291,15 +2478,17 @@ function buildWorkflowLinks() {
   }));
 }
 
-function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()) {
+function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams(), workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
   const lane = readSearchParam(searchParams, 'lane').trim();
   const priority = readSearchParam(searchParams, 'priority').trim();
   const status = readSearchParam(searchParams, 'status').trim();
-  const opportunities = OPPORTUNITIES.filter((opportunity) => (
-    (!lane || opportunity.lane === lane)
-    && (!priority || opportunity.priority === priority)
-    && (!status || opportunity.status === status)
-  ));
+  const opportunities = workflow?.listOpportunities
+    ? workflow.listOpportunities({ lane, priority, status })
+    : OPPORTUNITIES.filter((opportunity) => (
+      (!lane || opportunity.lane === lane)
+      && (!priority || opportunity.priority === priority)
+      && (!status || opportunity.status === status)
+    ));
 
   return publicSafeContent({
     $schema: SCHEMA_URL,
@@ -2316,8 +2505,8 @@ function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()
   });
 }
 
-function buildWorkflowOpportunityResponse(opportunityId) {
-  const opportunity = findOpportunity(opportunityId);
+function buildWorkflowOpportunityResponse(opportunityId, workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
+  const opportunity = workflow?.getOpportunity?.(opportunityId) ?? findOpportunity(opportunityId);
   if (!opportunity) {
     return {
       statusCode: 404,
@@ -2337,6 +2526,7 @@ function buildWorkflowOpportunityResponse(opportunityId) {
       status: 'opportunity_brief_ready',
       launchStatus: LAUNCH_STATUS,
       opportunity,
+      brief: workflow?.getBrief?.(opportunityId) ?? null,
       mcpTool: 'get_contribution_brief',
       mcpResult: callMcpTool('get_contribution_brief', { opportunityId }).structuredContent,
       authorizedSubmissionRoutes: ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.roleApplicationLinks
@@ -2346,10 +2536,41 @@ function buildWorkflowOpportunityResponse(opportunityId) {
   };
 }
 
-function buildWorkflowStatusResponse(searchParams = new URLSearchParams()) {
+function buildWorkflowStatusResponse(
+  searchParams = new URLSearchParams(),
+  service = LIVE_CONTRIBUTION_SERVICE,
+  workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
+  actor = undefined,
+) {
   const id = readSearchParam(searchParams, 'id').trim();
   const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
-  const lookup = id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
+  const workflowProjection = id ? workflow?.status?.({ id, kind, actor }) : null;
+  const serviceProjection = id && workflowProjection?.status !== 'status_found'
+    ? loadStatusProjection(service, actor === undefined ? { id, kind } : { id, kind, actor })
+    : null;
+  const deniedLookup = workflowProjection?.status === 'not_found'
+    ? workflowProjection
+    : serviceProjection?.status === 'not_found'
+      ? serviceProjection
+      : {
+          status: 'not_found',
+          query: { id, kind },
+          result: null,
+          reviewGate: reviewGateRecord(),
+          privacy: { notFoundForUnauthorizedOwner: true },
+        };
+  const lookup = id
+    ? workflowProjection?.status === 'status_found'
+      ? workflowProjection
+      : serviceProjection?.status === 'status_found'
+        ? serviceProjection
+        // The compatibility queue has no actor-aware authorization lookup. Do
+        // not allow it to reveal a record after the authenticated projections
+        // have already denied the requesting actor.
+        : actor === undefined
+          ? callMcpTool('check_contribution_status', { id, kind }).structuredContent
+          : deniedLookup
+    : null;
 
   return publicSafeContent({
     $schema: SCHEMA_URL,
@@ -2408,34 +2629,116 @@ async function handlePublicRegistryFeedRequest(req, res, includeBody, telemetry)
   });
 }
 
-async function handleWorkflowRegistrationPost(req, res, includeBody, telemetry) {
+async function readWorkflowJsonPayload(req) {
+  try {
+    const body = await readRequestBody(req, 512 * 1024);
+    const payload = parseJsonRequestBody(body);
+    if (!isPlainObject(payload)) {
+      const error = new Error('workflow request body must be a JSON object.');
+      error.statusCode = 400;
+      throw error;
+    }
+    return payload;
+  } catch (error) {
+    if (error.statusCode) throw error;
+    const wrapped = new Error(error.message || 'workflow request body must be valid JSON.');
+    wrapped.statusCode = 400;
+    throw wrapped;
+  }
+}
+
+function workflowIdempotencyKey(req, payload) {
+  const header = getRequestHeader(req, 'idempotency-key');
+  return header || payload.idempotencyKey || payload.idempotency_key;
+}
+
+function workflowErrorStatus(error) {
+  if (Number.isInteger(error?.status)) return error.status;
+  if (Number.isInteger(error?.statusCode)) return error.statusCode;
+  return 400;
+}
+
+function workflowErrorName(status) {
+  if (status === 401) return 'unauthorized';
+  if (status === 403) return 'forbidden';
+  if (status === 404) return 'not_found';
+  if (status === 409) return 'conflict';
+  if (status === 422) return 'validation_failed';
+  return 'workflow_rejected';
+}
+
+async function handleWorkflowRegistrationPost(req, res, includeBody, telemetry, workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
   let payload;
   try {
-    payload = parseJsonRequestBody(await readRequestBody(req, 512 * 1024));
-  } catch (error) {
-    return sendJson(res, 400, {
-      $schema: SCHEMA_URL,
-      error: 'invalid_json',
-      message: error.message,
-    }, includeBody, { ...telemetry, status: 400 });
-  }
-
-  try {
-    const authContext = authorizeMcpWriteTool(req, 'register_external_agent', payload);
-    return sendJson(res, 202, {
-      $schema: SCHEMA_URL,
-      ...callMcpTool('register_external_agent', payload, authContext).structuredContent,
-      authorizedRoute: WORKFLOW_REGISTRATIONS_PATH,
-      statusLookup: WORKFLOW_STATUS_PATH,
-    }, includeBody, { ...telemetry, status: 202 });
+    payload = await readWorkflowJsonPayload(req);
   } catch (error) {
     const status = error.statusCode ?? 400;
     return sendJson(res, status, {
       $schema: SCHEMA_URL,
+      error: 'invalid_json',
+      message: error.message,
+    }, includeBody, { ...telemetry, status });
+  }
+
+  try {
+    const authContext = authorizeMcpWriteTool(req, 'register_external_agent', payload);
+    const result = workflow.register({ actor: authContext, payload, idempotencyKey: workflowIdempotencyKey(req, payload) });
+    return sendJson(res, 202, {
+      $schema: SCHEMA_URL,
+      ...result,
+      authorizedRoute: WORKFLOW_REGISTRATIONS_PATH,
+      statusLookup: WORKFLOW_STATUS_PATH,
+    }, includeBody, { ...telemetry, status: 202 });
+  } catch (error) {
+    const status = workflowErrorStatus(error);
+    return sendJson(res, status, {
+      $schema: SCHEMA_URL,
       error: status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : 'registration_rejected',
       message: error.message,
-      data: error.jsonRpcData,
+      data: error.jsonRpcData ?? error.details,
       requiredScope: MCP_WRITE_TOOL_SCOPES.register_external_agent,
+    }, includeBody, { ...telemetry, status });
+  }
+}
+
+async function handleWorkflowMutationPost(req, res, includeBody, telemetry, {
+  workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
+  operation,
+  toolName,
+  acceptedStatus = 202,
+  responseName,
+} = {}) {
+  let payload;
+  try {
+    payload = await readWorkflowJsonPayload(req);
+  } catch (error) {
+    const status = error.statusCode ?? 400;
+    return sendJson(res, status, {
+      $schema: SCHEMA_URL,
+      error: 'invalid_json',
+      message: error.message,
+      requiredScope: MCP_WRITE_TOOL_SCOPES[toolName],
+    }, includeBody, { ...telemetry, status });
+  }
+
+  try {
+    const actor = authorizeMcpWriteTool(req, toolName, payload);
+    const result = workflow[operation]({ actor, payload, idempotencyKey: workflowIdempotencyKey(req, payload) });
+    return sendJson(res, acceptedStatus, {
+      $schema: SCHEMA_URL,
+      ...result,
+      ...(responseName && result?.record && result[responseName] === undefined ? { [responseName]: result.record } : {}),
+      statusLookup: WORKFLOW_STATUS_PATH,
+    }, includeBody, { ...telemetry, status: acceptedStatus });
+  } catch (error) {
+    const status = workflowErrorStatus(error);
+    return sendJson(res, status, {
+      $schema: SCHEMA_URL,
+      error: error.jsonRpcCode ? workflowErrorName(status) : workflowErrorName(status),
+      message: error.message,
+      code: error.code,
+      data: error.jsonRpcData ?? error.details,
+      requiredScope: MCP_WRITE_TOOL_SCOPES[toolName],
     }, includeBody, { ...telemetry, status });
   }
 }
@@ -2460,6 +2763,17 @@ function buildTermsOfUseStatus() {
     robotsPolicy: 'noindex,nofollow',
     caveat:
       'This is a prelaunch implementation-status route, not Terms of Use text, a legal agreement, or an acceptance flow.',
+  };
+}
+
+function buildPrivacyStatus() {
+  return {
+    ...PRIVACY_LEGAL_STATUS,
+    launchStatus: LAUNCH_STATUS,
+    robotsPolicy: 'noindex,nofollow',
+    currentIntakeNotice: CONTRIBUTION_PRIVACY_NOTICE,
+    caveat:
+      'This is a prelaunch implementation-status route and contribution-intake notice, not a final privacy policy.',
   };
 }
 
@@ -2733,6 +3047,30 @@ const JSON_ROUTES = [
     data: buildTermsOfUseStatus,
   },
   {
+    path: '/privacy.json',
+    label: 'Privacy legal-content status',
+    description:
+      'Prelaunch privacy status and contribution-intake notice. A legal-approved policy and public contact route are pending.',
+    status: PRIVACY_LEGAL_STATUS.status,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org privacy status response',
+      type: 'object',
+      additionalProperties: true,
+      required: [
+        'status',
+        'launchStatus',
+        'contentStatus',
+        'pageRoute',
+        'legalContentOwner',
+        'publicationStatus',
+        'requiredNextAction',
+        'currentIntakeNotice',
+      ],
+    },
+    data: buildPrivacyStatus,
+  },
+  {
     path: '/idacc/releases.json',
     label: 'IDACC releases',
     description: 'Dated IDACC release snapshot and current publication policy for IDACC-related updates.',
@@ -2819,6 +3157,14 @@ export const ROUTE_DEFINITIONS = [
     status: TERMS_OF_USE_LEGAL_STATUS.status,
   },
   {
+    path: PRIVACY_PAGE_ROUTE,
+    label: 'Privacy status page',
+    description:
+      'Prelaunch privacy status and contribution-intake notice. A legal-approved policy and public contact route are pending.',
+    kind: 'html',
+    status: PRIVACY_LEGAL_STATUS.status,
+  },
+  {
     path: '/onboarding',
     label: 'Agent onboarding contracts page',
     description: 'Human-readable overview of onboarding schemas, contribution workflow contracts, and role application routes.',
@@ -2864,9 +3210,57 @@ export const ROUTE_DEFINITIONS = [
     staticAsset: false,
   },
   {
+    path: WORKFLOW_CONTEXT_PATH,
+    label: 'Workflow context API',
+    description: 'Read-only source-grounded workflow context and policy for an opportunity or lane.',
+    kind: 'json',
+    status: 'source-grounded-context-ready',
+    staticAsset: false,
+  },
+  {
+    path: `${WORKFLOW_API_BASE_PATH}/brief/:opportunityId`,
+    label: 'Workflow brief API',
+    description: 'Read-only dispatch brief for one opportunity, including acceptance criteria and review path.',
+    kind: 'json',
+    status: 'brief-ready',
+    staticAsset: false,
+  },
+  {
     path: WORKFLOW_REGISTRATIONS_PATH,
     label: 'Workflow registration API',
     description: 'Bearer-authenticated HTTP JSON route for queueing an external-agent registration review packet.',
+    kind: 'json',
+    status: 'review-gated queue',
+    staticAsset: false,
+  },
+  {
+    path: WORKFLOW_CLAIMS_PATH,
+    label: 'Workflow claim API',
+    description: 'Bearer-authenticated claim request queued for owner review.',
+    kind: 'json',
+    status: 'review-gated queue',
+    staticAsset: false,
+  },
+  {
+    path: WORKFLOW_SUBMISSIONS_PATH,
+    label: 'Workflow submission API',
+    description: 'Bearer-authenticated contribution submission queued for review.',
+    kind: 'json',
+    status: 'review-gated queue',
+    staticAsset: false,
+  },
+  {
+    path: WORKFLOW_REVIEWS_PATH,
+    label: 'Workflow review API',
+    description: 'Reviewer-scoped API for recording idempotent terminal contribution outcomes.',
+    kind: 'json',
+    status: 'review-gated queue',
+    staticAsset: false,
+  },
+  {
+    path: WORKFLOW_FEEDBACK_PATH,
+    label: 'Workflow feedback API',
+    description: 'Bearer-authenticated response to contribution review feedback.',
     kind: 'json',
     status: 'review-gated queue',
     staticAsset: false,
@@ -3019,6 +3413,7 @@ const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
   { path: '/submission-status', label: 'Status' },
   { path: '/reputation', label: 'Reputation' },
   { path: '/terms-of-use', label: 'Terms' },
+  { path: PRIVACY_PAGE_ROUTE, label: 'Privacy' },
 ]);
 
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
@@ -3071,6 +3466,46 @@ function renderLaneRows() {
   ).join('');
 }
 
+function routeLinkPresentation(path) {
+  if (path === WORKFLOW_REGISTRATIONS_PATH) {
+    return {
+      displayPath: `POST ${path}`,
+      href: '/onboarding',
+      linkText: 'Read the authenticated POST request contract',
+    };
+  }
+
+  if (path === `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`) {
+    return {
+      displayPath: path,
+      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
+      linkText: 'Open a working opportunity example',
+    };
+  }
+
+  return { displayPath: path, href: path, linkText: path };
+}
+
+function renderRouteCardDestination(path) {
+  const presentation = routeLinkPresentation(path);
+  if (presentation.href === path && presentation.linkText === path) {
+    return `<h2><a href="${escapeHtml(path)}">${escapeHtml(path)}</a></h2>`;
+  }
+
+  return `<h2><code>${escapeHtml(presentation.displayPath)}</code></h2>
+            <p><a href="${escapeHtml(presentation.href)}">${escapeHtml(presentation.linkText)}</a></p>`;
+}
+
+function renderWorkflowRouteDestination(path) {
+  const presentation = routeLinkPresentation(path);
+  if (presentation.href === path && presentation.linkText === path) {
+    return `<a href="${escapeHtml(path)}">${escapeHtml(path)}</a>`;
+  }
+
+  return `<code>${escapeHtml(presentation.displayPath)}</code>
+          <p><a href="${escapeHtml(presentation.href)}">${escapeHtml(presentation.linkText)}</a></p>`;
+}
+
 function renderRouteCards() {
   return ROUTE_DEFINITIONS.filter((definition) => definition.path !== '/')
     .map(
@@ -3078,7 +3513,7 @@ function renderRouteCards() {
         <article class="route-card">
           <div>
             <p>${escapeHtml(definition.label)}</p>
-            <h2><a href="${escapeHtml(definition.path)}">${escapeHtml(definition.path)}</a></h2>
+            ${renderRouteCardDestination(definition.path)}
           </div>
           <span>${escapeHtml(getRouteStatus(definition))}</span>
         </article>
@@ -3095,7 +3530,7 @@ function renderWorkflowItems() {
         <div>
           <strong>${escapeHtml(item.step)}</strong>
           <p>${escapeHtml(item.action)}</p>
-          <a href="${escapeHtml(item.route)}">${escapeHtml(item.route)}</a>
+          ${renderWorkflowRouteDestination(item.route)}
           <p>${escapeHtml(item.reviewGate)}</p>
         </div>
       </li>
@@ -5204,10 +5639,14 @@ export function renderMcpDocsPage() {
   return renderMcpGatewayPage({ docs: true });
 }
 
-export function renderSubmissionStatusPage(searchParams = new URLSearchParams()) {
+export function renderSubmissionStatusPage(searchParams = new URLSearchParams(), options = {}) {
+  const service = options?.service ?? (options?.loadStatusProjection ? options : LIVE_CONTRIBUTION_SERVICE);
   const id = readSearchParam(searchParams, 'id').trim();
   const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
-  const lookup = id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
+  const serviceLookup = id ? loadStatusProjection(service, { id, kind }) : null;
+  const lookup = id && serviceLookup?.status === 'status_found'
+    ? serviceLookup
+    : id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
   const kindOptions = STATUS_LOOKUP_KINDS.map((item) => ({ value: item, label: item }));
   const resultBody = lookup
     ? `<pre><code>${escapeHtml(JSON.stringify(lookup, null, 2))}</code></pre>`
@@ -5276,6 +5715,10 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
         </form>
       </section>
 
+      <p class="lede" data-status-loader="server" data-status-route="/v1/workflow/status">
+        Status results are loaded by the server-side contribution projection loader for this request.
+      </p>
+
       <section class="band" aria-labelledby="result-title">
         <h2 id="result-title">Result</h2>
         ${resultBody}
@@ -5296,6 +5739,14 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams())
     </main>
   </body>
 </html>`;
+}
+
+function renderSubmissionStatusStaticDelegate() {
+  const page = renderSubmissionStatusPage();
+  return page.replace(
+    '<head>',
+    '<head>\n    <meta name="status-loader" content="server" />\n    <meta name="status-route" content="/v1/workflow/status" />\n    <meta http-equiv="refresh" content="0; url=/submission-status" />',
+  );
 }
 
 export function renderReputationPage(searchParams = new URLSearchParams()) {
@@ -5445,6 +5896,73 @@ export function renderTermsOfUsePage() {
 </html>`;
 }
 
+export function renderPrivacyPage() {
+  const privacyStatus = buildPrivacyStatus();
+  const pageTitle = 'Privacy status - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    PRIVACY_PAGE_ROUTE,
+    'Prelaunch privacy status and contribution-intake notice. A legal-approved policy and public contact route are pending.',
+  );
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: PRIVACY_PAGE_ROUTE })}
+    ${renderHumanLookupStyles()}
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav(PRIVACY_PAGE_ROUTE)}
+          <span class="status">${escapeHtml(privacyStatus.status)}</span>
+        </div>
+      </header>
+
+      <section class="hero" aria-labelledby="privacy-title">
+        <h1 id="privacy-title">Privacy policy and contact are pending legal approval.</h1>
+        <p class="lede">
+          A final privacy policy and approved public privacy-contact route are not yet published. This page records
+          the prelaunch gate and the current contribution-intake notice; it is not a substitute for a final policy.
+        </p>
+      </section>
+
+      <section class="band" aria-labelledby="privacy-notice-title">
+        <div>
+          <h2 id="privacy-notice-title">Current contribution-intake notice</h2>
+          <p class="lede">${escapeHtml(privacyStatus.currentIntakeNotice)}</p>
+        </div>
+      </section>
+
+      <section class="band" aria-labelledby="privacy-status-title">
+        <h2 id="privacy-status-title">Publication status</h2>
+        <table>
+          <tbody>
+            <tr><th>Content status</th><td><code>${escapeHtml(privacyStatus.contentStatus)}</code></td></tr>
+            <tr><th>Publication status</th><td>${escapeHtml(privacyStatus.publicationStatus)}</td></tr>
+            <tr><th>Legal content owner</th><td>${escapeHtml(privacyStatus.legalContentOwner)}</td></tr>
+            <tr><th>Required next action</th><td>${escapeHtml(privacyStatus.requiredNextAction)}</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="band" aria-labelledby="privacy-contract-title">
+        <h2 id="privacy-contract-title">Machine-readable status</h2>
+        <div>
+          <p class="lede">The equivalent status object is available at <a href="/privacy.json">/privacy.json</a>.</p>
+          <p class="lede caveat">This route remains <code>noindex,nofollow</code> while the launch gate is active.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 export function renderOnboardingPage() {
   const onboardingRoute = JSON_ROUTE_MAP.get('/onboarding.json');
   const contract = buildJsonResponse(onboardingRoute);
@@ -5579,6 +6097,29 @@ function rolloutGateBlockerItems(rolloutGates) {
 }
 
 export function renderIdentityKeysPage() {
+  const ensRollout = IDENTITY_KEYS_PUBLIC_CONTRACT.ensPrimaryNameRollout;
+  const ensCompletionEvidence = ensRollout.completionEvidence;
+  const ensEvidenceRows = [
+    ['Status', ensRollout.status],
+    ['Execution', ensCompletionEvidence.executionProgress],
+    ['Transaction hashes', `${ensCompletionEvidence.transactionHashCount} transaction hashes`],
+    ['Uncreated names', `${ensCompletionEvidence.uncreatedNameCount} names uncreated`],
+    ['Receipt evidence', ensCompletionEvidence.receiptEvidence],
+    ['Wallet-record mismatch', ensRollout.walletRecordMismatch.detail],
+  ].map(
+    ([label, value]) => `
+        <tr>
+          <th scope="row">${escapeHtml(label)}</th>
+          <td>${escapeHtml(value)}</td>
+        </tr>
+      `,
+  ).join('');
+  const ensRequiredGateItems = ensRollout.requiredExecutionGates
+    .map((gate) => `<li><code>${escapeHtml(gate.id)}</code>: ${escapeHtml(gate.requirement)}</li>`)
+    .join('');
+  const futureAgentProvisioningItems = ensRollout.futureAgentProvisioning.requiredEvidence
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join('');
   const sectionRows = IDENTITY_KEYS_PUBLIC_CONTRACT.sections
     .map(
       (section) => `
@@ -5644,6 +6185,7 @@ export function renderIdentityKeysPage() {
         --green: #1f6b4f;
         --blue: #315a8a;
         --gold: #8b5c10;
+        --warning: #7a3b12;
       }
 
       * { box-sizing: border-box; }
@@ -5695,7 +6237,7 @@ export function renderIdentityKeysPage() {
         padding: 0 12px;
         border: 1px solid var(--line);
         background: var(--panel);
-        color: var(--green);
+        color: var(--warning);
         font-size: 0.9rem;
         font-weight: 700;
       }
@@ -5800,9 +6342,31 @@ export function renderIdentityKeysPage() {
           ${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.publicationPolicy)}
         </p>
         <p class="lede">
-          Registry mode: ${escapeHtml(LIVE_AGENT_REGISTRY.mode)}. Routine signed state can move live;
+          Registry mode: ${escapeHtml(LIVE_AGENT_REGISTRY.mode)}. Routine signed state can be staged;
           authority-changing actions stay proof-gated.
         </p>
+      </section>
+
+      <section class="band" aria-labelledby="ens-rollout-title">
+        <h2 id="ens-rollout-title">ENS primary-name rollout</h2>
+        <div>
+          <p class="lede">
+            ${escapeHtml(ensRollout.scope)}
+            Current state: <code>${escapeHtml(ensRollout.status)}</code>.
+            This page reports status only and does not authorize ENS mutation, wallet changes, signing, or broadcasting.
+          </p>
+          <table>
+            <tbody>${ensEvidenceRows}</tbody>
+          </table>
+          <p class="lede">Required execution gates:</p>
+          <ul>${ensRequiredGateItems}</ul>
+          <p class="lede">
+            Future-agent provisioning:
+            <code>${escapeHtml(ensRollout.futureAgentProvisioning.status)}</code>.
+            ${escapeHtml(ensRollout.futureAgentProvisioning.requirement)}
+          </p>
+          <ul>${futureAgentProvisioningItems}</ul>
+        </div>
       </section>
 
       <section class="band" aria-labelledby="sections-title">
@@ -5961,6 +6525,7 @@ function parseMcpWriteTokenConfig() {
         .map(([token, value]) => [token, {
           subject: value.subject,
           scopes: value.scopes.filter((scope) => typeof scope === 'string'),
+          role: typeof value.role === 'string' ? value.role : '',
         }]),
     );
   } catch {
@@ -5974,9 +6539,17 @@ function getBearerToken(req) {
   return match ? match[1].trim() : '';
 }
 
-function authError(statusCode, message, data = {}) {
+function workflowStatusActor(req) {
+  const token = getBearerToken(req);
+  if (!token) return undefined;
+  const record = parseMcpWriteTokenConfig().get(token);
+  return record ? { subject: record.subject, scopes: record.scopes, role: record.role } : undefined;
+}
+
+function authError(statusCode, message, data = {}, code = undefined) {
   const error = new Error(message);
   error.statusCode = statusCode;
+  error.code = code;
   error.jsonRpcCode = statusCode === 401 ? -32001 : -32003;
   error.jsonRpcData = data;
   return error;
@@ -6003,18 +6576,19 @@ function authorizeMcpWriteTool(req, toolName, args = {}) {
     throw authError(403, 'MCP bearer token does not include the required contribution scope.', {
       requiredScope,
       grantedScopes: tokenRecord.scopes,
-    });
+    }, 'scope_forbidden');
   }
   if (typeof args.agentId === 'string' && args.agentId.trim() !== tokenRecord.subject) {
     throw authError(403, 'MCP bearer token subject must match arguments.agentId for write-like tools.', {
       subject: tokenRecord.subject,
       agentId: args.agentId.trim(),
-    });
+    }, 'subject_mismatch');
   }
 
   return {
     subject: tokenRecord.subject,
     scopes: tokenRecord.scopes,
+    role: tokenRecord.role,
     requiredScope,
   };
 }
@@ -6399,7 +6973,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     },
     {
       path: 'submission-status/index.html',
-      body: renderSubmissionStatusPage(),
+      // This asset is only a compatibility shell. start:dist and the Vercel
+      // rewrite route /submission-status to createRequestHandler, where the
+      // query is passed to the service projection loader.
+      body: renderSubmissionStatusStaticDelegate(),
     },
     {
       path: 'reputation/index.html',
@@ -6408,6 +6985,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     {
       path: 'terms-of-use/index.html',
       body: renderTermsOfUsePage(),
+    },
+    {
+      path: 'privacy/index.html',
+      body: renderPrivacyPage(),
     },
     {
       path: 'onboarding/index.html',
@@ -6437,12 +7018,18 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
   ];
 }
 
-export function createRequestHandler() {
+export function createRequestHandler({
+  contributionService = LIVE_CONTRIBUTION_SERVICE,
+  workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
+} = {}) {
   return async function handleRequest(req, res) {
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const includeBody = req.method !== 'HEAD';
-    const pathname = requestUrl.pathname;
-    const telemetry = { method: req.method ?? 'GET', path: pathname };
+    const rawPathname = requestUrl.pathname;
+    const pathname = rawPathname === CONTRIBUTIONS_API_ALIAS_BASE_PATH || rawPathname.startsWith(`${CONTRIBUTIONS_API_ALIAS_BASE_PATH}/`)
+      ? `${WORKFLOW_API_BASE_PATH}${rawPathname.slice(CONTRIBUTIONS_API_ALIAS_BASE_PATH.length)}`
+      : rawPathname;
+    const telemetry = { method: req.method ?? 'GET', path: rawPathname };
     const normalizedPath = normalizeCanonicalPath(pathname);
 
     if (pathname !== normalizedPath && CANONICAL_ROUTE_PATHS.has(normalizedPath)) {
@@ -6452,15 +7039,31 @@ export function createRequestHandler() {
       });
     }
 
+    // The build emits this compatibility shell for hosts that expose static
+    // assets, but it must never answer a status query from a query-blind
+    // snapshot. Redirect the asset URL to the server-rendered route while
+    // preserving the lookup query so the projection loader handles it.
+    if (pathname === SUBMISSION_STATUS_STATIC_ASSET_ROUTE && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendRedirect(res, 301, `/submission-status${requestUrl.search}`, {
+        ...telemetry,
+        status: 301,
+      });
+    }
+
     const isContributionIntentPost = req.method === 'POST' && CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
     const isWorkflowRegistrationPost = req.method === 'POST' && pathname === WORKFLOW_REGISTRATIONS_PATH;
+    const isWorkflowClaimPost = req.method === 'POST' && pathname === WORKFLOW_CLAIMS_PATH;
+    const isWorkflowSubmissionPost = req.method === 'POST' && pathname === WORKFLOW_SUBMISSIONS_PATH;
+    const isWorkflowReviewPost = req.method === 'POST' && pathname === WORKFLOW_REVIEWS_PATH;
+    const isWorkflowFeedbackPost = req.method === 'POST' && pathname === WORKFLOW_FEEDBACK_PATH;
+    const isWorkflowMutationPost = isWorkflowRegistrationPost || isWorkflowClaimPost || isWorkflowSubmissionPost || isWorkflowReviewPost || isWorkflowFeedbackPost;
     const isRegistryApi = isRegistryApiPath(pathname);
 
     if (pathname === MCP_GATEWAY.path) {
       return handleMcpRequest(req, res, telemetry);
     }
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost && !isWorkflowRegistrationPost && !isRegistryApi) {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost && !isWorkflowMutationPost && !isRegistryApi) {
       req.resume?.();
     }
 
@@ -6476,7 +7079,43 @@ export function createRequestHandler() {
     }
 
     if (isWorkflowRegistrationPost) {
-      return handleWorkflowRegistrationPost(req, res, includeBody, telemetry);
+      return handleWorkflowRegistrationPost(req, res, includeBody, telemetry, workflow);
+    }
+
+    if (isWorkflowClaimPost) {
+      return handleWorkflowMutationPost(req, res, includeBody, telemetry, {
+        workflow,
+        operation: 'claim',
+        toolName: 'claim_contribution',
+        responseName: 'claim',
+      });
+    }
+
+    if (isWorkflowSubmissionPost) {
+      return handleWorkflowMutationPost(req, res, includeBody, telemetry, {
+        workflow,
+        operation: 'submit',
+        toolName: 'submit_contribution',
+        responseName: 'submission',
+      });
+    }
+
+    if (isWorkflowReviewPost) {
+      return handleWorkflowMutationPost(req, res, includeBody, telemetry, {
+        workflow,
+        operation: 'review',
+        toolName: 'review_contribution',
+        responseName: 'review',
+      });
+    }
+
+    if (isWorkflowFeedbackPost) {
+      return handleWorkflowMutationPost(req, res, includeBody, telemetry, {
+        workflow,
+        operation: 'feedback',
+        toolName: 'respond_to_review_feedback',
+        responseName: 'feedbackResponse',
+      });
     }
 
     if (pathname === '/v1/registry/agents' && (req.method === 'GET' || req.method === 'HEAD')) {
@@ -6492,10 +7131,11 @@ export function createRequestHandler() {
         $schema: SCHEMA_URL,
         error: 'method_not_allowed',
         message:
-          'Only GET and HEAD are supported by this portal, except gated POST contribution-intent and workflow registration intake paths.',
+          'Only GET and HEAD are supported by this portal, except authenticated review-gated contribution workflow writes.',
         allowedMethods: ['GET', 'HEAD'],
         contributionIntentPostPaths: Array.from(CONTRIBUTION_INTENT_POST_PATHS),
         workflowRegistrationPostPath: WORKFLOW_REGISTRATIONS_PATH,
+        workflowWritePaths: [...WORKFLOW_WRITE_PATHS],
       }, includeBody, {
         ...telemetry,
         status: 405,
@@ -6517,7 +7157,7 @@ export function createRequestHandler() {
     }
 
     if (pathname === '/submission-status') {
-      return sendBody(res, 200, renderSubmissionStatusPage(requestUrl.searchParams), 'text/html; charset=utf-8', includeBody, {
+      return sendBody(res, 200, renderSubmissionStatusPage(requestUrl.searchParams, { service: contributionService }), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -6532,6 +7172,13 @@ export function createRequestHandler() {
 
     if (pathname === TERMS_OF_USE_PAGE_ROUTE || pathname === TERMS_OF_USE_SHORT_ROUTE) {
       return sendBody(res, 200, renderTermsOfUsePage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === PRIVACY_PAGE_ROUTE) {
+      return sendBody(res, 200, renderPrivacyPage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -6561,7 +7208,7 @@ export function createRequestHandler() {
     }
 
     if (pathname === WORKFLOW_OPPORTUNITIES_PATH) {
-      return sendJson(res, 200, buildWorkflowOpportunitiesResponse(requestUrl.searchParams), includeBody, {
+      return sendJson(res, 200, buildWorkflowOpportunitiesResponse(requestUrl.searchParams, workflow), includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -6569,15 +7216,55 @@ export function createRequestHandler() {
 
     const workflowOpportunityMatch = pathname.match(WORKFLOW_OPPORTUNITY_PATH_PATTERN);
     if (workflowOpportunityMatch) {
-      const response = buildWorkflowOpportunityResponse(decodeURIComponent(workflowOpportunityMatch[1]));
+      const response = buildWorkflowOpportunityResponse(decodeURIComponent(workflowOpportunityMatch[1]), workflow);
       return sendJson(res, response.statusCode, response.body, includeBody, {
         ...telemetry,
         status: response.statusCode,
       });
     }
 
+    const workflowBriefMatch = pathname.match(WORKFLOW_BRIEF_PATH_PATTERN);
+    if (workflowBriefMatch) {
+      try {
+        const opportunityId = decodeURIComponent(workflowBriefMatch[1]);
+        const brief = workflow.getBrief(opportunityId);
+        return sendJson(res, 200, {
+          $schema: SCHEMA_URL,
+          status: 'brief-ready',
+          brief,
+          reviewGate: reviewGateRecord(),
+        }, includeBody, { ...telemetry, status: 200 });
+      } catch (error) {
+        const status = workflowErrorStatus(error);
+        return sendJson(res, status, {
+          $schema: SCHEMA_URL,
+          error: error.code ?? 'brief_not_found',
+          message: error.message,
+        }, includeBody, { ...telemetry, status });
+      }
+    }
+
+    if (pathname === WORKFLOW_CONTEXT_PATH) {
+      try {
+        const opportunityId = readSearchParam(requestUrl.searchParams, 'opportunityId').trim();
+        const lane = readSearchParam(requestUrl.searchParams, 'lane').trim();
+        return sendJson(res, 200, {
+          $schema: SCHEMA_URL,
+          ...workflow.getContext({ opportunityId: opportunityId || undefined, lane: lane || undefined }),
+        }, includeBody, { ...telemetry, status: 200 });
+      } catch (error) {
+        const status = workflowErrorStatus(error);
+        return sendJson(res, status, {
+          $schema: SCHEMA_URL,
+          error: error.code ?? 'context_not_found',
+          message: error.message,
+        }, includeBody, { ...telemetry, status });
+      }
+    }
+
     if (pathname === WORKFLOW_STATUS_PATH) {
-      return sendJson(res, 200, buildWorkflowStatusResponse(requestUrl.searchParams), includeBody, {
+      const actor = workflowStatusActor(req);
+      return sendJson(res, 200, buildWorkflowStatusResponse(requestUrl.searchParams, contributionService, workflow, actor), includeBody, {
         ...telemetry,
         status: 200,
       });

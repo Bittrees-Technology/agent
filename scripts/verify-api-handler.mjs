@@ -242,6 +242,29 @@ for (const check of CHECKS) {
       console.error('  FAIL: /identity-keys did not render the execution gate policy.');
     }
 
+    for (const expectedText of [
+      'blocked-not-completed',
+      '0/68 executed',
+      '0 transaction hashes',
+      '67 names uncreated',
+      'onchainlead wallet-record mismatch',
+      'authorized-controller-signer',
+      'isolated-custody-attestations',
+      'numeric-spend-cap',
+      'broadcaster-authority',
+      'future-agent-provisioning-required',
+    ]) {
+      if (!res.body.includes(expectedText)) {
+        failed += 1;
+        console.error(`  FAIL: /identity-keys missing ENS rollout status text: ${expectedText}`);
+      }
+    }
+
+    if (/live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i.test(res.body)) {
+      failed += 1;
+      console.error('  FAIL: /identity-keys implied the ENS rollout was complete or executable.');
+    }
+
     if (/rawPrivateKey|secretKey|mnemonic|seedPhrase/.test(res.body)) {
       failed += 1;
       console.error('  FAIL: /identity-keys rendered a forbidden secret field name.');
@@ -303,6 +326,31 @@ for (const check of CHECKS) {
       if (!executionGate) {
         failed += 1;
         console.error('  FAIL: /identity-keys.json missing blocked execute policy.');
+      }
+
+      const ensRollout = parsedBody.data?.identityKeys?.ensPrimaryNameRollout;
+      const completionEvidence = ensRollout?.completionEvidence;
+      const gateIds = ensRollout?.requiredExecutionGates?.map((gate) => gate.id).sort().join(',');
+      if (
+        ensRollout?.status !== 'blocked-not-completed'
+        || completionEvidence?.executionProgress !== '0/68 executed'
+        || completionEvidence?.executedAgentCount !== 0
+        || completionEvidence?.cohortAgentCount !== 68
+        || completionEvidence?.transactionHashCount !== 0
+        || !Array.isArray(completionEvidence?.transactionHashes)
+        || completionEvidence.transactionHashes.length !== 0
+        || completionEvidence?.uncreatedNameCount !== 67
+        || ensRollout?.walletRecordMismatch?.id !== 'onchainlead-wallet-record-mismatch'
+        || gateIds !== 'authorized-controller-signer,broadcaster-authority,isolated-custody-attestations,numeric-spend-cap'
+        || ensRollout?.futureAgentProvisioning?.status !== 'future-agent-provisioning-required'
+      ) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json missing blocked ENS rollout counters, mismatch, or gates.');
+      }
+
+      if (/live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i.test(serializedBody)) {
+        failed += 1;
+        console.error('  FAIL: /identity-keys.json implied the ENS rollout was complete or executable.');
       }
 
       if (/rawPrivateKey|secretKey|mnemonic|seedPhrase/.test(serializedBody)) {

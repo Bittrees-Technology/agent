@@ -28,6 +28,7 @@ import {
   MCP_HARNESS_IMPORT_TABS,
   NO_RIGHTS_CREATED_DISCLAIMER,
   PORTAL_SECURITY_HEADERS,
+  PRIVACY_LEGAL_STATUS,
   REGISTRY_PROFILE_PUBLICATION_NOTICE,
   ROUTE_DEFINITIONS,
   SOURCE_REGISTRY,
@@ -46,6 +47,7 @@ import {
   renderMcpDocsPage,
   renderMcpGatewayPage,
   renderOnboardingPage,
+  renderPrivacyPage,
   renderReputationPage,
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
@@ -513,6 +515,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('submission-status/index.html'));
   assert.ok(assetPaths.has('reputation/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
+  assert.ok(assetPaths.has('privacy/index.html'));
   assert.ok(assetPaths.has('onboarding/index.html'));
   assert.ok(assetPaths.has('tou/index.html'));
   assert.ok(assetPaths.has('llms.txt'));
@@ -527,6 +530,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('submission-status.json'));
   assert.ok(assetPaths.has('reputation.json'));
   assert.ok(assetPaths.has('terms-of-use.json'));
+  assert.ok(assetPaths.has('privacy.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
   assert.ok(assetPaths.has('monitoring.json'));
 });
@@ -538,6 +542,7 @@ test('html pages emit description and Open Graph metadata', () => {
     ['/submission-status', renderSubmissionStatusPage()],
     ['/reputation', renderReputationPage()],
     ['/terms-of-use', renderTermsOfUsePage()],
+    ['/privacy', renderPrivacyPage()],
     ['/onboarding', renderOnboardingPage()],
     ['/mcp', renderMcpGatewayPage()],
     ['/mcp-docs', renderMcpDocsPage()],
@@ -596,6 +601,36 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
   });
 });
 
+test('privacy routes expose an accurate prelaunch status without inventing approved policy text', async () => {
+  const privacyRoute = JSON_ROUTE_MAP.get('/privacy.json');
+  const privacyContract = buildJsonResponse(privacyRoute, '2026-07-13T00:00:00.000Z');
+  const privacyPage = renderPrivacyPage();
+
+  assert.ok(privacyRoute);
+  assert.equal(privacyContract.status, PRIVACY_LEGAL_STATUS.status);
+  assert.equal(privacyContract.data.contentStatus, 'pending-legal-approved-content');
+  assert.equal(privacyContract.data.publicationStatus, 'not-published');
+  assert.equal(privacyContract.data.currentIntakeNotice, CONTRIBUTION_PRIVACY_NOTICE);
+  assert.match(privacyPage, /Privacy policy and contact are pending legal approval/);
+  assert.match(privacyPage, /not a substitute for a final policy/);
+  assert.match(privacyPage, /<meta name="robots" content="noindex,nofollow" \/>/);
+
+  await withPortalServer(async (baseUrl) => {
+    const pageResponse = await fetch(`${baseUrl}/privacy`);
+    const contractResponse = await fetch(`${baseUrl}/privacy.json`);
+    const contractBody = await contractResponse.json();
+
+    assert.equal(pageResponse.status, 200);
+    assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
+    assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(await pageResponse.text(), /pending legal approval/);
+
+    assert.equal(contractResponse.status, 200);
+    assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
+    assert.equal(contractBody.data.contentStatus, 'pending-legal-approved-content');
+  });
+});
+
 test('landing contribution intent CTA copy follows write flag posture', () => {
   withContributionIntentWriteFlags({}, () => {
     const html = renderLandingPage();
@@ -622,6 +657,16 @@ test('landing page stacks route cards before tablet overflow widths', () => {
   assert.match(html, /@media \(max-width: 900px\)/);
   assert.match(html, /\.route-card \{ align-items: flex-start; flex-direction: column; \}/);
   assert.match(html, /\.route-card span \{ white-space: normal; text-align: left; \}/);
+});
+
+test('landing route links use working examples or documentation for templates and POST-only APIs', () => {
+  const html = renderLandingPage();
+
+  assert.doesNotMatch(html, /href="\/v1\/workflow\/opportunities\/:opportunityId"/);
+  assert.doesNotMatch(html, /href="\/v1\/workflow\/registrations"/);
+  assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
+  assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
+  assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
 });
 
 test('contribution intent contract security gate tracks the write flag', () => {
@@ -919,6 +964,17 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
   assert.match(html, /Identity and keys\./);
   assert.match(html, /agent-signed-staged-state-with-guarded-authority-changes/);
   assert.match(html, /blocked-without-explicit-controller-or-safe-approval/);
+  assert.match(html, /blocked-not-completed/);
+  assert.match(html, /0\/68 executed/);
+  assert.match(html, /0 transaction hashes/);
+  assert.match(html, /67 names uncreated/);
+  assert.match(html, /onchainlead wallet-record mismatch/);
+  assert.match(html, /authorized-controller-signer/);
+  assert.match(html, /isolated-custody-attestations/);
+  assert.match(html, /numeric-spend-cap/);
+  assert.match(html, /broadcaster-authority/);
+  assert.match(html, /future-agent-provisioning-required/);
+  assert.doesNotMatch(html, /live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i);
   assert.doesNotMatch(html, /rawPrivateKey|secretKey|mnemonic|seedPhrase/);
 });
 
@@ -937,9 +993,31 @@ test('identity and keys route exposes public contract without secret fields', ()
     response.data.identityKeys.sections.some((section) => section.id === 'public-operational-keys'),
     'expected public key section',
   );
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.status, 'blocked-not-completed');
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.completionEvidence.executedAgentCount, 0);
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.completionEvidence.cohortAgentCount, 68);
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.completionEvidence.executionProgress, '0/68 executed');
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.completionEvidence.transactionHashCount, 0);
+  assert.deepEqual(response.data.identityKeys.ensPrimaryNameRollout.completionEvidence.transactionHashes, []);
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.completionEvidence.uncreatedNameCount, 67);
+  assert.equal(response.data.identityKeys.ensPrimaryNameRollout.walletRecordMismatch.id, 'onchainlead-wallet-record-mismatch');
+  assert.deepEqual(
+    response.data.identityKeys.ensPrimaryNameRollout.requiredExecutionGates.map((gate) => gate.id),
+    [
+      'authorized-controller-signer',
+      'isolated-custody-attestations',
+      'numeric-spend-cap',
+      'broadcaster-authority',
+    ],
+  );
+  assert.equal(
+    response.data.identityKeys.ensPrimaryNameRollout.futureAgentProvisioning.status,
+    'future-agent-provisioning-required',
+  );
   assert.doesNotMatch(serialized, /rawPrivateKey|secretKey|mnemonic|seedPhrase/);
   assert.match(serialized, /controller-signed challenge/);
   assert.match(serialized, /blocked-without-explicit-controller-or-safe-approval/);
+  assert.doesNotMatch(serialized, /live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i);
 });
 
 test('identity and keys JSON exposes the contributor-signing rollout gates with public references', () => {
@@ -1061,6 +1139,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/submission-status'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/reputation'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms-of-use'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/privacy'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/tou'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
@@ -1071,9 +1150,16 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/submission-status.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/reputation.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/terms-of-use.json'));
+  assert.ok(response.data.monitoring.schemaValidity.routes.includes('/privacy.json'));
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.claimDrift.baselineApprovedClaimIds.includes(APPROVED_CLAIMS[0].id));
   assert.ok(response.data.monitoring.claimDrift.baselineExcludedClaimIds.includes(EXCLUDED_CLAIM_REVIEW[0].id));
+  assert.ok(response.data.monitoring.errorPathChecks.some((check) => (
+    check.method === 'POST'
+    && check.path === '/v1/registry/heartbeats'
+    && check.expectedStatus === 400
+    && check.forbiddenResponseText.includes('/var/task')
+  )));
 });
 
 test('workflow API supports discovery brief and status journeys', async () => {
@@ -1435,6 +1521,7 @@ test('public contribution surfaces hide internal role and route literals', () =>
     ['/', renderLandingPage()],
     ['/llms.txt', buildLlmsTxt()],
     ['/terms-of-use', renderTermsOfUsePage()],
+    ['/privacy', renderPrivacyPage()],
     [
       '/submission-status',
       renderSubmissionStatusPage(new URLSearchParams('id=source-registry-hardening&kind=opportunity')),
@@ -1545,6 +1632,7 @@ test('human pages expose shared primary navigation and route metadata', () => {
     { path: '/submission-status', label: 'Status', html: renderSubmissionStatusPage() },
     { path: '/reputation', label: 'Reputation', html: renderReputationPage() },
     { path: '/terms-of-use', label: 'Terms', html: renderTermsOfUsePage() },
+    { path: '/privacy', label: 'Privacy', html: renderPrivacyPage() },
   ];
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

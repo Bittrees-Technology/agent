@@ -12,10 +12,18 @@ const host = process.env.HOST ?? '0.0.0.0';
 const canonicalRoutePaths = new Set([ROBOTS_TXT_PATH, ...ROUTE_DEFINITIONS.map((definition) => definition.path), '/portal-manifest.json']);
 const routeDefinitionsByPath = new Map(ROUTE_DEFINITIONS.map((definition) => [definition.path, definition]));
 const dynamicPortalHandler = createRequestHandler();
-const dynamicPortalRoutePaths = new Set(['/contribution-intents', '/gateway/contribution-intents']);
+// These routes must execute the server handler so query parameters reach the
+// contribution service projection loader. Serving dist/submission-status as a
+// static snapshot would make every lookup appear identical.
+const dynamicPortalRoutePaths = new Set([
+  '/contribution-intents',
+  '/gateway/contribution-intents',
+  '/submission-status',
+  '/submission-status/index.html',
+]);
 // API namespaces are implemented only by createRequestHandler. Delegate their
-// full namespaces rather than enumerating today's endpoints, so dist-mode stays
-// aligned with source-mode as the workflow and registry contracts grow.
+// full namespaces rather than enumerating today's endpoints, so dist-mode
+// stays aligned with source-mode as the workflow and registry contracts grow.
 const dynamicPortalRoutePrefixes = ['/v1/workflow/', '/v1/registry/'];
 
 function isDynamicPortalPath(pathname) {
@@ -156,8 +164,10 @@ const server = createServer(async (req, res) => {
     res.end(req.method === 'HEAD' ? undefined : body);
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'EISDIR') {
-      res.once('finish', () => logTelemetry({ ...telemetry, status: 404 }));
-      return sendText(res, 404, 'Not found.\n');
+      // Preserve the portal's JSON 404 contract for unknown GET routes. This
+      // also keeps smoke/error-path checks identical between start and
+      // start:dist while static assets remain directly readable.
+      return dynamicPortalHandler(req, res);
     }
 
     console.error(error);
