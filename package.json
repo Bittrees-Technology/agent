@@ -20,7 +20,7 @@
     "smoke": "node scripts/smoke-check.mjs",
     "start": "node src/server.mjs",
     "start:dist": "node scripts/serve-dist.mjs",
-    "test": "node --test --test-concurrency=1",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.mjs\"",
     "test:onboarding": "node --test test/onboarding-ci-docs.test.mjs",
     "verify:api": "node scripts/verify-api-handler.mjs"
   },

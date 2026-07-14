@@ -190,6 +190,7 @@ export const INTERNAL_OPPORTUNITY_REVIEW_NOTICE =
 export const PORTAL_SECURITY_HEADERS = {
   'Content-Security-Policy':
     "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests",
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',

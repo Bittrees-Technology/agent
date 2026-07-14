@@ -1120,6 +1120,7 @@ test('contribution intent HTML validation response exposes focusable error summa
 test('portal security headers enforce browser launch gate', () => {
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /default-src 'none'/);
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.equal(PORTAL_SECURITY_HEADERS['Strict-Transport-Security'], 'max-age=63072000; includeSubDomains');
   assert.equal(PORTAL_SECURITY_HEADERS['X-Frame-Options'], 'DENY');
   assert.equal(PORTAL_SECURITY_HEADERS['Referrer-Policy'], 'no-referrer');
   assert.equal(PORTAL_SECURITY_HEADERS['Permissions-Policy'], 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
