@@ -35,6 +35,10 @@ The portal is intentionally noindex until the source registry and public Bittree
 - Endpoint tests for route contracts and claim guardrails.
 - A build step that writes deployable static assets into `dist/` for Vercel.
 
+## Contributor onboarding and CI
+
+For a clean-machine setup, cross-platform update and troubleshooting guidance, and the contributor verification workflow, see [Contributor onboarding and clean-machine setup](docs/contributor-onboarding.md). The checked-in GitHub Actions preflight uses the same lockfile-based install and validation commands on Ubuntu, macOS, and Windows; it does not deploy.
+
 ## Source-aware content rules
 
 The portal currently limits Bittrees claims to the approved local/Brain grounding:
@@ -87,6 +91,10 @@ The workflow HTTP surface reuses the onboarding contract data and the existing r
 - `GET /v1/workflow/opportunities`
 - `GET /v1/workflow/opportunities/:opportunityId`
 - `POST /v1/workflow/registrations`
+- `POST /v1/workflow/claims`
+- `POST /v1/workflow/submissions`
+- `POST /v1/workflow/reviews`
+- `POST /v1/workflow/feedback`
 - `GET /v1/workflow/status?id=<id>&kind=<kind>`
 
 `GET /v1/workflow/opportunities` accepts optional `lane`, `priority`, and `status` query filters and returns the filtered opportunity list plus the canonical workflow steps, absolute role-application links, review gate, and launch caveats from `data/agent-onboarding/contribution-workflow.json`.
@@ -95,7 +103,11 @@ The workflow HTTP surface reuses the onboarding contract data and the existing r
 
 `POST /v1/workflow/registrations` is the onboarding-start route. It is a bearer-authenticated review queue stub backed by the same `register_external_agent` validation and review gate used by the MCP gateway. The JSON body must include `agentId`, `displayName`, `operator`, `contact`, `capabilities`, and `evidencePolicy`. Missing or wrong tokens return `401` or `403`; malformed or incomplete requests return `400`; accepted requests return `202` with the queued registration record, `authorizedRoute`, and `statusLookup`.
 
-`GET /v1/workflow/status` is the canonical onboarding/status-tracking route. It accepts `id` plus optional `kind` (`any`, `opportunity`, `registration`, `claim`, `submission`, `feedback`, or `attestation`). With no `id`, it returns the ready-state contract; with an `id`, it returns `status_found` or `not_found`, the nested MCP-backed `lookup`, the accepted kinds, and the human fallback route `/submission-status`. Unknown `kind` values normalize to `any` instead of returning a validation error.
+`POST /v1/workflow/claims`, `/submissions`, `/reviews`, and `/feedback` are the direct HTTP equivalents of the review-gated MCP write tools. They require bearer tokens scoped to `contributor:claim`, `contributor:submit`, `contributor:review`, or `contributor:feedback`; missing tokens, wrong scopes, subject mismatches, malformed JSON, unsafe payload fields, and invalid workflow state all fail closed with JSON errors. Accepted writes return `202` review-queue projections only; they do not publish claims, grant capabilities, create public attestations, move funds, submit transactions, or mutate registry authority.
+
+`GET /v1/workflow/status` is the canonical onboarding/status-tracking route. It accepts `id` plus optional `kind` (`any`, `opportunity`, `registration`, `claim`, `submission`, `feedback`, or `attestation`). With no `id`, it returns the ready-state contract; with an `id`, it returns `status_found` or `not_found`, the nested MCP-backed `lookup`, the accepted kinds, and the human fallback route `/submission-status`. Unknown `kind` values return `400` with `error: "invalid_status_kind"` and the accepted kind list.
+
+`/v1/contributions/*` is a backward-compatible alias for `/v1/workflow/*`. It preserves the same authentication, status-kind validation, and fail-closed error behavior as the canonical route; new clients should use `/v1/workflow/*`.
 
 Internal-only and review-routing fields still exist in the published schemas, but they are not public guarantees: `contact.kind = "internal-route"` is for review-gated/internal records only, and `handoff.requestedOwnerRoute`, `handoff.goalId`, and `handoff.sourceIds` remain review-routing or provenance fields rather than public assignment, approval, or authority signals.
 
@@ -245,6 +257,25 @@ The build writes:
 - `dist/idacc/releases.json`
 - `dist/monitoring.json`
 - `dist/portal-manifest.json`
+
+### Release metadata
+
+The build derives public portal release metadata from the deployed source identity and writes the same value to `dist/idacc/releases.json` (`data.releaseMetadata`) and `dist/portal-manifest.json` (`releaseMetadata`). An exact clean git tag is the default release version. Untagged builds use `packageVersion+<commit>` so the route cannot silently report the stale package version for a different commit; dirty local builds are marked with a `.dirty` suffix.
+
+Release automation may set `AGENT_RELEASE_VERSION` or `PORTAL_RELEASE_VERSION` to an approved display version, and `AGENT_RELEASE_TAG`, `PORTAL_RELEASE_TAG`, or `RELEASE_TAG` to an approved tag. Commit provenance is read from `AGENT_RELEASE_COMMIT_SHA`, `PORTAL_RELEASE_COMMIT_SHA`, `VERCEL_GIT_COMMIT_SHA`, `GITHUB_SHA`, `SOURCE_VERSION`, or the local git checkout, in that order. `AGENT_DEPLOYMENT_ID` or `VERCEL_DEPLOYMENT_ID` may supply the immutable deployment id.
+
+Deployment assumptions:
+
+- Release builds use a clean checkout; a dirty checkout will not claim the tag at `HEAD`.
+- The deploy platform serves generated static files before the catch-all API rewrite. If the dynamic handler serves the route, it derives the same contract from deployment environment variables.
+- A human-readable tag requires either an exact tag available in the build checkout or one of the explicit tag variables above. Commit identity remains the fallback when a shallow checkout does not contain tags.
+- Release metadata is evidence of the deployed source identity, not permission to launch. Existing legal, security, content, and operations gates still apply.
+
+After deployment, bind the live check to the intended release rather than merely checking that metadata exists:
+
+```bash
+npm run smoke -- --base-url=https://agent.bittrees.org --expected-release-version=1.2.3 --expected-release-tag=v1.2.3 --expected-release-commit=<full-commit-sha>
+```
 
 `/mcp`, `/contribution-intents`, and `/gateway/contribution-intents` are intentionally excluded from static output so Vercel does not shadow their POST-capable API handlers with static files.
 

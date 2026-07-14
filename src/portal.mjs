@@ -17,6 +17,7 @@ import {
   ONBOARDING_CONTRACT_RESPONSE_SCHEMA,
   buildOnboardingContractsData,
 } from './onboarding-contracts.mjs';
+import { DEPLOYED_RELEASE_METADATA } from './release-metadata.mjs';
 import { createContributionService, loadStatusProjection } from './contributions/service.mjs';
 import {
   ContributorPortalWorkflow,
@@ -29,9 +30,15 @@ const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
+const TERMS_PAGE_ROUTE = '/terms';
 const TERMS_OF_USE_SHORT_ROUTE = '/tou';
 const PRIVACY_PAGE_ROUTE = '/privacy';
 const SUBMISSION_STATUS_STATIC_ASSET_ROUTE = '/submission-status/index.html';
+const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
+  [`${TERMS_PAGE_ROUTE}/index.html`, TERMS_PAGE_ROUTE],
+  [`${TERMS_OF_USE_PAGE_ROUTE}/index.html`, TERMS_OF_USE_PAGE_ROUTE],
+  [`${TERMS_OF_USE_SHORT_ROUTE}/index.html`, TERMS_OF_USE_SHORT_ROUTE],
+]);
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
@@ -86,6 +93,17 @@ const WORKFLOW_WRITE_PATHS = new Set([
 const CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS ?? 60_000);
 const CONTRIBUTION_POST_RATE_LIMIT_MAX = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_MAX ?? 30);
 const CONTRIBUTION_POST_RATE_BUCKETS = new Map();
+const MCP_POST_RATE_LIMIT_WINDOW_MS = Number(process.env.MCP_POST_RATE_LIMIT_WINDOW_MS ?? 60_000);
+const MCP_POST_RATE_LIMIT_MAX = Number(process.env.MCP_POST_RATE_LIMIT_MAX ?? 120);
+const MCP_POST_RATE_BUCKETS = new Map();
+const GATEWAY_CORS_ALLOWED_METHODS = ['GET', 'HEAD', 'POST'];
+const GATEWAY_CORS_ALLOWED_HEADERS = [
+  'accept',
+  'authorization',
+  'content-type',
+  'idempotency-key',
+  'mcp-protocol-version',
+];
 const MCP_WRITE_TOOL_SCOPES = Object.freeze({
   register_external_agent: 'contributor:register',
   claim_contribution: 'contributor:claim',
@@ -483,6 +501,97 @@ export const EXCLUDED_CLAIM_REVIEW = EXCLUDED_CLAIMS.map((claim, index) => ({
   publicPrivateStatus: 'public-safe-exclusion',
   status: 'excluded-unless-specific-source-supports-it',
 }));
+
+export function buildApprovedContentPackage() {
+  return {
+    schema: 'agent.bittrees.approved-content-package.v1',
+    packageId: 'bittrees-agent-source-grounded-content-2026-07-07',
+    status: 'approved-for-prelaunch-rendering',
+    sourceOfTruthRoute: '/sources.json',
+    agentEntryRoute: '/llms.txt',
+    provenance: {
+      generatedFrom: ['SOURCE_REGISTRY', 'APPROVED_CLAIMS', 'EXCLUDED_CLAIM_REVIEW'],
+      publicSafeFilter: 'SOURCE_REGISTRY.publicSafe === true',
+      owner: 'lead',
+      reviewer: 'lead',
+      lastReviewedAt: '2026-07-07',
+      launchGate: LAUNCH_STATUS.publicLaunchGate,
+    },
+    agentInstructions: [
+      {
+        id: 'start-with-source-routes',
+        instruction:
+          'Start at /llms.txt, then read /sources.json before producing Bittrees-facing claims or contribution packets.',
+        links: ['/llms.txt', '/sources.json'],
+      },
+      {
+        id: 'cite-approved-records',
+        instruction:
+          'Use only approved source records and approved claim records; keep caveats, freshness windows, and reviewer provenance attached.',
+        links: ['/sources.json', '/templates.json'],
+      },
+      {
+        id: 'preserve-exclusions',
+        instruction:
+          'Check excluded claims before public reuse, especially AI-agent-platform, generic DAO, cross-chain, token-value, wallet, treasury, and public-launch claims.',
+        links: ['/sources.json', '/monitoring.json'],
+      },
+      {
+        id: 'queue-review-packets',
+        instruction:
+          'Submit source-aware contribution packets through the documented review-gated routes; receipts do not grant approval, authority, or compensation rights.',
+        links: ['/contribution-intents', '/gateway/contribution-intents', MCP_GATEWAY.path],
+      },
+      {
+        id: 'verify-identity-authority',
+        instruction:
+          'Use identity/key routes before trusting agent identity, controller state, delegated scopes, or onchain execution readiness.',
+        links: ['/identity-keys.json', '/reputation.json'],
+      },
+    ],
+    sources: SOURCE_REGISTRY.filter((source) => source.publicSafe === true).map((source) => ({
+      id: source.id,
+      label: source.label,
+      url: source.url,
+      authority: source.authority,
+      citationTargets: source.citationTargets,
+      owner: source.owner,
+      reviewer: source.reviewer,
+      freshnessWindow: source.freshnessWindow,
+      lastReviewedAt: source.lastReviewedAt,
+      mutable: source.mutable,
+      publicPrivateStatus: source.publicPrivateStatus,
+      reviewRequirement: source.reviewRequirement,
+      supports: source.supports,
+    })),
+    approvedClaims: APPROVED_CLAIMS.map((claim) => ({
+      id: claim.id,
+      claim: claim.claim,
+      caveat: claim.caveat,
+      citationTargets: claim.citationTargets,
+      owner: claim.owner,
+      reviewer: claim.reviewer,
+      freshnessWindow: claim.freshnessWindow,
+      lastReviewedAt: claim.lastReviewedAt,
+      mutable: claim.mutable,
+      publicPrivateStatus: claim.publicPrivateStatus,
+    })),
+    excludedClaims: EXCLUDED_CLAIM_REVIEW.map((claim) => ({
+      id: claim.id,
+      claim: claim.claim,
+      citationTargets: claim.citationTargets,
+      owner: claim.owner,
+      reviewer: claim.reviewer,
+      freshnessWindow: claim.freshnessWindow,
+      lastReviewedAt: claim.lastReviewedAt,
+      mutable: claim.mutable,
+      publicPrivateStatus: claim.publicPrivateStatus,
+      status: claim.status,
+    })),
+  };
+}
+
+export const APPROVED_CONTENT_PACKAGE = buildApprovedContentPackage();
 
 export const CONTRIBUTION_LANES = [
   {
@@ -1489,6 +1598,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/identity-keys',
     '/submission-status',
     '/reputation',
+    TERMS_PAGE_ROUTE,
     '/terms-of-use',
     '/tou',
     '/privacy',
@@ -1596,6 +1706,7 @@ export const TERMS_OF_USE_LEGAL_STATUS = {
   status: 'blocked-pending-legal-approved-content',
   contentStatus: 'pending-legal-approved-content',
   pageRoute: '/terms-of-use',
+  aliasRoutes: [TERMS_PAGE_ROUTE, TERMS_OF_USE_SHORT_ROUTE],
   jsonRoute: '/terms-of-use.json',
   legalContentOwner: 'legal/general-counsel',
   publicationStatus: 'not-published',
@@ -1723,6 +1834,85 @@ enabled = true
   },
 ];
 
+const MCP_SAFEGUARD_ENFORCEMENT = Object.freeze([
+  Object.freeze({
+    surface: 'read-only contribution tools',
+    verdict: 'ALLOW',
+    enforcementStatus: 'enforced',
+    controls: [
+      'POST-only Streamable HTTP JSON-RPC contract',
+      'MCP protocol and Accept-header validation',
+      'origin allowlist for browser-originated traffic',
+    ],
+  }),
+  Object.freeze({
+    surface: 'write-like contribution tools',
+    verdict: 'GATE',
+    enforcementStatus: 'enforced',
+    controls: [
+      'MCP_WRITE_TOKENS bearer-token lookup',
+      'token expiry, not-before, and revocation checks fail closed',
+      'per-tool contribution scope check',
+      'token subject must match arguments.agentId',
+      'review-queue-only persistence',
+    ],
+  }),
+  Object.freeze({
+    surface: 'production, registry, wallet, signing, and public-attestation authority',
+    verdict: 'BLOCK',
+    enforcementStatus: 'enforced',
+    controls: [
+      'productionMutationAllowed is false',
+      'review gate keeps registry, wallet, transaction, and contributor capability false',
+      'sensitive and authority-bearing payload material is rejected',
+    ],
+  }),
+  Object.freeze({
+    surface: 'gateway audit trail',
+    verdict: 'GATE',
+    enforcementStatus: 'enforced',
+    controls: [
+      'structural secret redaction before append',
+      'bounded process-local audit retention',
+      'no raw authorization, cookie, API-key, token, or nested secret fields retained',
+    ],
+  }),
+]);
+
+function externalMcpSafeguardEntry({ id, label, client, transport, configurationSource }) {
+  return Object.freeze({
+    integrationId: id,
+    integration: label,
+    client,
+    transport,
+    route: MCP_GATEWAY.path,
+    verdict: 'ALLOW read-only; GATE write-like; BLOCK production authority',
+    enforcementStatus: 'enforced-prelaunch',
+    configurationSource,
+    enforcement: MCP_SAFEGUARD_ENFORCEMENT,
+  });
+}
+
+// This index deliberately describes only clients routed to this gateway. It
+// does not imply that unrelated upstream MCPs (for example Alchemy MCP) are
+// installed, credentialed, or served by agent.bittrees.org.
+export const EXTERNAL_MCP_SAFEGUARD_INDEX = Object.freeze([
+  externalMcpSafeguardEntry({
+    id: 'generic-streamable-http',
+    label: 'Generic Streamable HTTP MCP client',
+    client: 'MCP-compatible external client',
+    transport: 'Streamable HTTP',
+    configurationSource: 'MCP_IMPORT_SNIPPETS.generic-mcp-client',
+  }),
+  ...MCP_HARNESS_IMPORT_TABS.map((tab) => externalMcpSafeguardEntry({
+    id: tab.id,
+    label: tab.label,
+    client: tab.client,
+    transport: tab.id === 'claude-desktop' ? 'stdio proxy to Streamable HTTP' : 'Streamable HTTP',
+    configurationSource: `MCP_HARNESS_IMPORT_TABS.${tab.id}`,
+  })),
+]);
+
 const STATUS_LOOKUP_KINDS = ['any', 'opportunity', 'registration', 'claim', 'submission', 'feedback', 'attestation'];
 
 const MCP_REVIEW_QUEUE = {
@@ -1730,12 +1920,13 @@ const MCP_REVIEW_QUEUE = {
   claims: new Map(),
   submissions: new Map(),
   feedbackResponses: new Map(),
-  attestations: new Map(),
 };
 
 const SECRET_FIELD_PATTERN = /(?:private|secret|mnemonic|seed|bearer|oauth|token|cookie|recovery)/i;
 const AUTHORITY_FIELD_PATTERN =
   /(?:authority|authorization|execution|execute|spend|signer|signature|wallet|transaction|controller|delegation|credential)/i;
+const MCP_AUDIT_EVENT_LIMIT = 256;
+const MCP_AUDIT_EVENTS = [];
 const SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS = [
   ['private key material', /\b(?:private key|secret key|seed phrase|mnemonic|recovery phrase)\b/i],
   ['credential material', /\b(?:bearer token|oauth token|api key|session cookie)\b/i],
@@ -1745,6 +1936,70 @@ const SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS = [
   ['spending request', /\b(?:spend|transfer|approve|move)\s+(?:funds|tokens|assets|treasury|wallet)\b/i],
   ['authority escalation request', /\b(?:grant|delegate|approve|authorize)\s+(?:authority|execution|spending|signing|wallet|safe|controller)\b/i],
 ];
+
+// Keep this recursive shape aligned with the registry control-plane's
+// redaction control: redact by structural field name first, then catch common
+// credential-bearing string forms. Audit records must never retain secrets.
+function isSecretishKey(key) {
+  return /(?:api[_-]?key|access[_-]?key|authorization|bearer|cookie|credential|oauth|password|private|secret|mnemonic|seed|token|recovery|signature|signer|wallet)/i.test(String(key));
+}
+
+function redactSecrets(value, key = '') {
+  if (isSecretishKey(key)) return '[REDACTED]';
+  if (Array.isArray(value)) return value.map((item) => redactSecrets(item, key));
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [childKey, redactSecrets(childValue, childKey)]),
+    );
+  }
+  if (typeof value === 'string'
+    && /(?:bearer\s+|sk[-_]|-----begin|private[_ -]?key|(?:api|access)[_-]?key\s*[:=]|(?:password|token|secret)\s*[:=])/i.test(value)) {
+    return '[REDACTED]';
+  }
+  return value;
+}
+
+function mcpAuditRequestProjection(req, message) {
+  const sensitiveHeaders = [
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'x-api-key',
+    'x-access-token',
+  ];
+  const headers = Object.fromEntries(
+    sensitiveHeaders
+      .map((name) => [name, getRequestHeader(req, name)])
+      .filter(([, value]) => value),
+  );
+
+  return {
+    method: req.method ?? 'POST',
+    path: MCP_GATEWAY.path,
+    headers,
+    ...(message === undefined ? {} : { jsonRpc: message }),
+  };
+}
+
+function appendMcpAuditEvent(req, { outcome, httpStatus, message } = {}) {
+  const event = redactSecrets({
+    $schema: 'agent.mcp.audit-event.v1',
+    eventId: `mcp-audit-${randomUUID()}`,
+    eventType: 'mcp.gateway.request',
+    occurredAt: new Date().toISOString(),
+    outcome,
+    httpStatus,
+    request: mcpAuditRequestProjection(req, message),
+  });
+
+  MCP_AUDIT_EVENTS.push(event);
+  if (MCP_AUDIT_EVENTS.length > MCP_AUDIT_EVENT_LIMIT) MCP_AUDIT_EVENTS.shift();
+  return event;
+}
+
+export function getMcpAuditEvents() {
+  return JSON.parse(JSON.stringify(MCP_AUDIT_EVENTS));
+}
 
 function textSchema(description, minLength = 1) {
   return { type: 'string', minLength, description };
@@ -1917,10 +2172,11 @@ export const MCP_CONTRIBUTION_TOOLS = [
     description:
       'Queue a contribution artifact for review. The gateway records status only and does not publish or mutate production state.',
     readOnly: false,
-    inputSchema: objectInputSchema(['agentId', 'opportunityId', 'title', 'artifact', 'evidence'], {
+    inputSchema: objectInputSchema(['agentId', 'opportunityId', 'idempotencyKey', 'title', 'artifact', 'evidence'], {
       agentId: textSchema('Submitting agent id.'),
       opportunityId: textSchema('Related opportunity id.'),
       claimId: textSchema('Optional claim id returned by claim_contribution.', 0),
+      idempotencyKey: textSchema('Required stable key for safely retrying the authenticated submission.', 1),
       title: textSchema('Contribution title.'),
       artifact: {
         type: 'object',
@@ -2133,22 +2389,12 @@ function createReviewRecord(collectionName, prefix, payload) {
   return record;
 }
 
-function createPendingAttestation(contributionId, payload) {
-  return createReviewRecord('attestations', 'att', {
-    contributionId,
-    attestationStatus: 'review_pending_not_publicly_attested',
-    publicAttestation: false,
-    ...payload,
-  });
-}
-
 function getQueueCollection(kind) {
   return {
     registration: MCP_REVIEW_QUEUE.registrations,
     claim: MCP_REVIEW_QUEUE.claims,
     submission: MCP_REVIEW_QUEUE.submissions,
     feedback: MCP_REVIEW_QUEUE.feedbackResponses,
-    attestation: MCP_REVIEW_QUEUE.attestations,
   }[kind];
 }
 
@@ -2164,7 +2410,6 @@ function findQueuedRecord(id, preferredKind = 'any') {
     ['claim', MCP_REVIEW_QUEUE.claims],
     ['submission', MCP_REVIEW_QUEUE.submissions],
     ['feedback', MCP_REVIEW_QUEUE.feedbackResponses],
-    ['attestation', MCP_REVIEW_QUEUE.attestations],
   ]) {
     const record = collection.get(id);
     if (record) return { kind, record };
@@ -2176,7 +2421,7 @@ function findQueuedRecord(id, preferredKind = 'any') {
   return null;
 }
 
-function callContributionTool(name, args = {}, authContext = null) {
+function callContributionTool(name, args = {}, authContext = null, workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
   switch (name) {
     case 'list_contribution_opportunities': {
       const includeReviewRequirements = args.includeReviewRequirements !== false;
@@ -2315,10 +2560,17 @@ function callContributionTool(name, args = {}, authContext = null) {
           replayed: serviceResult.replayed,
           projection: serviceResult.projection,
         };
+        const attestation = workflow.recordPendingAttestation({
+          actor: authContext,
+          submissionId: serviceResult.receiptId,
+          opportunityId,
+          agentId: requireText(args, 'agentId'),
+        });
         return {
           status: 'submission_queued_for_review',
           reviewGate: reviewGateRecord(),
           submission,
+        attestation,
           nextAction: 'Reviewer acceptance is required before publication, assignment, reputation credit, or attestation.',
         };
       }
@@ -2334,17 +2586,10 @@ function callContributionTool(name, args = {}, authContext = null) {
         authenticatedSubject: authContext?.subject ?? null,
         publicationMutation: 'blocked_until_review_acceptance',
       });
-      const attestation = createPendingAttestation(record.id, {
-        opportunityId,
-        agentId: record.agentId,
-        submissionId: record.id,
-      });
-
       return {
         status: 'submission_queued_for_review',
         reviewGate: record.reviewGate,
         submission: record,
-        attestation,
         nextAction: 'Reviewer acceptance is required before publication, assignment, reputation credit, or attestation.',
       };
     }
@@ -2352,16 +2597,21 @@ function callContributionTool(name, args = {}, authContext = null) {
     case 'check_contribution_status': {
       const id = requireText(args, 'id');
       const kind = optionalText(args, 'kind') ?? 'any';
-      const serviceProjection = loadStatusProjection(LIVE_CONTRIBUTION_SERVICE, { id, kind, actor: authContext });
-      if (serviceProjection.status === 'status_found') return serviceProjection;
-      const found = findQueuedRecord(id, kind);
-
-      return {
-        status: found ? 'status_found' : 'not_found',
-        reviewGate: reviewGateRecord(),
-        query: { id, kind },
-        result: found,
-      };
+      if (!isStatusLookupKind(kind)) {
+        throw invalidToolInput(`Unsupported status lookup kind: ${kind}`);
+      }
+      if (!authContext?.subject) {
+        return {
+          status: 'not_found',
+          reviewGate: reviewGateRecord(),
+          query: { id, kind },
+          result: null,
+          privacy: { notFoundForUnauthenticatedMcp: true },
+        };
+      }
+      const workflowProjection = workflow.status({ id, kind, actor: authContext });
+      if (workflowProjection.status === 'status_found') return workflowProjection;
+      return loadStatusProjection(LIVE_CONTRIBUTION_SERVICE, { id, kind, actor: authContext });
     }
 
     case 'respond_to_review_feedback': {
@@ -2387,21 +2637,18 @@ function callContributionTool(name, args = {}, authContext = null) {
     case 'get_agent_reputation': {
       const agentId = requireText(args, 'agentId');
       const approvedProfile = APPROVED_AGENT_PROFILES.find((profile) => profile.id === agentId);
-      const pendingRegistration = [...MCP_REVIEW_QUEUE.registrations.values()].find((record) => record.agentId === agentId);
-      const submissions = [...MCP_REVIEW_QUEUE.submissions.values()].filter((record) => record.agentId === agentId);
-
       return {
-        status: approvedProfile ? 'reviewed_profile_found' : pendingRegistration ? 'pending_review_profile_found' : 'not_found',
+        status: approvedProfile ? 'reviewed_profile_found' : 'not_found',
         reviewGate: reviewGateRecord(),
         agentId,
         reputation: {
-          score: approvedProfile ? 70 : pendingRegistration ? 10 : 0,
-          status: approvedProfile ? 'operator-reviewed-evidence' : pendingRegistration ? 'unreviewed-pending' : 'unknown',
+          score: approvedProfile ? 70 : 0,
+          status: approvedProfile ? 'operator-reviewed-evidence' : 'unknown',
           caveat: 'Reputation is an evidence signal and does not authorize execution, spending, registry mutation, or public claim expansion.',
         },
         approvedProfile,
-        pendingRegistration,
-        queuedSubmissionCount: submissions.length,
+        pendingRegistration: null,
+        queuedSubmissionCount: 0,
       };
     }
 
@@ -2412,9 +2659,12 @@ function callContributionTool(name, args = {}, authContext = null) {
         throw invalidToolInput('attestationId or contributionId is required.');
       }
 
-      const attestation = attestationId
-        ? MCP_REVIEW_QUEUE.attestations.get(attestationId)
-        : [...MCP_REVIEW_QUEUE.attestations.values()].find((record) => record.contributionId === contributionId);
+      const attestationLookup = workflow.lookupAttestation({
+        attestationId,
+        contributionId,
+        actor: authContext,
+      });
+      const attestation = attestationLookup.attestation;
 
       return {
         status: attestation ? 'attestation_status_found' : 'not_found',
@@ -2429,9 +2679,9 @@ function callContributionTool(name, args = {}, authContext = null) {
   }
 }
 
-export function callMcpTool(name, args = {}, authContext = null) {
+export function callMcpTool(name, args = {}, authContext = null, workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
   if (!MCP_TOOL_BY_NAME.has(name)) throw invalidToolInput(`Unknown tool: ${name}`);
-  const data = callContributionTool(name, args, authContext);
+  const data = callContributionTool(name, args, authContext, workflow);
   const structuredContent = publicSafeContent(data);
 
   return {
@@ -2454,6 +2704,7 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
     tools: MCP_CONTRIBUTION_TOOLS,
     importSnippets: MCP_IMPORT_SNIPPETS,
     harnessImportTabs: MCP_HARNESS_IMPORT_TABS,
+    externalMcpSafeguardIndex: EXTERNAL_MCP_SAFEGUARD_INDEX,
     reviewGate: reviewGateRecord(),
     jsonRpcMethods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call'],
   };
@@ -2545,10 +2796,10 @@ function buildWorkflowStatusResponse(
   actor = undefined,
 ) {
   const id = readSearchParam(searchParams, 'id').trim();
-  const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
+  const kind = readSearchParam(searchParams, 'kind').trim() || 'any';
   const workflowProjection = id ? workflow?.status?.({ id, kind, actor }) : null;
-  const serviceProjection = id && workflowProjection?.status !== 'status_found'
-    ? loadStatusProjection(service, actor === undefined ? { id, kind } : { id, kind, actor })
+  const serviceProjection = id && actor?.subject && workflowProjection?.status !== 'status_found'
+    ? loadStatusProjection(service, { id, kind, actor })
     : null;
   const deniedLookup = workflowProjection?.status === 'not_found'
     ? workflowProjection
@@ -2566,12 +2817,7 @@ function buildWorkflowStatusResponse(
       ? workflowProjection
       : serviceProjection?.status === 'status_found'
         ? serviceProjection
-        // The compatibility queue has no actor-aware authorization lookup. Do
-        // not allow it to reveal a record after the authenticated projections
-        // have already denied the requesting actor.
-        : actor === undefined
-          ? callMcpTool('check_contribution_status', { id, kind }).structuredContent
-          : deniedLookup
+        : deniedLookup
     : null;
 
   return publicSafeContent({
@@ -2918,7 +3164,15 @@ const JSON_ROUTES = [
       title: 'agent.bittrees.org sources response',
       type: 'object',
       additionalProperties: true,
-      required: ['status', 'launchStatus', 'reviewRegistry', 'sources', 'approvedClaims', 'excludedClaims'],
+      required: [
+        'status',
+        'launchStatus',
+        'reviewRegistry',
+        'approvedContentPackage',
+        'sources',
+        'approvedClaims',
+        'excludedClaims',
+      ],
     },
     data: {
       status: 'ready-for-review',
@@ -2939,6 +3193,7 @@ const JSON_ROUTES = [
           'publicPrivateStatus',
         ],
       },
+      approvedContentPackage: APPROVED_CONTENT_PACKAGE,
       sources: SOURCE_REGISTRY.filter((source) => source.publicSafe === true),
       approvedClaims: APPROVED_CLAIMS,
       excludedClaims: EXCLUDED_CLAIMS,
@@ -3082,11 +3337,12 @@ const JSON_ROUTES = [
       title: 'agent.bittrees.org idacc releases response',
       type: 'object',
       additionalProperties: true,
-      required: ['status', 'launchStatus', 'releasePolicy', 'releaseSnapshot', 'releases'],
+      required: ['status', 'launchStatus', 'releaseMetadata', 'releasePolicy', 'releaseSnapshot', 'releases'],
     },
-    data: {
+    data: ({ releaseMetadata = DEPLOYED_RELEASE_METADATA } = {}) => ({
       status: 'release-snapshot-ready',
       launchStatus: LAUNCH_STATUS,
+      releaseMetadata,
       releasePolicy: {
         currentState:
           'A dated latest-release snapshot is published for staging review. Re-check GitHub before public launch or installation guidance.',
@@ -3099,7 +3355,7 @@ const JSON_ROUTES = [
       },
       releaseSnapshot: IDACC_RELEASE_SNAPSHOT,
       releases: [IDACC_RELEASE_SNAPSHOT.latest],
-    },
+    }),
   },
   {
     path: '/monitoring.json',
@@ -3149,6 +3405,14 @@ export const ROUTE_DEFINITIONS = [
     description: 'Human-readable lookup for agent reputation evidence with identity, authority, and authorization caveats.',
     kind: 'html',
     status: 'human-view-ready',
+  },
+  {
+    path: TERMS_PAGE_ROUTE,
+    label: 'Terms status page',
+    description:
+      'Public terms route for the prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
+    kind: 'html',
+    status: TERMS_OF_USE_LEGAL_STATUS.status,
   },
   {
     path: '/terms-of-use',
@@ -3407,6 +3671,223 @@ function renderOverflowSafeStyles() {
   `;
 }
 
+const CONTRIBUTION_INTENT_FIELD_HELP = Object.freeze({
+  'contributor.kind': 'Select the submitter category for this review packet.',
+  'contributor.name': 'Use the public display name reviewers should recognize.',
+  'contributor.agentId': 'Optional stable agent id, when the contributor has one.',
+  'contributor.team': 'Optional team or organization responsible for follow-up.',
+  'contributor.contactRoute': 'Use an approved public contact URL or review route.',
+  targetLane: 'Choose the Bittrees lane that best matches the packet.',
+  proposedTemplate: 'Choose the review template that matches the intended output.',
+  summary: 'Summarize the proposed contribution without secrets or authority requests.',
+  'handoff.requestedOwnerRoute': 'Name the approved review contact, not an internal route.',
+  'handoff.goalId': 'Optional goal id when this packet belongs to a tracked goal.',
+  'handoff.expectedOutput': 'Describe the concrete review artifact or implementation output.',
+  'handoff.acceptanceCriteria': 'List one acceptance criterion per line.',
+  'handoff.outOfScope': 'List work the reviewer should not treat as requested.',
+  'handoff.backlogPolicy': 'State how optional follow-up should be parked.',
+  'handoff.sourceIds': 'Optional source ids, one per line or comma-separated.',
+});
+
+function contributionIntentFieldId(name) {
+  return `intent-${String(name).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`;
+}
+
+function renderContributionIntentFieldHelp(name) {
+  const help = CONTRIBUTION_INTENT_FIELD_HELP[name];
+  if (!help) return '';
+  return `<span id="${escapeHtml(contributionIntentFieldId(name))}-hint" class="field-help">${escapeHtml(help)}</span>`;
+}
+
+function contributionIntentDescribedBy(name) {
+  return `aria-describedby="${escapeHtml(contributionIntentFieldId(name))}-hint"`;
+}
+
+function renderContributionIntentFormStyles() {
+  return `
+      .intent-form-shell {
+        display: grid;
+        gap: 12px;
+      }
+
+      .intent-form {
+        display: grid;
+        gap: 18px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .intent-form label,
+      .intent-form fieldset {
+        display: grid;
+        gap: 7px;
+        margin: 0;
+      }
+
+      .intent-form .wide,
+      .intent-form fieldset {
+        grid-column: 1 / -1;
+      }
+
+      .intent-form .field-label,
+      .intent-form legend {
+        color: var(--ink);
+        font-size: 0.82rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      .intent-form .field-help,
+      .intent-form .checkbox-copy {
+        color: var(--muted);
+        font-size: 0.88rem;
+        font-weight: 550;
+        line-height: 1.5;
+        text-transform: none;
+      }
+
+      .intent-form input,
+      .intent-form select,
+      .intent-form textarea {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        padding: 10px 11px;
+      }
+
+      .intent-form textarea {
+        resize: vertical;
+        line-height: 1.55;
+      }
+
+      .intent-form fieldset {
+        border: 1px solid var(--line);
+        padding: 14px;
+      }
+
+      .intent-form .checkbox-label {
+        grid-template-columns: 44px 1fr;
+        align-items: center;
+        min-height: 44px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .intent-form input[type="checkbox"] {
+        width: 44px;
+        min-height: 44px;
+        margin: 0;
+        padding: 0;
+        accent-color: var(--green);
+        touch-action: manipulation;
+      }
+
+      .intent-form button {
+        justify-self: start;
+        min-height: 44px;
+        border: 0;
+        background: var(--green);
+        color: #fff;
+        font: inherit;
+        font-weight: 800;
+        padding: 0 16px;
+        touch-action: manipulation;
+      }
+
+      @media (max-width: 900px) {
+        .form-grid { grid-template-columns: 1fr; }
+        .intent-form { padding: 14px; }
+        .intent-form button {
+          justify-self: stretch;
+          width: 100%;
+        }
+      }
+  `;
+}
+
+function renderContributionIntentPageStyles() {
+  return `
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f7f2;
+        --ink: #17201c;
+        --muted: #5e6963;
+        --line: #cfd7d0;
+        --panel: #ffffff;
+        --green: #1f6b4f;
+        --blue: #315a8a;
+        --gold: #8b5c10;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+      }
+
+      main {
+        width: min(900px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        max-width: 16ch;
+        font-size: clamp(2.4rem, 6vw, 4.6rem);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        letter-spacing: 0;
+      }
+
+      p,
+      li {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+      pre {
+        max-height: 520px;
+        margin: 0;
+        overflow: auto;
+        white-space: pre-wrap;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 14px;
+      }
+
+      ${renderOverflowSafeStyles()}
+      ${renderContributionIntentFormStyles()}
+
+      @media (max-width: 820px) {
+        main { width: min(100% - 28px, 900px); padding-top: 18px; }
+        h1 { max-width: 100%; }
+      }
+    </style>`;
+}
+
 const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
   { path: '/', label: 'Home' },
   { path: '/identity-keys', label: 'Identity' },
@@ -3466,6 +3947,76 @@ function renderLaneRows() {
       </tr>
     `,
   ).join('');
+}
+
+function renderCitationTarget(target) {
+  if (/^https?:\/\//i.test(target)) {
+    return `<a href="${escapeHtml(target)}">${escapeHtml(target)}</a>`;
+  }
+
+  if (target.startsWith('portal-route:')) {
+    const route = target.slice('portal-route:'.length);
+    return `<a href="${escapeHtml(route)}">${escapeHtml(route)}</a>`;
+  }
+
+  if (target.startsWith('/')) {
+    return `<a href="${escapeHtml(target)}">${escapeHtml(target)}</a>`;
+  }
+
+  return `<code>${escapeHtml(publicSafeString(target))}</code>`;
+}
+
+function renderCitationTargets(targets) {
+  return targets.map((target) => renderCitationTarget(target)).join(' ');
+}
+
+function renderApprovedContentInstructionItems() {
+  return APPROVED_CONTENT_PACKAGE.agentInstructions.map((instruction) => `
+    <li>
+      <strong>${escapeHtml(instruction.instruction)}</strong>
+      <p class="citation-links">Links: ${renderCitationTargets(instruction.links)}</p>
+    </li>
+  `).join('');
+}
+
+function renderApprovedSourceRows() {
+  return APPROVED_CONTENT_PACKAGE.sources.map((source) => `
+    <tr>
+      <td>
+        <strong>${source.url ? `<a href="${escapeHtml(source.url)}">${escapeHtml(source.label)}</a>` : escapeHtml(source.label)}</strong>
+        <p class="citation-links">Citations: ${renderCitationTargets(source.citationTargets)}</p>
+      </td>
+      <td>
+        ${escapeHtml(source.authority)}
+        <p>${escapeHtml(source.publicPrivateStatus)}</p>
+      </td>
+      <td>
+        Reviewed ${escapeHtml(source.lastReviewedAt)}.
+        <p>${escapeHtml(source.freshnessWindow)}</p>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderApprovedClaimItems() {
+  return APPROVED_CONTENT_PACKAGE.approvedClaims.map((claim) => `
+    <li>
+      <strong>${escapeHtml(claim.claim)}</strong>
+      <p>Caveat: ${escapeHtml(claim.caveat)}</p>
+      <p class="citation-links">Citations: ${renderCitationTargets(claim.citationTargets)}</p>
+      <p>Reviewed ${escapeHtml(claim.lastReviewedAt)} by ${escapeHtml(publicSafeString(claim.reviewer))}; freshness: ${escapeHtml(claim.freshnessWindow)}</p>
+    </li>
+  `).join('');
+}
+
+function renderExcludedClaimItems() {
+  return APPROVED_CONTENT_PACKAGE.excludedClaims.map((claim) => `
+    <li>
+      <strong>${escapeHtml(claim.claim)}</strong>
+      <p>Status: ${escapeHtml(claim.status)}</p>
+      <p class="citation-links">Citations: ${renderCitationTargets(claim.citationTargets)}</p>
+    </li>
+  `).join('');
 }
 
 function routeLinkPresentation(path) {
@@ -3623,8 +4174,8 @@ function readSearchParam(searchParams, name) {
   return '';
 }
 
-function normalizeStatusLookupKind(value) {
-  return STATUS_LOOKUP_KINDS.includes(value) ? value : 'any';
+function isStatusLookupKind(value) {
+  return STATUS_LOOKUP_KINDS.includes(value);
 }
 
 function renderHumanLookupStyles() {
@@ -3755,25 +4306,34 @@ function renderHumanLookupStyles() {
         text-transform: uppercase;
       }
 
+      .field-help {
+        color: var(--muted);
+        font-size: 0.88rem;
+        font-weight: 550;
+        line-height: 1.5;
+        text-transform: none;
+      }
+
       input,
       select {
         width: 100%;
-        min-height: 42px;
+        min-height: 44px;
         border: 1px solid var(--line);
         background: #fff;
         color: var(--ink);
         font: inherit;
-        padding: 9px 10px;
+        padding: 10px 11px;
       }
 
       button {
-        min-height: 42px;
+        min-height: 44px;
         border: 0;
         background: var(--green);
         color: #fff;
         font: inherit;
         font-weight: 800;
         padding: 0 16px;
+        touch-action: manipulation;
       }
 
       table {
@@ -3830,6 +4390,7 @@ function renderHumanLookupStyles() {
         .topline { align-items: flex-start; }
         .topline-meta { justify-content: flex-start; }
         h1 { max-width: 100%; }
+        button { width: 100%; }
       }
     </style>
   `;
@@ -3855,9 +4416,17 @@ function getContributionIntentCtaCopy() {
   };
 }
 
-function renderContributionIntentForm(payload = {}) {
+function renderContributionIntentForm(payload = {}, options = {}) {
   const values = buildContributionIntentFormValues(payload);
   const ctaCopy = getContributionIntentCtaCopy();
+  const formDescriptionIds = [
+    'intent-rights-notice',
+    'intent-privacy-notice',
+    'intent-write-notice',
+  ];
+  const errorAttributes = options.errorSummaryId
+    ? ` aria-invalid="true" aria-errormessage="${escapeHtml(options.errorSummaryId)}"`
+    : '';
   const laneOptions = CONTRIBUTION_LANES.map((lane) => ({
     value: lane.id,
     label: `${lane.label} - ${lane.bittreesArm}`,
@@ -3875,81 +4444,96 @@ function renderContributionIntentForm(payload = {}) {
     <p class="form-notice" id="intent-rights-notice">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
     <p class="form-notice" id="intent-privacy-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
     <p class="form-notice" id="intent-write-notice">${escapeHtml(ctaCopy.formNotice)}</p>
-    <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post" aria-describedby="intent-rights-notice intent-privacy-notice intent-write-notice">
+    <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post" aria-describedby="${escapeHtml(formDescriptionIds.join(' '))}"${errorAttributes}>
     <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
     <div class="form-grid">
-      <label>
-        <span>Contributor type</span>
-        <select name="contributor.kind" required>
+      <label for="${contributionIntentFieldId('contributor.kind')}">
+        <span class="field-label">Contributor type</span>
+        ${renderContributionIntentFieldHelp('contributor.kind')}
+        <select id="${contributionIntentFieldId('contributor.kind')}" name="contributor.kind" required ${contributionIntentDescribedBy('contributor.kind')}>
           ${renderSelectOptions(contributorKindOptions, values['contributor.kind'] || 'agent')}
         </select>
       </label>
-      <label>
-        <span>Contributor name</span>
-        <input type="text" name="contributor.name" value="${escapeHtml(values['contributor.name'])}" required minlength="2" maxlength="120" autocomplete="name" />
+      <label for="${contributionIntentFieldId('contributor.name')}">
+        <span class="field-label">Contributor name</span>
+        ${renderContributionIntentFieldHelp('contributor.name')}
+        <input id="${contributionIntentFieldId('contributor.name')}" type="text" name="contributor.name" value="${escapeHtml(values['contributor.name'])}" required minlength="2" maxlength="120" autocomplete="name" ${contributionIntentDescribedBy('contributor.name')} />
       </label>
-      <label>
-        <span>Agent ID</span>
-        <input type="text" name="contributor.agentId" value="${escapeHtml(values['contributor.agentId'])}" maxlength="120" autocomplete="off" />
+      <label for="${contributionIntentFieldId('contributor.agentId')}">
+        <span class="field-label">Agent ID</span>
+        ${renderContributionIntentFieldHelp('contributor.agentId')}
+        <input id="${contributionIntentFieldId('contributor.agentId')}" type="text" name="contributor.agentId" value="${escapeHtml(values['contributor.agentId'])}" maxlength="120" autocomplete="off" ${contributionIntentDescribedBy('contributor.agentId')} />
       </label>
-      <label>
-        <span>Team</span>
-        <input type="text" name="contributor.team" value="${escapeHtml(values['contributor.team'])}" maxlength="120" autocomplete="organization" />
+      <label for="${contributionIntentFieldId('contributor.team')}">
+        <span class="field-label">Team</span>
+        ${renderContributionIntentFieldHelp('contributor.team')}
+        <input id="${contributionIntentFieldId('contributor.team')}" type="text" name="contributor.team" value="${escapeHtml(values['contributor.team'])}" maxlength="120" autocomplete="organization" ${contributionIntentDescribedBy('contributor.team')} />
       </label>
-      <label class="wide">
-        <span>Contact route</span>
-        <input type="text" name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="https://example.org/contact" />
+      <label class="wide" for="${contributionIntentFieldId('contributor.contactRoute')}">
+        <span class="field-label">Contact route</span>
+        ${renderContributionIntentFieldHelp('contributor.contactRoute')}
+        <input id="${contributionIntentFieldId('contributor.contactRoute')}" type="text" name="contributor.contactRoute" value="${escapeHtml(values['contributor.contactRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="https://example.org/contact" ${contributionIntentDescribedBy('contributor.contactRoute')} />
       </label>
-      <label>
-        <span>Target lane</span>
-        <select name="targetLane" required>
+      <label for="${contributionIntentFieldId('targetLane')}">
+        <span class="field-label">Target lane</span>
+        ${renderContributionIntentFieldHelp('targetLane')}
+        <select id="${contributionIntentFieldId('targetLane')}" name="targetLane" required ${contributionIntentDescribedBy('targetLane')}>
           ${renderSelectOptions(laneOptions, values.targetLane || 'inc-ops-governance')}
         </select>
       </label>
-      <label>
-        <span>Proposed template</span>
-        <select name="proposedTemplate" required>
+      <label for="${contributionIntentFieldId('proposedTemplate')}">
+        <span class="field-label">Proposed template</span>
+        ${renderContributionIntentFieldHelp('proposedTemplate')}
+        <select id="${contributionIntentFieldId('proposedTemplate')}" name="proposedTemplate" required ${contributionIntentDescribedBy('proposedTemplate')}>
           ${renderSelectOptions(templateOptions, values.proposedTemplate || 'contribution-task')}
         </select>
       </label>
-      <label class="wide">
-        <span>Summary</span>
-        <textarea name="summary" required minlength="20" maxlength="2000" rows="4">${escapeHtml(values.summary)}</textarea>
+      <label class="wide" for="${contributionIntentFieldId('summary')}">
+        <span class="field-label">Summary</span>
+        ${renderContributionIntentFieldHelp('summary')}
+        <textarea id="${contributionIntentFieldId('summary')}" name="summary" required minlength="20" maxlength="2000" rows="4" ${contributionIntentDescribedBy('summary')}>${escapeHtml(values.summary)}</textarea>
       </label>
-      <label>
-        <span>Requested owner route</span>
-        <input type="text" name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="approved review contact" />
+      <label for="${contributionIntentFieldId('handoff.requestedOwnerRoute')}">
+        <span class="field-label">Requested owner route</span>
+        ${renderContributionIntentFieldHelp('handoff.requestedOwnerRoute')}
+        <input id="${contributionIntentFieldId('handoff.requestedOwnerRoute')}" type="text" name="handoff.requestedOwnerRoute" value="${escapeHtml(values['handoff.requestedOwnerRoute'])}" required minlength="3" maxlength="240" autocomplete="off" placeholder="approved review contact" ${contributionIntentDescribedBy('handoff.requestedOwnerRoute')} />
       </label>
-      <label>
-        <span>Goal ID</span>
-        <input type="text" name="handoff.goalId" value="${escapeHtml(values['handoff.goalId'])}" maxlength="120" autocomplete="off" />
+      <label for="${contributionIntentFieldId('handoff.goalId')}">
+        <span class="field-label">Goal ID</span>
+        ${renderContributionIntentFieldHelp('handoff.goalId')}
+        <input id="${contributionIntentFieldId('handoff.goalId')}" type="text" name="handoff.goalId" value="${escapeHtml(values['handoff.goalId'])}" maxlength="120" autocomplete="off" ${contributionIntentDescribedBy('handoff.goalId')} />
       </label>
-      <label class="wide">
-        <span>Expected output</span>
-        <textarea name="handoff.expectedOutput" required minlength="10" maxlength="1200" rows="3">${escapeHtml(values['handoff.expectedOutput'])}</textarea>
+      <label class="wide" for="${contributionIntentFieldId('handoff.expectedOutput')}">
+        <span class="field-label">Expected output</span>
+        ${renderContributionIntentFieldHelp('handoff.expectedOutput')}
+        <textarea id="${contributionIntentFieldId('handoff.expectedOutput')}" name="handoff.expectedOutput" required minlength="10" maxlength="1200" rows="3" ${contributionIntentDescribedBy('handoff.expectedOutput')}>${escapeHtml(values['handoff.expectedOutput'])}</textarea>
       </label>
-      <label class="wide">
-        <span>Acceptance criteria</span>
-        <textarea name="handoff.acceptanceCriteria" required minlength="5" rows="4">${escapeHtml(values['handoff.acceptanceCriteria'])}</textarea>
+      <label class="wide" for="${contributionIntentFieldId('handoff.acceptanceCriteria')}">
+        <span class="field-label">Acceptance criteria</span>
+        ${renderContributionIntentFieldHelp('handoff.acceptanceCriteria')}
+        <textarea id="${contributionIntentFieldId('handoff.acceptanceCriteria')}" name="handoff.acceptanceCriteria" required minlength="5" rows="4" ${contributionIntentDescribedBy('handoff.acceptanceCriteria')}>${escapeHtml(values['handoff.acceptanceCriteria'])}</textarea>
       </label>
-      <label class="wide">
-        <span>Out of scope</span>
-        <textarea name="handoff.outOfScope" required minlength="3" rows="3">${escapeHtml(values['handoff.outOfScope'])}</textarea>
+      <label class="wide" for="${contributionIntentFieldId('handoff.outOfScope')}">
+        <span class="field-label">Out of scope</span>
+        ${renderContributionIntentFieldHelp('handoff.outOfScope')}
+        <textarea id="${contributionIntentFieldId('handoff.outOfScope')}" name="handoff.outOfScope" required minlength="3" rows="3" ${contributionIntentDescribedBy('handoff.outOfScope')}>${escapeHtml(values['handoff.outOfScope'])}</textarea>
       </label>
-      <label class="wide">
-        <span>Backlog policy</span>
-        <textarea name="handoff.backlogPolicy" required minlength="10" maxlength="700" rows="3">${escapeHtml(values['handoff.backlogPolicy'])}</textarea>
+      <label class="wide" for="${contributionIntentFieldId('handoff.backlogPolicy')}">
+        <span class="field-label">Backlog policy</span>
+        ${renderContributionIntentFieldHelp('handoff.backlogPolicy')}
+        <textarea id="${contributionIntentFieldId('handoff.backlogPolicy')}" name="handoff.backlogPolicy" required minlength="10" maxlength="700" rows="3" ${contributionIntentDescribedBy('handoff.backlogPolicy')}>${escapeHtml(values['handoff.backlogPolicy'])}</textarea>
       </label>
-      <label class="wide">
-        <span>Source IDs</span>
-        <textarea name="handoff.sourceIds" rows="2">${escapeHtml(values['handoff.sourceIds'])}</textarea>
+      <label class="wide" for="${contributionIntentFieldId('handoff.sourceIds')}">
+        <span class="field-label">Source IDs</span>
+        ${renderContributionIntentFieldHelp('handoff.sourceIds')}
+        <textarea id="${contributionIntentFieldId('handoff.sourceIds')}" name="handoff.sourceIds" rows="2" ${contributionIntentDescribedBy('handoff.sourceIds')}>${escapeHtml(values['handoff.sourceIds'])}</textarea>
       </label>
     </div>
     <fieldset>
       <legend>Safety acknowledgements</legend>
-      <label><input type="checkbox" name="safety.noSecretsIncluded" value="true" required${values['safety.noSecretsIncluded'] ? ' checked' : ''} /> No secrets, credentials, wallet data, or private material are included.</label>
-      <label><input type="checkbox" name="safety.noLiveWriteAcknowledged" value="true" required${values['safety.noLiveWriteAcknowledged'] ? ' checked' : ''} /> I understand live production writes remain disabled without approval.</label>
-      <label><input type="checkbox" name="safety.noOnchainActionRequested" value="true" required${values['safety.noOnchainActionRequested'] ? ' checked' : ''} /> This is not a request for onchain execution or asset movement.</label>
+      <label class="checkbox-label" for="${contributionIntentFieldId('safety.noSecretsIncluded')}"><input id="${contributionIntentFieldId('safety.noSecretsIncluded')}" type="checkbox" name="safety.noSecretsIncluded" value="true" required${values['safety.noSecretsIncluded'] ? ' checked' : ''} /> <span class="checkbox-copy">No secrets, credentials, wallet data, or private material are included.</span></label>
+      <label class="checkbox-label" for="${contributionIntentFieldId('safety.noLiveWriteAcknowledged')}"><input id="${contributionIntentFieldId('safety.noLiveWriteAcknowledged')}" type="checkbox" name="safety.noLiveWriteAcknowledged" value="true" required${values['safety.noLiveWriteAcknowledged'] ? ' checked' : ''} /> <span class="checkbox-copy">I understand live production writes remain disabled without approval.</span></label>
+      <label class="checkbox-label" for="${contributionIntentFieldId('safety.noOnchainActionRequested')}"><input id="${contributionIntentFieldId('safety.noOnchainActionRequested')}" type="checkbox" name="safety.noOnchainActionRequested" value="true" required${values['safety.noOnchainActionRequested'] ? ' checked' : ''} /> <span class="checkbox-copy">This is not a request for onchain execution or asset movement.</span></label>
     </fieldset>
     <button type="submit">${escapeHtml(ctaCopy.buttonLabel)}</button>
   </form>
@@ -4022,24 +4606,35 @@ function getRequesterKey(req, routePath) {
   return `${routePath}:${address}`;
 }
 
-function checkContributionPostRateLimit(req, routePath, now = Date.now()) {
-  const maxRequests = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_MAX ?? CONTRIBUTION_POST_RATE_LIMIT_MAX);
-  const windowMs = Number(process.env.CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS ?? CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS);
+function checkGatewayPostRateLimit(
+  buckets,
+  req,
+  routePath,
+  {
+    maxRequestsEnv,
+    windowMsEnv,
+    defaultMaxRequests,
+    defaultWindowMs,
+  },
+  now = Date.now(),
+) {
+  const maxRequests = Number(process.env[maxRequestsEnv] ?? defaultMaxRequests);
+  const windowMs = Number(process.env[windowMsEnv] ?? defaultWindowMs);
   if (!Number.isFinite(maxRequests) || maxRequests <= 0 || !Number.isFinite(windowMs) || windowMs <= 0) {
     return { allowed: true };
   }
 
   const key = getRequesterKey(req, routePath);
-  const current = CONTRIBUTION_POST_RATE_BUCKETS.get(key);
+  const current = buckets.get(key);
   const bucket = current && current.resetAt > now
     ? current
     : { count: 0, resetAt: now + windowMs };
   bucket.count += 1;
-  CONTRIBUTION_POST_RATE_BUCKETS.set(key, bucket);
+  buckets.set(key, bucket);
 
-  if (CONTRIBUTION_POST_RATE_BUCKETS.size > 10_000) {
-    for (const [bucketKey, bucketValue] of CONTRIBUTION_POST_RATE_BUCKETS.entries()) {
-      if (bucketValue.resetAt <= now) CONTRIBUTION_POST_RATE_BUCKETS.delete(bucketKey);
+  if (buckets.size > 10_000) {
+    for (const [bucketKey, bucketValue] of buckets.entries()) {
+      if (bucketValue.resetAt <= now) buckets.delete(bucketKey);
     }
   }
 
@@ -4051,6 +4646,80 @@ function checkContributionPostRateLimit(req, routePath, now = Date.now()) {
   }
 
   return { allowed: true };
+}
+
+function checkContributionPostRateLimit(req, routePath, now = Date.now()) {
+  return checkGatewayPostRateLimit(CONTRIBUTION_POST_RATE_BUCKETS, req, routePath, {
+    maxRequestsEnv: 'CONTRIBUTION_POST_RATE_LIMIT_MAX',
+    windowMsEnv: 'CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS',
+    defaultMaxRequests: CONTRIBUTION_POST_RATE_LIMIT_MAX,
+    defaultWindowMs: CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS,
+  }, now);
+}
+
+function checkMcpPostRateLimit(req, now = Date.now()) {
+  return checkGatewayPostRateLimit(MCP_POST_RATE_BUCKETS, req, MCP_GATEWAY.path, {
+    maxRequestsEnv: 'MCP_POST_RATE_LIMIT_MAX',
+    windowMsEnv: 'MCP_POST_RATE_LIMIT_WINDOW_MS',
+    defaultMaxRequests: MCP_POST_RATE_LIMIT_MAX,
+    defaultWindowMs: MCP_POST_RATE_LIMIT_WINDOW_MS,
+  }, now);
+}
+
+function isLoopbackHost(host) {
+  const hostname = String(host || '').split(':', 1)[0].trim().toLowerCase();
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
+}
+
+function gatewayAllowedOrigins(req) {
+  const allowed = new Set([
+    PORTAL_BASE_URL,
+    ...(process.env.GATEWAY_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+    ...(process.env.MCP_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ]);
+
+  const host = getRequestHeader(req, 'host');
+  if (isLoopbackHost(host)) {
+    allowed.add(`http://${host}`);
+    allowed.add(`https://${host}`);
+  }
+
+  return allowed;
+}
+
+function gatewayOriginPolicy(req) {
+  const origin = getRequestHeader(req, 'origin');
+  if (!origin) return { allowed: true };
+  return gatewayAllowedOrigins(req).has(origin)
+    ? { allowed: true, origin }
+    : { allowed: false, origin };
+}
+
+function gatewayCorsHeaders(req, allowedMethods = GATEWAY_CORS_ALLOWED_METHODS) {
+  const policy = gatewayOriginPolicy(req);
+  if (!policy.allowed || !policy.origin) return {};
+  return {
+    'Access-Control-Allow-Origin': policy.origin,
+    'Access-Control-Allow-Methods': allowedMethods.join(', '),
+    'Access-Control-Allow-Headers': GATEWAY_CORS_ALLOWED_HEADERS.join(', '),
+    'Access-Control-Max-Age': '600',
+    Vary: 'Origin',
+  };
+}
+
+function applyGatewayCorsHeaders(req, res, allowedMethods = GATEWAY_CORS_ALLOWED_METHODS) {
+  const headers = gatewayCorsHeaders(req, allowedMethods);
+  for (const [name, value] of Object.entries(headers)) {
+    if (typeof res.setHeader === 'function') res.setHeader(name, value);
+    else if (res.headers && typeof res.headers === 'object') res.headers[name] = value;
+  }
+  return headers;
 }
 
 function shouldRenderContributionIntentHtml(req) {
@@ -4469,6 +5138,7 @@ function renderContributionIntentPage({ title, heading, lead, body, path = CONTR
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: lead, path })}
+    ${renderContributionIntentPageStyles()}
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -4517,10 +5187,10 @@ function renderContributionIntentValidationPage(response, payload = {}) {
     heading: 'Check the submission',
     lead: response.message,
     path: response.route,
-    body: `<section class="error-summary" role="alert" aria-labelledby="intent-error-title" tabindex="-1">
+    body: `<section class="error-summary" role="alert" id="intent-error-summary" aria-labelledby="intent-error-title" tabindex="-1">
       <h2 id="intent-error-title">There is a problem with the submission</h2>
       <ul>${errorItems}</ul>
-    </section>${renderContributionIntentForm(payload)}`,
+    </section>${renderContributionIntentForm(payload, { errorSummaryId: 'intent-error-summary' })}`,
   });
 }
 
@@ -4690,6 +5360,22 @@ async function handleContributionIntentPost(
 ) {
   const renderHtml = shouldRenderContributionIntentHtml(req);
   const intakeGate = buildContributionIntakeGate();
+
+  if (!gatewayOriginPolicy(req).allowed) {
+    req.resume?.();
+    const responseBody = buildContributionIntentRejectedResponse(
+      'Contribution intent rejected because the request Origin is not allowed.',
+      'Submit directly to the Bittrees portal origin or use a server-to-server client without browser Origin.',
+      ['Origin is not allowed for the contribution-intake gateway.'],
+      routePath,
+    );
+    const responseTelemetry = { ...telemetry, status: 403 };
+    if (renderHtml) {
+      return sendBody(res, 403, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, 403, responseBody, includeBody, responseTelemetry);
+  }
+  applyGatewayCorsHeaders(req, res, ['POST']);
 
   if (!intakeGate.accepted) {
     req.resume?.();
@@ -5106,6 +5792,71 @@ export function renderLandingPage() {
         list-style: none;
       }
 
+      .package-stack {
+        display: grid;
+        gap: 22px;
+      }
+
+      .package-block {
+        display: grid;
+        gap: 12px;
+      }
+
+      .package-block h3 {
+        margin: 0;
+        font-size: 1rem;
+        letter-spacing: 0;
+      }
+
+      .package-meta {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .instruction-list,
+      .claim-list {
+        display: grid;
+        gap: 12px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .instruction-list li,
+      .claim-list li {
+        display: grid;
+        gap: 7px;
+        padding: 0 0 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .instruction-list li:last-child,
+      .claim-list li:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .instruction-list p,
+      .claim-list p,
+      td p {
+        margin: 4px 0 0;
+      }
+
+      .citation-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        align-items: center;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .citation-links a,
+      .citation-links code {
+        display: inline-block;
+      }
+
       .scope-list li {
         display: grid;
         gap: 6px;
@@ -5167,6 +5918,8 @@ export function renderLandingPage() {
       .note,
       .legal-notice,
       .form-notice,
+      .instruction-list p,
+      .claim-list p,
       td {
         color: var(--muted);
         line-height: 1.6;
@@ -5205,92 +5958,7 @@ export function renderLandingPage() {
 
       ${renderOverflowSafeStyles()}
 
-      .intent-form-shell {
-        display: grid;
-        gap: 12px;
-      }
-
-      .intent-form {
-        display: grid;
-        gap: 18px;
-        padding: 18px;
-        border: 1px solid var(--line);
-        background: var(--panel);
-      }
-
-      .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }
-
-      .intent-form label,
-      .intent-form fieldset {
-        display: grid;
-        gap: 7px;
-        margin: 0;
-      }
-
-      .intent-form .wide,
-      .intent-form fieldset {
-        grid-column: 1 / -1;
-      }
-
-      .intent-form span,
-      .intent-form legend {
-        color: var(--ink);
-        font-size: 0.82rem;
-        font-weight: 750;
-        text-transform: uppercase;
-        letter-spacing: 0;
-      }
-
-      .intent-form input,
-      .intent-form select,
-      .intent-form textarea {
-        width: 100%;
-        min-height: 42px;
-        border: 1px solid var(--line);
-        background: #fff;
-        color: var(--ink);
-        font: inherit;
-        padding: 9px 10px;
-      }
-
-      .intent-form textarea {
-        resize: vertical;
-        line-height: 1.55;
-      }
-
-      .intent-form fieldset {
-        border: 1px solid var(--line);
-        padding: 14px;
-      }
-
-      .intent-form fieldset label {
-        grid-template-columns: 18px 1fr;
-        align-items: start;
-        color: var(--muted);
-        line-height: 1.5;
-      }
-
-      .intent-form input[type="checkbox"] {
-        width: 18px;
-        min-height: 18px;
-        margin: 2px 0 0;
-        padding: 0;
-      }
-
-      .intent-form button {
-        justify-self: start;
-        min-height: 44px;
-        border: 0;
-        background: var(--green);
-        color: #fff;
-        font: inherit;
-        font-weight: 800;
-        padding: 0 16px;
-      }
+      ${renderContributionIntentFormStyles()}
 
       @media (max-width: 900px) {
         main { width: min(100% - 28px, 1180px); padding-top: 18px; }
@@ -5302,8 +5970,7 @@ export function renderLandingPage() {
         h1 { max-width: 100%; }
         .route-card { align-items: flex-start; flex-direction: column; }
         .route-card span { white-space: normal; text-align: left; }
-        .workflow-list,
-        .form-grid { grid-template-columns: 1fr; }
+        .workflow-list { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -5334,6 +6001,57 @@ export function renderLandingPage() {
         <nav class="action-grid" aria-label="Machine-readable routes">
           ${renderRouteCards()}
         </nav>
+      </section>
+
+      <section class="band" aria-labelledby="approved-package-title">
+        <div>
+          <h2 id="approved-package-title">Approved content package</h2>
+          <p class="note">
+            ${escapeHtml(APPROVED_CONTENT_PACKAGE.packageId)} is rendered from the source registry,
+            approved claim list, excluded claim list, and launch gate provenance published at
+            <a href="${escapeHtml(APPROVED_CONTENT_PACKAGE.sourceOfTruthRoute)}">${escapeHtml(APPROVED_CONTENT_PACKAGE.sourceOfTruthRoute)}</a>.
+          </p>
+          <p class="package-meta">
+            Reviewed ${escapeHtml(APPROVED_CONTENT_PACKAGE.provenance.lastReviewedAt)} by
+            ${escapeHtml(publicSafeString(APPROVED_CONTENT_PACKAGE.provenance.reviewer))};
+            public-safe filter: <code>${escapeHtml(APPROVED_CONTENT_PACKAGE.provenance.publicSafeFilter)}</code>.
+          </p>
+        </div>
+        <div class="package-stack">
+          <section class="package-block" aria-labelledby="agent-instructions-title">
+            <h3 id="agent-instructions-title">Agent instructions</h3>
+            <ol class="instruction-list">
+              ${renderApprovedContentInstructionItems()}
+            </ol>
+          </section>
+          <section class="package-block" aria-labelledby="source-links-title">
+            <h3 id="source-links-title">Source links and provenance</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Authority</th>
+                  <th>Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${renderApprovedSourceRows()}
+              </tbody>
+            </table>
+          </section>
+          <section class="package-block" aria-labelledby="approved-claims-title">
+            <h3 id="approved-claims-title">Approved claim guardrails</h3>
+            <ul class="claim-list">
+              ${renderApprovedClaimItems()}
+            </ul>
+          </section>
+          <section class="package-block" aria-labelledby="excluded-claims-title">
+            <h3 id="excluded-claims-title">Excluded public claims</h3>
+            <ul class="claim-list">
+              ${renderExcludedClaimItems()}
+            </ul>
+          </section>
+        </div>
       </section>
 
       <section class="band" aria-labelledby="workflow-title">
@@ -5642,13 +6360,12 @@ export function renderMcpDocsPage() {
 }
 
 export function renderSubmissionStatusPage(searchParams = new URLSearchParams(), options = {}) {
-  const service = options?.service ?? (options?.loadStatusProjection ? options : LIVE_CONTRIBUTION_SERVICE);
+  const workflow = options?.workflow ?? LIVE_CONTRIBUTOR_PORTAL_WORKFLOW;
   const id = readSearchParam(searchParams, 'id').trim();
-  const kind = normalizeStatusLookupKind(readSearchParam(searchParams, 'kind').trim() || 'any');
-  const serviceLookup = id ? loadStatusProjection(service, { id, kind }) : null;
-  const lookup = id && serviceLookup?.status === 'status_found'
-    ? serviceLookup
-    : id ? callMcpTool('check_contribution_status', { id, kind }).structuredContent : null;
+  const kind = readSearchParam(searchParams, 'kind').trim() || 'any';
+  const lookup = id && isStatusLookupKind(kind)
+    ? publicSafeContent(workflow.status({ id, kind }))
+    : null;
   const kindOptions = STATUS_LOOKUP_KINDS.map((item) => ({ value: item, label: item }));
   const resultBody = lookup
     ? `<pre><code>${escapeHtml(JSON.stringify(lookup, null, 2))}</code></pre>`
@@ -5705,13 +6422,15 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
       <section class="band" aria-labelledby="lookup-title">
         <h2 id="lookup-title">Lookup</h2>
         <form method="get" action="/submission-status">
-          <label>
-            Record id
-            <input type="search" name="id" value="${escapeHtml(id)}" placeholder="source-registry-hardening or sub_..." />
+          <label for="status-record-id">
+            <span>Record id</span>
+            <span id="status-record-id-hint" class="field-help">Opportunity, registration, claim, submission, feedback, or attestation id.</span>
+            <input id="status-record-id" type="search" name="id" value="${escapeHtml(id)}" placeholder="source-registry-hardening or sub_..." autocomplete="off" aria-describedby="status-record-id-hint" />
           </label>
-          <label>
-            Kind
-            <select name="kind">${renderSelectOptions(kindOptions, kind)}</select>
+          <label for="status-kind">
+            <span>Kind</span>
+            <span id="status-kind-hint" class="field-help">Narrow the lookup when the record type is known.</span>
+            <select id="status-kind" name="kind" aria-describedby="status-kind-hint">${renderSelectOptions(kindOptions, kind)}</select>
           </label>
           <button type="submit">Check</button>
         </form>
@@ -5808,9 +6527,10 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
       <section class="band" aria-labelledby="lookup-title">
         <h2 id="lookup-title">Lookup</h2>
         <form method="get" action="/reputation">
-          <label>
-            Agent id
-            <input type="search" name="agentId" value="${escapeHtml(agentId)}" placeholder="idacc-default-lead" />
+          <label for="reputation-agent-id">
+            <span>Agent id</span>
+            <span id="reputation-agent-id-hint" class="field-help">Reviewed public profile id to inspect for evidence signals.</span>
+            <input id="reputation-agent-id" type="search" name="agentId" value="${escapeHtml(agentId)}" placeholder="idacc-default-lead" autocomplete="off" aria-describedby="reputation-agent-id-hint" />
           </label>
           <button type="submit">Check</button>
         </form>
@@ -6422,8 +7142,8 @@ export function renderIdentityKeysPage() {
 </html>`;
 }
 
-export function buildJsonResponse(routeDefinition, generatedAt = new Date().toISOString()) {
-  const routeData = typeof routeDefinition.data === 'function' ? routeDefinition.data() : routeDefinition.data;
+export function buildJsonResponse(routeDefinition, generatedAt = new Date().toISOString(), context = {}) {
+  const routeData = typeof routeDefinition.data === 'function' ? routeDefinition.data(context) : routeDefinition.data;
   const publicRouteData = publicSafeContent(routeData);
 
   return {
@@ -6528,6 +7248,12 @@ function parseMcpWriteTokenConfig() {
           subject: value.subject,
           scopes: value.scopes.filter((scope) => typeof scope === 'string'),
           role: typeof value.role === 'string' ? value.role : '',
+          status: typeof value.status === 'string' ? value.status : 'active',
+          issuedAt: typeof value.issuedAt === 'string' ? value.issuedAt : '',
+          notBefore: typeof value.notBefore === 'string' ? value.notBefore : '',
+          expiresAt: typeof value.expiresAt === 'string' ? value.expiresAt : '',
+          revoked: value.revoked === true,
+          revokedAt: typeof value.revokedAt === 'string' ? value.revokedAt : '',
         }]),
     );
   } catch {
@@ -6541,10 +7267,63 @@ function getBearerToken(req) {
   return match ? match[1].trim() : '';
 }
 
+const MCP_WRITE_TOKEN_ACTIVE_STATUSES = new Set(['active', 'issued', 'valid']);
+
+function timestampLifecycleError(field, value, requiredScope) {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    return authError(401, `MCP bearer token ${field} is invalid; credential config fails closed.`, {
+      requiredScope,
+      field,
+    }, 'credential_lifecycle_invalid');
+  }
+  return null;
+}
+
+function mcpWriteTokenLifecycleError(tokenRecord, requiredScope) {
+  const status = String(tokenRecord.status || 'active').trim().toLowerCase();
+  if (!MCP_WRITE_TOKEN_ACTIVE_STATUSES.has(status)) {
+    return authError(401, 'MCP bearer token is not active.', {
+      requiredScope,
+      credentialStatus: status || 'unknown',
+    }, status === 'revoked' ? 'credential_revoked' : 'credential_inactive');
+  }
+  if (tokenRecord.revoked || tokenRecord.revokedAt) {
+    return authError(401, 'MCP bearer token has been revoked.', {
+      requiredScope,
+      credentialStatus: 'revoked',
+    }, 'credential_revoked');
+  }
+
+  const notBeforeError = timestampLifecycleError('notBefore', tokenRecord.notBefore, requiredScope);
+  if (notBeforeError) return notBeforeError;
+  if (tokenRecord.notBefore && Date.now() < Date.parse(tokenRecord.notBefore)) {
+    return authError(401, 'MCP bearer token is not valid yet.', {
+      requiredScope,
+      notBefore: tokenRecord.notBefore,
+    }, 'credential_not_yet_valid');
+  }
+
+  const expiresAtError = timestampLifecycleError('expiresAt', tokenRecord.expiresAt, requiredScope);
+  if (expiresAtError) return expiresAtError;
+  if (tokenRecord.expiresAt && Date.now() >= Date.parse(tokenRecord.expiresAt)) {
+    return authError(401, 'MCP bearer token has expired.', {
+      requiredScope,
+      expiresAt: tokenRecord.expiresAt,
+    }, 'credential_expired');
+  }
+
+  return null;
+}
+
 function workflowStatusActor(req) {
   const token = getBearerToken(req);
   if (!token) return undefined;
   const record = parseMcpWriteTokenConfig().get(token);
+  if (!record) throw authError(401, 'MCP bearer token is not recognized.', {}, 'credential_unknown');
+  const lifecycleError = mcpWriteTokenLifecycleError(record);
+  if (lifecycleError) throw lifecycleError;
   return record ? { subject: record.subject, scopes: record.scopes, role: record.role } : undefined;
 }
 
@@ -6574,6 +7353,8 @@ function authorizeMcpWriteTool(req, toolName, args = {}) {
       requiredScope,
     });
   }
+  const lifecycleError = mcpWriteTokenLifecycleError(tokenRecord, requiredScope);
+  if (lifecycleError) throw lifecycleError;
   if (!tokenRecord.scopes.includes(requiredScope)) {
     throw authError(403, 'MCP bearer token does not include the required contribution scope.', {
       requiredScope,
@@ -6600,27 +7381,7 @@ function wantsEventStream(req) {
 }
 
 function isAllowedMcpOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return true;
-
-  const allowed = new Set([
-    'https://agent.bittrees.org',
-    'http://agent.bittrees.org',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    ...(process.env.MCP_ALLOWED_ORIGINS ?? '')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean),
-  ]);
-
-  const host = req.headers.host;
-  if (host) {
-    allowed.add(`http://${host}`);
-    allowed.add(`https://${host}`);
-  }
-
-  return allowed.has(origin);
+  return gatewayOriginPolicy(req).allowed;
 }
 
 function isJsonRpcRequest(message) {
@@ -6649,7 +7410,7 @@ function validateProtocolHeader(req, message) {
   }
 }
 
-function handleMcpJsonRpcMessage(message, req) {
+function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     throw invalidToolInput('MCP POST body must be a single JSON-RPC object.');
   }
@@ -6700,8 +7461,10 @@ function handleMcpJsonRpcMessage(message, req) {
       if (typeof params.name !== 'string') throw invalidToolInput('tools/call params.name is required.');
       if (!MCP_TOOL_BY_NAME.has(params.name)) throw invalidToolInput(`Unknown tool: ${params.name}`);
       const args = params.arguments ?? {};
-      const authContext = authorizeMcpWriteTool(req, params.name, args);
-      return jsonRpcResult(message.id, callMcpTool(params.name, args, authContext));
+      const authContext = params.name === 'check_contribution_status'
+        ? workflowStatusActor(req)
+        : authorizeMcpWriteTool(req, params.name, args);
+      return jsonRpcResult(message.id, callMcpTool(params.name, args, authContext, workflow));
     }
 
     default:
@@ -6709,18 +7472,36 @@ function handleMcpJsonRpcMessage(message, req) {
   }
 }
 
-export async function handleMcpRequest(req, res, telemetry = { method: req.method ?? 'GET', path: MCP_GATEWAY.path }) {
+export async function handleMcpRequest(
+  req,
+  res,
+  telemetry = { method: req.method ?? 'GET', path: MCP_GATEWAY.path },
+  workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
+) {
   const includeBody = req.method !== 'HEAD';
+  const audit = (details) => appendMcpAuditEvent(req, details);
 
   if (!isAllowedMcpOrigin(req)) {
+    audit({ outcome: 'origin_rejected', httpStatus: 403 });
     return sendMcpJson(res, 403, {
       error: 'origin_not_allowed',
       message: 'Origin is not allowed for the MCP gateway.',
     }, includeBody, { ...telemetry, status: 403 });
   }
+  applyGatewayCorsHeaders(req, res);
+
+  if (req.method === 'OPTIONS') {
+    audit({ outcome: 'cors_preflight_accepted', httpStatus: 204 });
+    return sendEmpty(res, 204, { ...telemetry, status: 204 }, {
+      Allow: 'GET, HEAD, POST, OPTIONS',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+      ...gatewayCorsHeaders(req),
+    });
+  }
 
   if (req.method === 'GET' || req.method === 'HEAD') {
     if (wantsEventStream(req)) {
+      audit({ outcome: 'sse_rejected', httpStatus: 405 });
       return sendMcpJson(res, 405, {
         error: 'sse_stream_not_available',
         message: 'This MCP gateway supports POST JSON-RPC. Server-initiated SSE streams are not available.',
@@ -6730,6 +7511,7 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
       });
     }
 
+    audit({ outcome: 'documentation_served', httpStatus: 200 });
     return sendBody(res, 200, renderMcpGatewayPage(), 'text/html; charset=utf-8', includeBody, {
       ...telemetry,
       status: 200,
@@ -6740,6 +7522,7 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
   }
 
   if (req.method !== 'POST') {
+    audit({ outcome: 'method_rejected', httpStatus: 405 });
     return sendMcpJson(res, 405, {
       error: 'method_not_allowed',
       message: 'The MCP gateway accepts POST JSON-RPC requests. Browser GET returns documentation.',
@@ -6749,7 +7532,20 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
     });
   }
 
+  const rateLimit = checkMcpPostRateLimit(req);
+  if (!rateLimit.allowed) {
+    req.resume?.();
+    audit({ outcome: 'rate_limited', httpStatus: 429 });
+    return sendMcpJson(res, 429, {
+      error: 'rate_limited',
+      message: 'This client exceeded the MCP gateway request quota.',
+    }, includeBody, { ...telemetry, status: 429 }, {
+      'Retry-After': String(rateLimit.retryAfterSeconds),
+    });
+  }
+
   if (!acceptsMcpPost(req)) {
+    audit({ outcome: 'accept_rejected', httpStatus: 406 });
     return sendMcpJson(res, 406, {
       error: 'not_acceptable',
       message: 'Streamable HTTP clients should send Accept: application/json, text/event-stream.',
@@ -6758,6 +7554,7 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
 
   const contentType = String(req.headers['content-type'] ?? '').toLowerCase();
   if (!contentType.includes('application/json')) {
+    audit({ outcome: 'content_type_rejected', httpStatus: 415 });
     return sendMcpJson(res, 415, jsonRpcError(null, -32000, 'Content-Type must be application/json.'), includeBody, {
       ...telemetry,
       status: 415,
@@ -6769,6 +7566,9 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
     message = parseJsonRequestBody(await readRequestBody(req));
   } catch (error) {
     const statusCode = error.statusCode ?? 400;
+    // Do not retain an unparsed raw body: it can be malformed precisely
+    // because it carried an unsupported or secret-bearing value.
+    audit({ outcome: 'parse_rejected', httpStatus: statusCode });
     return sendMcpJson(
       res,
       statusCode,
@@ -6779,18 +7579,21 @@ export async function handleMcpRequest(req, res, telemetry = { method: req.metho
   }
 
   try {
-    const response = handleMcpJsonRpcMessage(message, req);
+    const response = handleMcpJsonRpcMessage(message, req, workflow);
     if (response === null || isJsonRpcNotificationOrResponse(message)) {
+      audit({ outcome: 'notification_accepted', httpStatus: 202, message });
       return sendEmpty(res, 202, { ...telemetry, status: 202 }, {
         'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
       });
     }
 
+    audit({ outcome: 'completed', httpStatus: 200, message });
     return sendMcpJson(res, 200, response, includeBody, { ...telemetry, status: 200 });
   } catch (error) {
     const id = message && typeof message === 'object' && Object.hasOwn(message, 'id') ? message.id : null;
     const code = error.jsonRpcCode ?? -32603;
     const statusCode = error.statusCode ?? (code === -32602 || code === -32600 ? 400 : 200);
+    audit({ outcome: 'rejected', httpStatus: statusCode, message });
     return sendMcpJson(
       res,
       statusCode,
@@ -6944,12 +7747,17 @@ function sendRedirect(res, statusCode, location, telemetry = null) {
   if (telemetry) logTelemetryRequest(telemetry);
 }
 
-export function buildPortalManifest(generatedAt = new Date().toISOString()) {
+export function buildPortalManifest(
+  generatedAt = new Date().toISOString(),
+  { releaseMetadata = DEPLOYED_RELEASE_METADATA } = {},
+) {
   return {
     name: 'agent.bittrees.org',
     generatedAt,
+    releaseMetadata,
     launchStatus: LAUNCH_STATUS,
     sourceScope: SOURCE_SCOPE.map((source) => source.name),
+    sourceSnapshotEvidence: buildSourceSnapshotEvidence(generatedAt, { releaseMetadata }),
     routes: ROUTE_DEFINITIONS.map((definition) => ({
       path: definition.path,
       label: definition.label,
@@ -6960,12 +7768,79 @@ export function buildPortalManifest(generatedAt = new Date().toISOString()) {
   };
 }
 
-export function buildStaticAssets(generatedAt = new Date().toISOString()) {
+export function buildSourceSnapshotEvidence(
+  generatedAt = new Date().toISOString(),
+  { releaseMetadata = DEPLOYED_RELEASE_METADATA } = {},
+) {
+  const routeEvidencePaths = [
+    TERMS_PAGE_ROUTE,
+    TERMS_OF_USE_PAGE_ROUTE,
+    TERMS_OF_USE_SHORT_ROUTE,
+    '/terms-of-use.json',
+    '/idacc/releases.json',
+    '/monitoring.json',
+    '/portal-manifest.json',
+  ];
+  const htmlRoutes = new Map(ROUTE_DEFINITIONS.map((definition) => [definition.path, definition]));
+  const jsonRoutes = new Map(JSON_ROUTES.map((definition) => [definition.path, definition]));
+
+  return {
+    schema: 'agent.bittrees.source-snapshot-evidence.v1',
+    label: 'SOURCE SNAPSHOT evidence',
+    status: 'source-snapshot-ready',
+    generatedAt,
+    sourceSnapshot: {
+      scope: 'current source tree and generated manifest output',
+      authority: 'buildPortalManifest/buildStaticAssets source snapshot',
+      releaseMetadata,
+      evidenceRoutes: routeEvidencePaths,
+      termsRoute: TERMS_PAGE_ROUTE,
+      termsCanonicalRoute: TERMS_OF_USE_PAGE_ROUTE,
+      caveat:
+        'This source snapshot proves the route contract present in this source/build output; it does not prove the independently deployed live target has consumed this source.',
+    },
+    liveTarget: {
+      baseUrl: PORTAL_BASE_URL,
+      relationship: 'independently deployed live target',
+      rolloutStatus: 'not-asserted-by-source-snapshot',
+      requiredVerification:
+        'After deployment, run live route checks or smoke tests against the live target before claiming rollout.',
+    },
+    routeEvidence: routeEvidencePaths.map((path) => {
+      if (path === '/portal-manifest.json') {
+        return {
+          path,
+          kind: 'json',
+          status: 'generated-by-buildStaticAssets',
+          source: 'buildPortalManifest',
+        };
+      }
+
+      const routeDefinition = htmlRoutes.get(path) ?? jsonRoutes.get(path);
+      return {
+        path,
+        kind: routeDefinition?.kind ?? 'json',
+        status: routeDefinition ? getRouteStatus(routeDefinition) : 'generated-by-buildStaticAssets',
+        source: htmlRoutes.has(path) ? 'ROUTE_DEFINITIONS' : 'JSON_ROUTES',
+      };
+    }),
+    rolloutBlockers: [
+      'No deployment was performed by this source snapshot evidence task.',
+      'The live target must be checked independently because it can lag the source tree.',
+      'Public launch remains blocked by noindex and source/legal/security/operations approval gates.',
+    ],
+  };
+}
+
+export function buildStaticAssets(
+  generatedAt = new Date().toISOString(),
+  { releaseMetadata = DEPLOYED_RELEASE_METADATA } = {},
+) {
   const routeAssets = JSON_ROUTES
     .filter((definition) => definition.staticAsset !== false && !CONTRIBUTION_INTENT_POST_PATHS.has(definition.path))
     .map((definition) => ({
       path: definition.path.replace(/^\//, ''),
-      body: `${JSON.stringify(buildJsonResponse(definition, generatedAt), null, 2)}\n`,
+      body: `${JSON.stringify(buildJsonResponse(definition, generatedAt, { releaseMetadata }), null, 2)}\n`,
     }));
 
   return [
@@ -6987,6 +7862,10 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     {
       path: 'reputation/index.html',
       body: renderReputationPage(),
+    },
+    {
+      path: 'terms/index.html',
+      body: renderTermsOfUsePage(),
     },
     {
       path: 'terms-of-use/index.html',
@@ -7019,7 +7898,7 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
     ...routeAssets,
     {
       path: 'portal-manifest.json',
-      body: `${JSON.stringify(buildPortalManifest(generatedAt), null, 2)}\n`,
+      body: `${JSON.stringify(buildPortalManifest(generatedAt, { releaseMetadata }), null, 2)}\n`,
     },
   ];
 }
@@ -7027,6 +7906,7 @@ export function buildStaticAssets(generatedAt = new Date().toISOString()) {
 export function createRequestHandler({
   contributionService = LIVE_CONTRIBUTION_SERVICE,
   workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
+  releaseMetadata = DEPLOYED_RELEASE_METADATA,
 } = {}) {
   return async function handleRequest(req, res) {
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
@@ -7045,6 +7925,13 @@ export function createRequestHandler({
       });
     }
 
+    if ((req.method === 'GET' || req.method === 'HEAD') && TERMS_STATIC_ASSET_ROUTE_REDIRECTS.has(pathname)) {
+      return sendRedirect(res, 301, `${TERMS_STATIC_ASSET_ROUTE_REDIRECTS.get(pathname)}${requestUrl.search}`, {
+        ...telemetry,
+        status: 301,
+      });
+    }
+
     // The build emits this compatibility shell for hosts that expose static
     // assets, but it must never answer a status query from a query-blind
     // snapshot. Redirect the asset URL to the server-rendered route while
@@ -7056,7 +7943,8 @@ export function createRequestHandler({
       });
     }
 
-    const isContributionIntentPost = req.method === 'POST' && CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
+    const isContributionIntentPath = CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
+    const isContributionIntentPost = req.method === 'POST' && isContributionIntentPath;
     const isWorkflowRegistrationPost = req.method === 'POST' && pathname === WORKFLOW_REGISTRATIONS_PATH;
     const isWorkflowClaimPost = req.method === 'POST' && pathname === WORKFLOW_CLAIMS_PATH;
     const isWorkflowSubmissionPost = req.method === 'POST' && pathname === WORKFLOW_SUBMISSIONS_PATH;
@@ -7066,7 +7954,20 @@ export function createRequestHandler({
     const isRegistryApi = isRegistryApiPath(pathname);
 
     if (pathname === MCP_GATEWAY.path) {
-      return handleMcpRequest(req, res, telemetry);
+      return handleMcpRequest(req, res, telemetry, workflow);
+    }
+
+    if (isContributionIntentPath && req.method === 'OPTIONS') {
+      if (!gatewayOriginPolicy(req).allowed) {
+        return sendJson(res, 403, {
+          error: 'origin_not_allowed',
+          message: 'Origin is not allowed for the contribution-intake gateway.',
+        }, includeBody, { ...telemetry, status: 403 });
+      }
+      return sendEmpty(res, 204, { ...telemetry, status: 204 }, {
+        Allow: 'POST, OPTIONS',
+        ...gatewayCorsHeaders(req, ['POST']),
+      });
     }
 
     if (req.method !== 'GET' && req.method !== 'HEAD' && !isContributionIntentPost && !isWorkflowMutationPost && !isRegistryApi) {
@@ -7163,7 +8064,7 @@ export function createRequestHandler({
     }
 
     if (pathname === '/submission-status') {
-      return sendBody(res, 200, renderSubmissionStatusPage(requestUrl.searchParams, { service: contributionService }), 'text/html; charset=utf-8', includeBody, {
+      return sendBody(res, 200, renderSubmissionStatusPage(requestUrl.searchParams, { service: contributionService, workflow }), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -7176,7 +8077,7 @@ export function createRequestHandler({
       });
     }
 
-    if (pathname === TERMS_OF_USE_PAGE_ROUTE || pathname === TERMS_OF_USE_SHORT_ROUTE) {
+    if (pathname === TERMS_PAGE_ROUTE || pathname === TERMS_OF_USE_PAGE_ROUTE || pathname === TERMS_OF_USE_SHORT_ROUTE) {
       return sendBody(res, 200, renderTermsOfUsePage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
@@ -7269,7 +8170,28 @@ export function createRequestHandler({
     }
 
     if (pathname === WORKFLOW_STATUS_PATH) {
-      const actor = workflowStatusActor(req);
+      const requestedKind = readSearchParam(requestUrl.searchParams, 'kind').trim() || 'any';
+      if (!isStatusLookupKind(requestedKind)) {
+        return sendJson(res, 400, {
+          $schema: SCHEMA_URL,
+          error: 'invalid_status_kind',
+          message: `Unsupported status lookup kind: ${requestedKind}`,
+          acceptedKinds: STATUS_LOOKUP_KINDS,
+        }, includeBody, { ...telemetry, status: 400 });
+      }
+      let actor;
+      try {
+        actor = workflowStatusActor(req);
+      } catch (error) {
+        const status = workflowErrorStatus(error);
+        return sendJson(res, status, {
+          $schema: SCHEMA_URL,
+          error: workflowErrorName(status),
+          message: error.message,
+          code: error.code,
+          data: error.jsonRpcData ?? error.details,
+        }, includeBody, { ...telemetry, status });
+      }
       return sendJson(res, 200, buildWorkflowStatusResponse(requestUrl.searchParams, contributionService, workflow, actor), includeBody, {
         ...telemetry,
         status: 200,
@@ -7278,7 +8200,7 @@ export function createRequestHandler({
 
     const routeDefinition = JSON_ROUTE_MAP.get(pathname);
     if (routeDefinition) {
-      return sendJson(res, 200, buildJsonResponse(routeDefinition), includeBody, {
+      return sendJson(res, 200, buildJsonResponse(routeDefinition, undefined, { releaseMetadata }), includeBody, {
         ...telemetry,
         status: 200,
       });

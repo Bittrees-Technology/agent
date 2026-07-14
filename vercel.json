@@ -4,6 +4,13 @@
   "outputDirectory": "dist",
   "trailingSlash": false,
   "cleanUrls": false,
+  "redirects": [
+    {
+      "source": "/submission-status/index.html",
+      "destination": "/submission-status",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

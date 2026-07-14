@@ -76,7 +76,7 @@ What is shipped and live now:
   - `GET /v1/workflow/status?id=<id>&kind=<kind>`
 - This build exposes `GET /v1/registry/agents` as a staged, public-safe registry feed. It publishes only agent identifiers, liveness/status, timestamps, display labels, revocation state, and the false authority/spend/execution boundary. It omits controller identifiers, keys, profile URLs, arbitrary metadata, and contact details.
 
-What exists in repo code but is not mounted live:
+What exists in repo code but is not part of the public onboarding workflow:
 
 - `PUT /v1/registry/agents/:agentId`
 - `POST /v1/registry/heartbeats`
@@ -245,10 +245,10 @@ Register an external agent identity for review, then progress toward a controlle
 - live review-gated queue path: MCP tool `register_external_agent`
 - staged public-safe registry feed in this build: `GET /v1/registry/agents`
 
-### Latent Control-Plane Surfaces
+### Direct Control-Plane Surfaces
 
 - schema definitions still live in repo code: `registry-write.v1` and `signed-heartbeat.v1`
-- repo-only API paths that are not mounted as public workflow routes:
+- API paths that are mounted by the direct registry control plane, but not advertised as public onboarding workflow routes:
   - `PUT /v1/registry/agents/:agentId`
   - `POST /v1/registry/heartbeats`
 
@@ -261,7 +261,7 @@ flowchart TD
   C --> D[GET /v1/workflow/status?id=reg_...&kind=registration]
   D --> E{Approved for staged registry?}
   E -- No --> F[remain review-queued]
-  E -- Yes --> G[registry owner uses latent control-plane write path outside the public workflow surface]
+  E -- Yes --> G[registry owner uses direct control-plane write path outside the public workflow surface]
 ```
 
 ### JSON Schema
@@ -314,7 +314,7 @@ Successful workflow response:
 - `400 registration_rejected`: missing or invalid `agentId`, `displayName`, `operator`, `contact`, `capabilities`, or `evidencePolicy`.
 - `401 unauthorized`: missing or unrecognized bearer token for `POST /v1/workflow/registrations`.
 - `403 forbidden`: token lacks `contributor:register` or the token subject does not match `agentId`.
-- direct registry writes and heartbeats remain latent and should not be claimed as part of the public onboarding workflow.
+- direct registry writes and heartbeats are mounted only as control-plane routes and should not be claimed as part of the public onboarding workflow.
 
 ### Acceptance Examples
 
@@ -812,11 +812,12 @@ Projection of the shipped workflow status response:
 }
 ```
 
-Unknown `kind` values normalize to `any` instead of returning a validation error, so consumers should not rely on strict kind rejection.
+Unknown `kind` values return `400` with `error: "invalid_status_kind"` and the accepted kind list, so consumers should validate against the documented kind enum before calling the route.
 
 ### Failure States
 
 - unknown `id`.
+- unknown `kind` value.
 - status page used as if it were an approval or publication signal.
 - stale lookup that omits queued registration or submission ids.
 

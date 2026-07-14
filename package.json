@@ -13,7 +13,7 @@
     "access": "public"
   },
   "scripts": {
-    "check": "node --check src/server.mjs && node --check src/portal.mjs && node --check src/onboarding-contracts.mjs && node --check src/registry-control-plane.mjs && node --check src/contributions/idacc.mjs && node --check src/contributions/brain.mjs && node --check src/contributions/outbox.mjs && node --check src/contributions/outbox-worker.mjs && node --check src/contributions/service.mjs && node --check src/contributions/index.mjs && node --check src/integrations/idacc-manager-client.mjs && node --check src/integrations/brain-client.mjs && node --check api/index.js && node --check scripts/build.mjs && node --check scripts/mcp-stdio-proxy.mjs && node --check scripts/serve-dist.mjs && node --check scripts/smoke-check.mjs && node --check scripts/verify-api-handler.mjs && node --check test/portal.test.mjs && node --check test/mcp-stdio-proxy.test.mjs && node --check test/registry-control-plane.test.mjs && node --check test/contributions/acceptance.test.mjs && node --check test/contributions/integration.test.mjs && node --check test/contributions/integration-adapters.test.mjs && node --check test/contributions/service.test.mjs",
+    "check": "node --check src/server.mjs && node --check src/portal.mjs && node --check src/release-metadata.mjs && node --check src/onboarding-contracts.mjs && node --check src/registry-control-plane.mjs && node --check src/contributions/attestation.mjs && node --check src/contributions/idacc.mjs && node --check src/contributions/brain.mjs && node --check src/contributions/outbox.mjs && node --check src/contributions/outbox-worker.mjs && node --check src/contributions/service.mjs && node --check src/contributions/index.mjs && node --check src/integrations/idacc-manager-client.mjs && node --check src/integrations/brain-client.mjs && node --check api/index.js && node --check scripts/build.mjs && node --check scripts/mcp-stdio-proxy.mjs && node --check scripts/serve-dist.mjs && node --check scripts/smoke-check.mjs && node --check scripts/verify-api-handler.mjs && node --check test/portal.test.mjs && node --check test/release-metadata.test.mjs && node --check test/onboarding-ci-docs.test.mjs && node --check test/mcp-stdio-proxy.test.mjs && node --check test/registry-control-plane.test.mjs && node --check test/contributions/acceptance.test.mjs && node --check test/contributions/integration.test.mjs && node --check test/contributions/integration-adapters.test.mjs && node --check test/contributions/service.test.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node --watch src/server.mjs",
     "mcp:stdio": "node scripts/mcp-stdio-proxy.mjs",
@@ -21,6 +21,7 @@
     "start": "node src/server.mjs",
     "start:dist": "node scripts/serve-dist.mjs",
     "test": "node --test --test-concurrency=1",
+    "test:onboarding": "node --test test/onboarding-ci-docs.test.mjs",
     "verify:api": "node scripts/verify-api-handler.mjs"
   },
   "engines": {

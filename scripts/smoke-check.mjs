@@ -2,13 +2,23 @@ const DEFAULT_BASE_URL = 'https://agent.bittrees.org';
 
 const args = process.argv.slice(2);
 const baseUrlArg = args.find((arg) => arg.startsWith('--base-url='));
+const expectedReleaseVersionArg = args.find((arg) => arg.startsWith('--expected-release-version='));
+const expectedReleaseTagArg = args.find((arg) => arg.startsWith('--expected-release-tag='));
+const expectedReleaseCommitArg = args.find((arg) => arg.startsWith('--expected-release-commit='));
 const baseUrl = new URL(baseUrlArg ? baseUrlArg.split('=').slice(1).join('=') : process.env.BASE_URL ?? DEFAULT_BASE_URL);
+const expectedReleaseVersion = expectedReleaseVersionArg?.split('=').slice(1).join('=')
+  || process.env.EXPECTED_RELEASE_VERSION;
+const expectedReleaseTag = expectedReleaseTagArg?.split('=').slice(1).join('=')
+  || process.env.EXPECTED_RELEASE_TAG;
+const expectedReleaseCommit = expectedReleaseCommitArg?.split('=').slice(1).join('=')
+  || process.env.EXPECTED_RELEASE_COMMIT;
 
 const routeChecks = [
   { path: '/', kind: 'html' },
   { path: '/identity-keys', kind: 'html' },
   { path: '/submission-status', kind: 'html' },
   { path: '/reputation', kind: 'html' },
+  { path: '/terms', kind: 'html' },
   { path: '/terms-of-use', kind: 'html' },
   { path: '/privacy', kind: 'html' },
   { path: '/onboarding', kind: 'html' },
@@ -159,8 +169,8 @@ async function checkRoute(path, kind) {
     );
   }
 
-  if (path === '/terms-of-use') {
-    check(text.includes('Terms of Use are pending legal approval'), '/terms-of-use missing legal approval status');
+  if (path === '/terms' || path === '/terms-of-use') {
+    check(text.includes('Terms of Use are pending legal approval'), `${path} missing legal approval status`);
   }
 
   if (path === '/privacy') {
@@ -430,6 +440,42 @@ async function checkWorkflowDataRoutes() {
 async function checkReleaseFreshness() {
   const releaseRoute = jsonResponses.get('/idacc/releases.json') ?? await readJson('/idacc/releases.json');
   const snapshotTag = releaseRoute?.data?.releaseSnapshot?.latest?.tag;
+  const releaseMetadata = releaseRoute?.data?.releaseMetadata;
+
+  check(
+    releaseMetadata?.schemaVersion === 'agent.bittrees.release-metadata.v1',
+    '/idacc/releases.json missing deployed release metadata',
+  );
+  check(
+    typeof releaseMetadata?.version === 'string' && releaseMetadata.version.length > 0,
+    '/idacc/releases.json missing deployed release version',
+  );
+  check(
+    /^[0-9a-f]{7,64}$/i.test(releaseMetadata?.commitSha ?? ''),
+    '/idacc/releases.json missing immutable deployed commit SHA',
+  );
+  check(
+    releaseMetadata?.source !== 'package-fallback',
+    '/idacc/releases.json fell back to package metadata instead of the deployed build identity',
+  );
+  if (expectedReleaseVersion) {
+    check(
+      releaseMetadata?.version === expectedReleaseVersion,
+      `/idacc/releases.json version ${releaseMetadata?.version} differs from expected ${expectedReleaseVersion}`,
+    );
+  }
+  if (expectedReleaseTag) {
+    check(
+      releaseMetadata?.tag === expectedReleaseTag,
+      `/idacc/releases.json tag ${releaseMetadata?.tag} differs from expected ${expectedReleaseTag}`,
+    );
+  }
+  if (expectedReleaseCommit) {
+    check(
+      releaseMetadata?.commitSha === expectedReleaseCommit.toLowerCase(),
+      `/idacc/releases.json commit ${releaseMetadata?.commitSha} differs from expected ${expectedReleaseCommit}`,
+    );
+  }
 
   const githubResponse = await fetch('https://api.github.com/repos/bobofbuilding/idacc/releases/latest', {
     headers: {

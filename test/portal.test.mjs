@@ -9,11 +9,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import {
+  APPROVED_CONTENT_PACKAGE,
   APPROVED_CLAIMS,
   APPROVED_AGENT_PROFILES,
   CONTRIBUTION_PRIVACY_NOTICE,
   CONTRIBUTION_LANES,
   CONTRIBUTION_WORKFLOW,
+  EXTERNAL_MCP_SAFEGUARD_INDEX,
   EXCLUDED_CLAIMS,
   EXCLUDED_CLAIM_REVIEW,
   IDENTITY_KEYS_PUBLIC_CONTRACT,
@@ -41,6 +43,7 @@ import {
   buildStaticAssets,
   callMcpTool,
   createRequestHandler,
+  getMcpAuditEvents,
   handleRegistryRequest,
   renderIdentityKeysPage,
   renderLandingPage,
@@ -97,6 +100,10 @@ const CONTRIBUTION_INTENT_ENV_NAMES_FOR_TEST = [
   'CONTRIBUTION_INTENTS_DATA_DIR',
   'CONTRIBUTION_POST_RATE_LIMIT_MAX',
   'CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS',
+  'GATEWAY_ALLOWED_ORIGINS',
+  'MCP_ALLOWED_ORIGINS',
+  'MCP_POST_RATE_LIMIT_MAX',
+  'MCP_POST_RATE_LIMIT_WINDOW_MS',
   'MCP_WRITE_TOKENS',
 ];
 
@@ -502,6 +509,47 @@ test('sources JSON only serves explicitly public-safe source records', async () 
   });
 });
 
+test('sources JSON exposes the approved content package with provenance', () => {
+  const sourcesRoute = JSON_ROUTE_MAP.get('/sources.json');
+  const response = buildJsonResponse(sourcesRoute, '2026-07-06T00:00:00.000Z');
+  const approvedPackage = response.data.approvedContentPackage;
+
+  assert.equal(approvedPackage.schema, 'agent.bittrees.approved-content-package.v1');
+  assert.equal(approvedPackage.sourceOfTruthRoute, '/sources.json');
+  assert.equal(approvedPackage.agentEntryRoute, '/llms.txt');
+  assert.equal(approvedPackage.provenance.publicSafeFilter, 'SOURCE_REGISTRY.publicSafe === true');
+  assert.deepEqual(
+    approvedPackage.sources.map((source) => source.id),
+    SOURCE_REGISTRY.filter((source) => source.publicSafe === true).map((source) => source.id),
+  );
+  assert.deepEqual(
+    approvedPackage.approvedClaims.map((claim) => claim.id),
+    APPROVED_CLAIMS.map((claim) => claim.id),
+  );
+  assert.ok(approvedPackage.agentInstructions.some((instruction) => instruction.links.includes('/sources.json')));
+  assert.doesNotMatch(JSON.stringify(approvedPackage), RAW_BRAIN_MEMORY_ID_PATTERN);
+});
+
+test('landing page renders approved content package instructions, links, and provenance', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /Approved content package/);
+  assert.match(html, new RegExp(APPROVED_CONTENT_PACKAGE.packageId));
+  assert.match(html, /Agent instructions/);
+  assert.match(html, /Source links and provenance/);
+  assert.match(html, /Approved claim guardrails/);
+  assert.match(html, /Excluded public claims/);
+  assert.match(html, /href="\/sources\.json"/);
+  assert.match(html, /href="\/llms\.txt"/);
+  assert.match(html, /href="https:\/\/gov\.bittrees\.org"/);
+  assert.match(html, /href="https:\/\/research\.bittrees\.org"/);
+  assert.match(html, /href="https:\/\/capital\.bittrees\.org"/);
+  assert.match(html, /three-arm ecosystem/);
+  assert.match(html, /Do not describe Bittrees primarily as an AI-agent blockchain platform/);
+  assert.match(html, /SOURCE_REGISTRY\.publicSafe === true/);
+  assert.doesNotMatch(html, RAW_BRAIN_MEMORY_ID_PATTERN);
+});
+
 test('static build includes all advertised routes', () => {
   const manifest = buildPortalManifest('2026-07-06T00:00:00.000Z');
   const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
@@ -511,11 +559,22 @@ test('static build includes all advertised routes', () => {
     manifest.routes.map((route) => route.path),
     ROUTE_DEFINITIONS.map((route) => route.path),
   );
+  assert.equal(manifest.sourceSnapshotEvidence.label, 'SOURCE SNAPSHOT evidence');
+  assert.equal(manifest.sourceSnapshotEvidence.sourceSnapshot.termsRoute, '/terms');
+  assert.ok(manifest.sourceSnapshotEvidence.sourceSnapshot.evidenceRoutes.includes('/terms'));
+  assert.equal(manifest.sourceSnapshotEvidence.liveTarget.relationship, 'independently deployed live target');
+  assert.equal(manifest.sourceSnapshotEvidence.liveTarget.rolloutStatus, 'not-asserted-by-source-snapshot');
+  assert.ok(manifest.sourceSnapshotEvidence.routeEvidence.some((route) => (
+    route.path === '/terms'
+    && route.status === TERMS_OF_USE_LEGAL_STATUS.status
+    && route.source === 'ROUTE_DEFINITIONS'
+  )));
 
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('identity-keys/index.html'));
   assert.ok(assetPaths.has('submission-status/index.html'));
   assert.ok(assetPaths.has('reputation/index.html'));
+  assert.ok(assetPaths.has('terms/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
   assert.ok(assetPaths.has('privacy/index.html'));
   assert.ok(assetPaths.has('onboarding/index.html'));
@@ -574,16 +633,33 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
   assert.equal(termsContract.data.contentStatus, 'pending-legal-approved-content');
   assert.equal(termsContract.data.publicationStatus, 'not-published');
   assert.equal(termsContract.data.legalContentOwner, 'legal/general-counsel');
+  assert.deepEqual(termsContract.data.aliasRoutes, ['/terms', '/tou']);
   assert.match(termsContract.data.requiredNextAction, /Legal\/general-counsel must author and approve/);
   assert.match(termsPage, /Terms of Use are pending legal approval/);
   assert.match(termsPage, /not a legal agreement, acceptance flow, or substitute/);
   assert.match(termsPage, /<meta name="robots" content="noindex,nofollow" \/>/);
 
   await withPortalServer(async (baseUrl) => {
+    const publicRouteResponse = await fetch(`${baseUrl}/terms`);
+    const publicRouteSlashResponse = await fetch(`${baseUrl}/terms/`);
+    const publicRouteAssetResponse = await fetch(`${baseUrl}/terms/index.html`);
     const pageResponse = await fetch(`${baseUrl}/terms-of-use`);
     const shortRouteResponse = await fetch(`${baseUrl}/tou`);
     const contractResponse = await fetch(`${baseUrl}/terms-of-use.json`);
     const contractBody = await contractResponse.json();
+
+    assert.equal(publicRouteResponse.status, 200);
+    assert.match(publicRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
+    assert.equal(publicRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(await publicRouteResponse.text(), /Terms of Use are pending legal approval/);
+
+    assert.equal(publicRouteSlashResponse.status, 200);
+    assert.equal(publicRouteSlashResponse.url, `${baseUrl}/terms`);
+    assert.match(await publicRouteSlashResponse.text(), /Terms of Use are pending legal approval/);
+
+    assert.equal(publicRouteAssetResponse.status, 200);
+    assert.equal(publicRouteAssetResponse.url, `${baseUrl}/terms`);
+    assert.match(await publicRouteAssetResponse.text(), /Terms of Use are pending legal approval/);
 
     assert.equal(pageResponse.status, 200);
     assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
@@ -659,6 +735,65 @@ test('landing page stacks route cards before tablet overflow widths', () => {
   assert.match(html, /@media \(max-width: 900px\)/);
   assert.match(html, /\.route-card \{ align-items: flex-start; flex-direction: column; \}/);
   assert.match(html, /\.route-card span \{ white-space: normal; text-align: left; \}/);
+});
+
+test('contribution intent form exposes accessible labels instructions and mobile touch targets', () => {
+  const html = renderLandingPage();
+  const requiredFieldIds = [
+    ['intent-contributor-kind', 'contributor.kind'],
+    ['intent-contributor-name', 'contributor.name'],
+    ['intent-contributor-contactRoute', 'contributor.contactRoute'],
+    ['intent-targetLane', 'targetLane'],
+    ['intent-proposedTemplate', 'proposedTemplate'],
+    ['intent-summary', 'summary'],
+    ['intent-handoff-requestedOwnerRoute', 'handoff.requestedOwnerRoute'],
+    ['intent-handoff-expectedOutput', 'handoff.expectedOutput'],
+    ['intent-handoff-acceptanceCriteria', 'handoff.acceptanceCriteria'],
+    ['intent-handoff-outOfScope', 'handoff.outOfScope'],
+    ['intent-handoff-backlogPolicy', 'handoff.backlogPolicy'],
+  ];
+
+  assert.match(html, /<form class="intent-form"[^>]+aria-describedby="intent-rights-notice intent-privacy-notice intent-write-notice"/);
+  assert.match(html, /\.intent-form input,\n\s+\.intent-form select,\n\s+\.intent-form textarea \{\n\s+width: 100%;\n\s+min-height: 44px;/);
+  assert.match(html, /\.intent-form \.checkbox-label \{\n\s+grid-template-columns: 44px 1fr;\n\s+align-items: center;\n\s+min-height: 44px;/);
+  assert.match(html, /\.intent-form input\[type="checkbox"\] \{\n\s+width: 44px;\n\s+min-height: 44px;/);
+  assert.match(html, /\.intent-form button \{\n\s+justify-self: start;\n\s+min-height: 44px;/);
+  assert.match(html, /@media \(max-width: 900px\) \{\n\s+\.form-grid \{ grid-template-columns: 1fr; \}/);
+  assert.match(html, /\.intent-form button \{\n\s+justify-self: stretch;\n\s+width: 100%;/);
+
+  for (const [id, name] of requiredFieldIds) {
+    assert.match(html, new RegExp(`<label[^>]+for="${id}"`), `${name} label is explicitly associated`);
+    assert.match(html, new RegExp(`id="${id}"[^>]+name="${name.replace('.', '\\.')}"`), `${name} control has stable id`);
+    assert.match(html, new RegExp(`id="${id}-hint" class="field-help"`), `${name} has field help`);
+    assert.match(html, new RegExp(`aria-describedby="${id}-hint"`), `${name} references field help`);
+  }
+
+  for (const id of [
+    'intent-safety-noSecretsIncluded',
+    'intent-safety-noLiveWriteAcknowledged',
+    'intent-safety-noOnchainActionRequested',
+  ]) {
+    assert.match(html, new RegExp(`<label class="checkbox-label" for="${id}">`));
+    assert.match(html, new RegExp(`<input id="${id}" type="checkbox"`));
+  }
+});
+
+test('human lookup forms expose mobile accessible labels and instructions', () => {
+  const statusHtml = renderSubmissionStatusPage();
+  const reputationHtml = renderReputationPage();
+
+  assert.match(statusHtml, /<label for="status-record-id">/);
+  assert.match(statusHtml, /id="status-record-id-hint" class="field-help"/);
+  assert.match(statusHtml, /<input id="status-record-id" type="search" name="id"[^>]+aria-describedby="status-record-id-hint"/);
+  assert.match(statusHtml, /<label for="status-kind">/);
+  assert.match(statusHtml, /<select id="status-kind" name="kind" aria-describedby="status-kind-hint">/);
+  assert.match(statusHtml, /input,\n\s+select \{\n\s+width: 100%;\n\s+min-height: 44px;/);
+  assert.match(statusHtml, /button \{\n\s+min-height: 44px;/);
+  assert.match(statusHtml, /@media \(max-width: 820px\)[\s\S]+button \{ width: 100%; \}/);
+
+  assert.match(reputationHtml, /<label for="reputation-agent-id">/);
+  assert.match(reputationHtml, /id="reputation-agent-id-hint" class="field-help"/);
+  assert.match(reputationHtml, /<input id="reputation-agent-id" type="search" name="agentId"[^>]+aria-describedby="reputation-agent-id-hint"/);
 });
 
 test('landing route links use working examples or documentation for templates and POST-only APIs', () => {
@@ -920,6 +1055,68 @@ test('contribution intent POST rate limits repeated write attempts', async () =>
   });
 });
 
+test('contribution intent POST rejects cross-origin writes without CORS allow headers', async () => {
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-origin-${Date.now()}`, import.meta.url)),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Origin: 'https://not-bittrees.example',
+        },
+        body: JSON.stringify(buildValidContributionIntentPayload()),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get('access-control-allow-origin'), null);
+      assert.equal(body.accepted, false);
+      assert.equal(body.status, 'rejected');
+      assert.match(body.message, /Origin is not allowed/);
+    });
+  });
+});
+
+test('contribution intent HTML validation response exposes focusable error summary', async () => {
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-html-validation-${Date.now()}`, import.meta.url)),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'text/html',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          schema: 'agent.bittrees.contribution-intent.v1',
+          'contributor.kind': 'agent',
+        }).toString(),
+      });
+      const html = await response.text();
+
+      assert.equal(response.status, 400);
+      assert.match(response.headers.get('content-type') ?? '', /^text\/html/);
+      assert.match(html, /<section class="error-summary"[^>]*id="intent-error-summary"/);
+      assert.match(html, /<section class="error-summary"[^>]*role="alert"/);
+      assert.match(html, /<section class="error-summary"[^>]*aria-labelledby="intent-error-title"/);
+      assert.match(html, /<section class="error-summary"[^>]*tabindex="-1"/);
+      assert.match(html, /<h2 id="intent-error-title">There is a problem with the submission<\/h2>/);
+      assert.match(html, /displayName|body\.contributor\.name|body\.summary|body\.handoff/);
+      assert.match(html, /<form class="intent-form"[^>]+aria-describedby="intent-rights-notice intent-privacy-notice intent-write-notice"/);
+      assert.match(html, /<form class="intent-form"[^>]+aria-invalid="true"/);
+      assert.match(html, /<form class="intent-form"[^>]+aria-errormessage="intent-error-summary"/);
+      assert.match(html, /id="intent-summary" name="summary" required/);
+      assert.match(html, /id="intent-summary-hint" class="field-help"/);
+    });
+  });
+});
+
 test('portal security headers enforce browser launch gate', () => {
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /default-src 'none'/);
   assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /frame-ancestors 'none'/);
@@ -1144,6 +1341,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/identity-keys'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/submission-status'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/reputation'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/terms-of-use'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/privacy'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding'));
@@ -1208,12 +1406,12 @@ test('workflow API supports discovery brief and status journeys', async () => {
     assert.equal(statusBody.lookup.result.kind, 'opportunity');
     assert.equal(statusBody.humanRoute, '/submission-status');
 
-    const normalizedStatusResponse = await fetch(`${baseUrl}/v1/workflow/status?id=${opportunityId}&kind=bogus`);
-    const normalizedStatusBody = await normalizedStatusResponse.json();
+    const invalidStatusResponse = await fetch(`${baseUrl}/v1/workflow/status?id=${opportunityId}&kind=wat`);
+    const invalidStatusBody = await invalidStatusResponse.json();
 
-    assert.equal(normalizedStatusResponse.status, 200);
-    assert.equal(normalizedStatusBody.query.kind, 'any');
-    assert.equal(normalizedStatusBody.status, 'status_found');
+    assert.equal(invalidStatusResponse.status, 400);
+    assert.equal(invalidStatusBody.error, 'invalid_status_kind');
+    assert.ok(invalidStatusBody.acceptedKinds.includes('opportunity'));
   });
 });
 
@@ -1310,7 +1508,19 @@ test('public registry feed route is readable and keeps registry writes unavailab
 
     assert.equal(feedResponse.status, 200);
     assert.equal(feed.route, '/v1/registry/agents');
+    assert.equal(feed.status, 'prelaunch-registry-under-review');
     assert.deepEqual(feed.records, []);
+    assert.deepEqual(feed.privacy.omittedFields, [
+      'controller identifiers',
+      'public keys',
+      'profile URIs',
+      'descriptions',
+      'metadata',
+      'tags',
+      'contact details',
+    ]);
+    assert.equal(feed.reviewGate.status, 'review_required_before_publication_or_assignment');
+    assert.equal(feed.reviewGate.registryMutationAllowed, false);
 
     const writeResponse = await fetch(`${baseUrl}/v1/registry/agents`, {
       method: 'POST',
@@ -1549,6 +1759,15 @@ test('mcp gateway contract exposes required contribution tools', () => {
     response.data.harnessImportTabs.map((tab) => tab.id),
     MCP_HARNESS_IMPORT_TABS.map((tab) => tab.id),
   );
+  assert.deepEqual(
+    response.data.externalMcpSafeguardIndex.map((entry) => entry.integrationId),
+    EXTERNAL_MCP_SAFEGUARD_INDEX.map((entry) => entry.integrationId),
+  );
+  for (const entry of response.data.externalMcpSafeguardIndex) {
+    assert.equal(entry.enforcementStatus, 'enforced-prelaunch');
+    assert.equal(entry.verdict, 'ALLOW read-only; GATE write-like; BLOCK production authority');
+    assert.ok(entry.enforcement.some((control) => control.surface === 'gateway audit trail'));
+  }
 });
 
 test('public MCP review gates use role labels without internal reviewer routes', () => {
@@ -1774,13 +1993,13 @@ test('mcp tool calls are review-gated and structured', () => {
 
   assert.equal(submitResult.structuredContent.status, 'submission_queued_for_review');
   assert.equal(submitResult.structuredContent.reviewGate.productionMutationAllowed, false);
-  assert.equal(submitResult.structuredContent.attestation.publicAttestation, false);
+  assert.equal('attestation' in submitResult.structuredContent, false);
 
   const statusResult = callMcpTool('check_contribution_status', {
     id: submitResult.structuredContent.submission.id,
   });
-  assert.equal(statusResult.structuredContent.status, 'status_found');
-  assert.equal(statusResult.structuredContent.result.kind, 'submission');
+  assert.equal(statusResult.structuredContent.status, 'not_found');
+  assert.equal(statusResult.structuredContent.result, null);
 });
 
 test('mcp write-like tools reject authority wallet and transaction material', () => {
@@ -1861,10 +2080,173 @@ test('mcp streamable http endpoint initializes and serves tools', async () => {
   });
 });
 
-test('mcp HTTP write-like tools require scoped bearer tokens bound to agentId', async () => {
+test('mcp status lookup rejects unsupported kinds at runtime', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const rejected = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'unsupported-status-kind',
+      method: 'tools/call',
+      params: {
+        name: 'check_contribution_status',
+        arguments: {
+          id: 'source-registry-hardening',
+          kind: 'bogus',
+        },
+      },
+    });
+
+    assert.equal(rejected.response.status, 400);
+    assert.equal(rejected.json.id, 'unsupported-status-kind');
+    assert.equal(rejected.json.error.code, -32602);
+    assert.equal(rejected.json.error.message, 'Unsupported status lookup kind: bogus');
+  });
+});
+
+test('MCP service fallback keeps anonymous and register-only status lookups opaque', async () => {
+  const legacyTitle = 'Legacy MCP privacy regression fixture';
+  const legacyArtifactValue = 'legacy-private-artifact-marker';
+  const legacySubmission = callMcpTool('submit_contribution', {
+    agentId: 'legacy-status-fixture-agent',
+    opportunityId: 'source-registry-hardening',
+    title: legacyTitle,
+    artifact: { kind: 'markdown', value: legacyArtifactValue },
+    evidence: ['portal-route:/sources.json'],
+  }).structuredContent.submission;
+
   await withContributionIntentWriteFlags({
     MCP_WRITE_TOKENS: JSON.stringify({
-      'token-agent-a-claim': { subject: 'agent-a', scopes: ['contributor:claim'] },
+      'token-status-owner': { subject: 'status-owner', scopes: ['contributor:submit'] },
+      'token-status-owner-register-only': { subject: 'status-owner', scopes: ['contributor:register'] },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const anonymous = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'anonymous-legacy-status',
+        method: 'tools/call',
+        params: {
+          name: 'check_contribution_status',
+          arguments: { id: legacySubmission.id, kind: 'submission' },
+        },
+      });
+
+      assert.equal(anonymous.response.status, 200);
+      assert.equal(anonymous.json.result.structuredContent.status, 'not_found');
+      assert.equal(anonymous.json.result.structuredContent.result, null);
+      assert.doesNotMatch(JSON.stringify(anonymous.json), new RegExp(`${legacyTitle}|${legacyArtifactValue}`));
+
+      const submitted = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'authenticated-owner-submit',
+        method: 'tools/call',
+        params: {
+          name: 'submit_contribution',
+          arguments: {
+            agentId: 'status-owner',
+            opportunityId: 'source-registry-hardening',
+            idempotencyKey: 'status-owner-regression-1',
+            title: 'Authenticated owner status regression fixture',
+            artifact: { kind: 'markdown', value: 'owner-visible-review-packet' },
+            evidence: ['portal-route:/sources.json'],
+          },
+        },
+      }, { Authorization: 'Bearer token-status-owner' });
+
+      assert.equal(submitted.response.status, 200);
+      const ownerSubmission = submitted.json.result.structuredContent.submission;
+      const registerOnlyLookup = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'same-subject-register-only-status',
+        method: 'tools/call',
+        params: {
+          name: 'check_contribution_status',
+          arguments: { id: ownerSubmission.id, kind: 'submission' },
+        },
+      }, { Authorization: 'Bearer token-status-owner-register-only' });
+
+      assert.equal(registerOnlyLookup.response.status, 200);
+      assert.equal(registerOnlyLookup.json.result.structuredContent.status, 'not_found');
+      assert.equal(registerOnlyLookup.json.result.structuredContent.result, null);
+
+      const ownerLookup = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'authenticated-owner-status',
+        method: 'tools/call',
+        params: {
+          name: 'check_contribution_status',
+          arguments: { id: ownerSubmission.id, kind: 'submission' },
+        },
+      }, { Authorization: 'Bearer token-status-owner' });
+
+      assert.equal(ownerLookup.response.status, 200);
+      assert.equal(ownerLookup.json.result.structuredContent.status, 'status_found');
+      assert.equal(ownerLookup.json.result.structuredContent.result.id, ownerSubmission.id);
+    });
+  });
+});
+
+test('mcp gateway audit trail structurally redacts bearer and nested secret payload fields', async () => {
+  const headerSecret = 'audit-header-secret-5f8f3c';
+  const apiKeySecret = 'audit-api-key-secret-72c1b8';
+  const nestedSecret = 'audit-nested-token-secret-91d0a4';
+  const bearerBodySecret = 'audit-bearer-body-secret-cc843d';
+
+  await withPortalServer(async (baseUrl) => {
+    const result = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'audit-redaction-regression',
+      method: 'tools/call',
+      params: {
+        name: 'get_bittrees_context',
+        arguments: {
+          apiKey: apiKeySecret,
+          nested: {
+            accessToken: nestedSecret,
+          },
+          note: `Bearer ${bearerBodySecret}`,
+        },
+      },
+    }, {
+      Authorization: `Bearer ${headerSecret}`,
+    });
+
+    assert.equal(result.response.status, 200);
+  });
+
+  const auditEvent = getMcpAuditEvents().find(
+    (event) => event.request?.jsonRpc?.id === 'audit-redaction-regression',
+  );
+  assert.ok(auditEvent, 'expected the MCP request to create an audit event');
+  assert.equal(auditEvent.request.headers.authorization, '[REDACTED]');
+  assert.equal(auditEvent.request.jsonRpc.params.arguments.apiKey, '[REDACTED]');
+  assert.equal(auditEvent.request.jsonRpc.params.arguments.nested.accessToken, '[REDACTED]');
+  assert.equal(auditEvent.request.jsonRpc.params.arguments.note, '[REDACTED]');
+
+  const serializedAuditEvent = JSON.stringify(auditEvent);
+  for (const secret of [headerSecret, apiKeySecret, nestedSecret, bearerBodySecret]) {
+    assert.doesNotMatch(serializedAuditEvent, new RegExp(secret));
+  }
+});
+
+test('mcp HTTP write-like tools require active scoped bearer tokens bound to agentId', async () => {
+  await withContributionIntentWriteFlags({
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'token-agent-a-claim': {
+        subject: 'agent-a',
+        scopes: ['contributor:claim'],
+        issuedAt: '2026-07-14T00:00:00.000Z',
+        expiresAt: '2999-01-01T00:00:00.000Z',
+      },
+      'token-agent-a-expired': {
+        subject: 'agent-a',
+        scopes: ['contributor:claim'],
+        expiresAt: '2000-01-01T00:00:00.000Z',
+      },
+      'token-agent-a-revoked': {
+        subject: 'agent-a',
+        scopes: ['contributor:claim'],
+        revoked: true,
+      },
       'token-agent-a-register': { subject: 'agent-a', scopes: ['contributor:register'] },
     }),
   }, async () => {
@@ -1894,6 +2276,20 @@ test('mcp HTTP write-like tools require scoped bearer tokens bound to agentId', 
       assert.equal(wrongScope.response.status, 403);
       assert.equal(wrongScope.json.error.code, -32003);
 
+      const expired = await mcpPost(baseUrl, claimMessage, {
+        Authorization: 'Bearer token-agent-a-expired',
+      });
+      assert.equal(expired.response.status, 401);
+      assert.equal(expired.json.error.code, -32001);
+      assert.match(expired.json.error.message, /expired/);
+
+      const revoked = await mcpPost(baseUrl, claimMessage, {
+        Authorization: 'Bearer token-agent-a-revoked',
+      });
+      assert.equal(revoked.response.status, 401);
+      assert.equal(revoked.json.error.code, -32001);
+      assert.match(revoked.json.error.message, /revoked/);
+
       const mismatch = await mcpPost(baseUrl, {
         ...claimMessage,
         params: {
@@ -1909,6 +2305,16 @@ test('mcp HTTP write-like tools require scoped bearer tokens bound to agentId', 
       assert.equal(mismatch.response.status, 403);
       assert.match(mismatch.json.error.message, /subject must match/);
 
+      const expiredStatusLookup = await fetch(`${baseUrl}/v1/workflow/status?id=source-registry-hardening&kind=opportunity`, {
+        headers: {
+          Authorization: 'Bearer token-agent-a-expired',
+        },
+      });
+      const expiredStatusLookupBody = await expiredStatusLookup.json();
+      assert.equal(expiredStatusLookup.status, 401);
+      assert.equal(expiredStatusLookupBody.error, 'unauthorized');
+      assert.equal(expiredStatusLookupBody.code, 'credential_expired');
+
       const accepted = await mcpPost(baseUrl, claimMessage, {
         Authorization: 'Bearer token-agent-a-claim',
       });
@@ -1921,6 +2327,69 @@ test('mcp HTTP write-like tools require scoped bearer tokens bound to agentId', 
       assert.equal(reviewGate.walletAuthorityGranted, false);
       assert.equal(reviewGate.transactionSubmissionAllowed, false);
       assert.equal(reviewGate.registryMutationAllowed, false);
+    });
+  });
+});
+
+test('authenticated MCP submissions create the workflow-owned pending attestation', async () => {
+  await withContributionIntentWriteFlags({
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'token-attestation-agent': { subject: 'attestation-agent', scopes: ['contributor:submit'] },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const submitted = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'mcp-attestation-submit',
+        method: 'tools/call',
+        params: {
+          name: 'submit_contribution',
+          arguments: {
+            agentId: 'attestation-agent',
+            opportunityId: 'source-registry-hardening',
+            title: 'Attestation mapping regression packet',
+            idempotencyKey: 'mcp-attestation-submit-1',
+            artifact: { kind: 'markdown', value: 'A review-only submission.' },
+            evidence: ['portal-route:/sources.json'],
+          },
+        },
+      }, { Authorization: 'Bearer token-attestation-agent' });
+
+      assert.equal(submitted.response.status, 200);
+      const result = submitted.json.result.structuredContent;
+      assert.equal(result.attestation.publicAttestation, false);
+      assert.equal(result.attestation.attestationStatus, 'review_pending_not_publicly_attested');
+      assert.equal(result.attestation.submissionId, result.submission.id);
+
+      const replayed = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'mcp-attestation-submit-replay',
+        method: 'tools/call',
+        params: {
+          name: 'submit_contribution',
+          arguments: {
+            agentId: 'attestation-agent',
+            opportunityId: 'source-registry-hardening',
+            title: 'Attestation mapping regression packet',
+            idempotencyKey: 'mcp-attestation-submit-1',
+            artifact: { kind: 'markdown', value: 'A review-only submission.' },
+            evidence: ['portal-route:/sources.json'],
+          },
+        },
+      }, { Authorization: 'Bearer token-attestation-agent' });
+      assert.equal(replayed.response.status, 200);
+      assert.equal(replayed.json.result.structuredContent.submission.id, result.submission.id);
+      assert.equal(replayed.json.result.structuredContent.attestation.id, result.attestation.id);
+
+      const status = await fetch(`${baseUrl}/v1/workflow/status?id=${encodeURIComponent(result.attestation.id)}&kind=attestation`, {
+        headers: { Authorization: 'Bearer token-attestation-agent' },
+      });
+      const statusBody = await status.json();
+      assert.equal(status.status, 200);
+      assert.equal(statusBody.lookup.status, 'status_found');
+      assert.equal(statusBody.lookup.result.id, result.attestation.id);
+      assert.equal(statusBody.lookup.result.submissionId, result.submission.id);
+      assert.equal(statusBody.lookup.result.publicAttestation, false);
     });
   });
 });
@@ -1992,6 +2461,7 @@ test('mcp endpoint rejects browser-origin mismatch and server-initiated sse get'
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
     });
     assert.equal(originRejected.status, 403);
+    assert.equal(originRejected.headers.get('access-control-allow-origin'), null);
 
     const sseRejected = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
       headers: {
@@ -1999,6 +2469,60 @@ test('mcp endpoint rejects browser-origin mismatch and server-initiated sse get'
       },
     });
     assert.equal(sseRejected.status, 405);
+  });
+});
+
+test('sensitive JSON routes never use wildcard CORS', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const mcpPreflight = await fetch(`${baseUrl}${MCP_GATEWAY.path}`, {
+      method: 'OPTIONS',
+      headers: { Origin: baseUrl },
+    });
+    assert.equal(mcpPreflight.status, 204);
+    assert.equal(mcpPreflight.headers.get('access-control-allow-origin'), baseUrl);
+    assert.notEqual(mcpPreflight.headers.get('access-control-allow-origin'), '*');
+
+    const workflowStatus = await fetch(`${baseUrl}/v1/workflow/status?id=source-registry-hardening&kind=opportunity`, {
+      headers: { Origin: baseUrl },
+    });
+    assert.equal(workflowStatus.status, 200);
+    assert.equal(workflowStatus.headers.get('access-control-allow-origin'), null);
+  });
+});
+
+test('mcp endpoint rate limits repeated POSTs before body handling', async () => {
+  await withContributionIntentWriteFlags({
+    MCP_POST_RATE_LIMIT_MAX: '2',
+    MCP_POST_RATE_LIMIT_WINDOW_MS: '60000',
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const headers = {
+        'X-Forwarded-For': `198.51.100.${Math.floor(Math.random() * 200) + 1}`,
+      };
+
+      for (let index = 0; index < 2; index += 1) {
+        const { response, json } = await mcpPost(baseUrl, {
+          jsonrpc: '2.0',
+          id: `rate-${index}`,
+          method: 'tools/list',
+          params: {},
+        }, headers);
+
+        assert.equal(response.status, 200);
+        assert.ok(Array.isArray(json.result.tools));
+      }
+
+      const limited = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'rate-limited',
+        method: 'tools/list',
+        params: {},
+      }, headers);
+
+      assert.equal(limited.response.status, 429);
+      assert.equal(limited.response.headers.has('retry-after'), true);
+      assert.equal(limited.json.error, 'rate_limited');
+    });
   });
 });
 

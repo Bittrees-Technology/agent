@@ -716,7 +716,7 @@ export const ONBOARDING_FLOW_CONTRACTS = [
     },
     failureStates: [
       'unknown id',
-      'unknown kind values normalize to any rather than returning a 4xx validation error',
+      'unknown kind values return 400 invalid_status_kind with the accepted kind list',
       'status page used as approval or publication signal',
       'lookup checks only opportunities and misses queued records',
     ],

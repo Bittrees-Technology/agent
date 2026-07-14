@@ -124,6 +124,7 @@ const CHECKS = [
   { method: 'GET', path: '/v1/workflow/opportunities' },
   { method: 'GET', path: '/v1/workflow/opportunities/source-registry-hardening' },
   { method: 'GET', path: '/v1/workflow/status?id=source-registry-hardening&kind=opportunity' },
+  { method: 'GET', path: '/v1/contributions/status?id=source-registry-hardening&kind=malformed', expectedStatus: 400 },
   { method: 'GET', path: '/v1/registry/agents' },
   { method: 'GET', path: '/idacc/releases.json' },
   { method: 'GET', path: '/contribution-intents' },
@@ -378,6 +379,19 @@ for (const check of CHECKS) {
     } catch (error) {
       failed += 1;
       console.error(`  FAIL: /v1/workflow/opportunities response was not valid JSON: ${error.message}`);
+    }
+  }
+
+  if (res.statusCode === 400 && check.method === 'GET' && check.path.startsWith('/v1/contributions/status')) {
+    try {
+      const parsedBody = JSON.parse(res.body);
+      if (parsedBody.error !== 'invalid_status_kind' || !parsedBody.acceptedKinds?.includes('attestation')) {
+        failed += 1;
+        console.error('  FAIL: /v1/contributions/status malformed kind did not fail closed with acceptedKinds.');
+      }
+    } catch (error) {
+      failed += 1;
+      console.error(`  FAIL: /v1/contributions/status malformed-kind response was not valid JSON: ${error.message}`);
     }
   }
 

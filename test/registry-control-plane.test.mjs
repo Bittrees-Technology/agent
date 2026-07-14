@@ -112,9 +112,9 @@ test('invalid heartbeat is quarantined and cannot mutate identity or authority',
   const { plane, privateKey, now } = await makePlane();
   const value = heartbeat({ privateKey, now });
   value.payload.status = 'online';
-  value.signature = value.signature.endsWith('A')
-    ? `${value.signature.slice(0, -1)}B`
-    : `${value.signature.slice(0, -1)}A`;
+  value.signature = value.signature.startsWith('A')
+    ? `B${value.signature.slice(1)}`
+    : `A${value.signature.slice(1)}`;
   await assert.rejects(() => plane.ingestSignedHeartbeat(value), (error) => error instanceof RegistryRejectedError);
   const record = await plane.getRecord('agent-one');
   assert.equal(record.sequence, 0);
