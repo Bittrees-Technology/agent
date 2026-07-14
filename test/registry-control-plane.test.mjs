@@ -169,6 +169,38 @@ test('file persistence validates on write and rejects a tampered stored projecti
   }
 });
 
+test('registry feed only exports explicitly public-safe, unrevoked records', async () => {
+  const keys = fixture();
+  const plane = new RegistryControlPlane({ store: new MemoryRegistryStore(), clock: () => keys.now });
+  await plane.bootstrapAgent({
+    agentId: 'public-agent',
+    controllerId: 'controller-public',
+    controllerPublicKey: keys.publicKeyPem,
+    displayName: 'Public Agent',
+    publicSafe: true,
+  });
+  await plane.bootstrapAgent({
+    agentId: 'private-agent',
+    controllerId: 'controller-private',
+    controllerPublicKey: keys.publicKeyPem,
+    displayName: 'Private Agent',
+  });
+  await plane.bootstrapAgent({
+    agentId: 'revoked-agent',
+    controllerId: 'controller-revoked',
+    controllerPublicKey: keys.publicKeyPem,
+    displayName: 'Revoked Agent',
+    publicSafe: true,
+  });
+  await plane.revokeAgent('revoked-agent');
+
+  const feed = await plane.registryFeed();
+
+  assert.deepEqual(feed.records.map((record) => record.agent_id), ['public-agent']);
+  assert.equal(feed.records[0].public_safe, true);
+  assert.doesNotMatch(JSON.stringify(feed), /private-agent|revoked-agent/);
+});
+
 test('signing bytes are canonical and do not include the signature member', () => {
   const { privateKey, publicKeyPem, now } = fixture();
   const request = registryWrite({ privateKey, publicKeyPem, now });

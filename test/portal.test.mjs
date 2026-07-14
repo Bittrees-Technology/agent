@@ -1250,6 +1250,23 @@ test('public registry feed omits controller, contact, and arbitrary record metad
       revoked: false,
       record_version: 2,
       updated_at: '2026-07-13T00:00:00.000Z',
+      public_safe: true,
+      authority_state: {
+        authority_changes_allowed: false,
+        spend_allowed: false,
+        execution_allowed: false,
+      },
+    }, {
+      schema_version: 'agent.registry.record.public.v1',
+      agent_id: 'private-agent',
+      sequence: 1,
+      status: 'active',
+      health: 'online',
+      last_seen: '2026-07-13T00:00:00.000Z',
+      revoked: false,
+      record_version: 1,
+      updated_at: '2026-07-13T00:00:00.000Z',
+      public_safe: false,
       authority_state: {
         authority_changes_allowed: false,
         spend_allowed: false,
@@ -1277,6 +1294,7 @@ test('public registry feed omits controller, contact, and arbitrary record metad
       executionAllowed: false,
     },
   }]);
+  assert.doesNotMatch(JSON.stringify(response), /private-agent/);
 });
 
 test('public registry feed route is readable and keeps registry writes unavailable', async () => {
@@ -1298,6 +1316,58 @@ test('public registry feed route is readable and keeps registry writes unavailab
     assert.equal(writeResponse.status, 405);
     assert.equal(writeBody.error, 'method_not_allowed');
   });
+});
+
+test('registry export handler filters private records and projects approved records safely', async () => {
+  const controlPlane = {
+    async registryFeed() {
+      return {
+        generated_at: '2026-07-13T00:00:00.000Z',
+        records: [{
+          agent_id: 'public-agent',
+          controller_id: 'private-controller',
+          sequence: 2,
+          status: 'active',
+          health: 'online',
+          last_seen: '2026-07-13T00:00:00.000Z',
+          display_name: 'Public Agent',
+          profile_uri: 'https://example.invalid/private-profile',
+          metadata: { contact: 'private@example.invalid' },
+          revoked: false,
+          record_version: 2,
+          updated_at: '2026-07-13T00:00:00.000Z',
+          public_safe: true,
+        }, {
+          agent_id: 'private-agent',
+          sequence: 1,
+          status: 'active',
+          health: 'online',
+          last_seen: '2026-07-13T00:00:00.000Z',
+          revoked: false,
+          record_version: 1,
+          updated_at: '2026-07-13T00:00:00.000Z',
+          public_safe: false,
+        }],
+      };
+    },
+  };
+  const req = {
+    method: 'GET',
+    url: '/v1/registry/agents',
+    headers: { host: 'agent.bittrees.org' },
+  };
+  const res = {
+    statusCode: 200,
+    body: '',
+    writeHead(statusCode) { this.statusCode = statusCode; },
+    end(chunk) { if (chunk) this.body += chunk; },
+  };
+
+  await handleRegistryRequest(req, res, undefined, controlPlane);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body).records.map((record) => record.agentId), ['public-agent']);
+  assert.doesNotMatch(res.body, /private-agent|private-controller|private-profile|private@example\.invalid/);
 });
 
 test('heartbeats route sanitizes unexpected filesystem failures instead of leaking them', async () => {

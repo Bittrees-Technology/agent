@@ -2595,7 +2595,7 @@ export function buildPublicRegistryFeed(feed) {
     status: 'prelaunch-registry-under-review',
     generatedAt: feed?.generated_at ?? new Date().toISOString(),
     route: '/v1/registry/agents',
-    records: records.map((record) => ({
+    records: records.filter((record) => record?.public_safe === true && record.revoked === false).map((record) => ({
       schemaVersion: 'agent.registry.record.public.v1',
       agentId: record.agent_id,
       sequence: record.sequence,
@@ -6854,10 +6854,14 @@ export async function handleRegistryRequest(
   try {
     if (req.method === 'GET' || req.method === 'HEAD') {
       if (pathname === '/v1/registry/agents') {
-        return sendJson(res, 200, await controlPlane.registryFeed(), includeBody, { ...telemetry, status: 200 });
+        return sendJson(res, 200, buildPublicRegistryFeed(await controlPlane.registryFeed()), includeBody, { ...telemetry, status: 200 });
       }
       if (agentId) {
-        const record = await controlPlane.emitCanonicalRecord(agentId);
+        const feed = buildPublicRegistryFeed(await controlPlane.registryFeed());
+        const record = feed.records.find((candidate) => candidate.agentId === agentId);
+        if (!record) {
+          return sendJson(res, 404, registryErrorBody(Object.assign(new Error('registry record not found'), { code: 'unknown_agent' })), includeBody, { ...telemetry, status: 404 });
+        }
         return sendJson(res, 200, record, includeBody, { ...telemetry, status: 200 });
       }
       return sendJson(res, 404, registryErrorBody(new Error('registry route not found')), includeBody, { ...telemetry, status: 404 });

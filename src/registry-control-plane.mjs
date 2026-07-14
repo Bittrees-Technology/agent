@@ -56,6 +56,7 @@ export const REGISTRY_RECORD_SCHEMA = Object.freeze({
     revoked: { type: 'boolean' },
     record_version: { type: 'integer', minimum: 1 },
     updated_at: { type: 'string', format: 'date-time' },
+    public_safe: { type: 'boolean' },
     display_name: { type: 'string', minLength: 1, maxLength: 160 },
     description: { type: 'string', maxLength: 4000 },
     profile_uri: { type: 'string', minLength: 1, maxLength: 2048 },
@@ -153,6 +154,7 @@ export const CANONICAL_EMITTED_RECORD_SCHEMA = Object.freeze({
     profile_uri: { type: 'string' },
     metadata: { type: 'object' },
     tags: { type: 'array' },
+    public_safe: { type: 'boolean' },
     revoked: { type: 'boolean' },
     record_version: { type: 'integer', minimum: 1 },
     updated_at: { type: 'string', format: 'date-time' },
@@ -365,7 +367,7 @@ function validateRecord(record) {
     'schema_version', 'agent_id', 'controller_id', 'controller_public_key', 'controller_key_id',
     'sequence', 'status', 'health', 'last_seen', 'last_verified_at', 'revoked', 'record_version',
     'updated_at', 'display_name', 'description', 'profile_uri', 'public_keys', 'metadata', 'tags',
-    'authority_state', 'revocation_reason', 'revoked_by',
+    'authority_state', 'revocation_reason', 'revoked_by', 'public_safe',
   ]));
   if (record.schema_version !== REGISTRY_RECORD_SCHEMA_VERSION) {
     throw new RegistryError('invalid_record_schema', 'stored record has an unsupported schema version');
@@ -375,6 +377,9 @@ function validateRecord(record) {
   assertDateTime(record.last_seen, 'last_seen');
   if (record.last_verified_at !== undefined) assertDateTime(record.last_verified_at, 'last_verified_at');
   if (typeof record.revoked !== 'boolean') throw new RegistryError('invalid_record', 'revoked must be boolean');
+  if (record.public_safe !== undefined && typeof record.public_safe !== 'boolean') {
+    throw new RegistryError('invalid_record', 'public_safe must be boolean');
+  }
   assertInteger(record.record_version, 'record_version', 1);
   assertDateTime(record.updated_at, 'updated_at');
   if (record.controller_key_id !== undefined) assertString(record.controller_key_id, 'controller_key_id');
@@ -912,7 +917,7 @@ function authorityState() {
   };
 }
 
-function makeSeedRecord({ agent_id, controller_id, controller_public_key, controller_key_id = 'controller', description = '', profile_uri = '', now, metadata = {}, display_name = agent_id }) {
+function makeSeedRecord({ agent_id, controller_id, controller_public_key, controller_key_id = 'controller', description = '', profile_uri = '', now, metadata = {}, display_name = agent_id, public_safe = false }) {
   return {
     schema_version: REGISTRY_RECORD_SCHEMA_VERSION,
     agent_id,
@@ -928,6 +933,7 @@ function makeSeedRecord({ agent_id, controller_id, controller_public_key, contro
     metadata: clone(metadata),
     tags: [],
     last_seen: new Date(now).toISOString(),
+    public_safe,
     revoked: false,
     record_version: 1,
     updated_at: new Date(now).toISOString(),
@@ -1001,11 +1007,12 @@ export class RegistryControlPlane {
     return { next, event };
   }
 
-  async bootstrapAgent({ agentId, controllerId, controllerPublicKey, controllerKeyId = 'controller', metadata, displayName, description = '', profileUri = '' }) {
+  async bootstrapAgent({ agentId, controllerId, controllerPublicKey, controllerKeyId = 'controller', metadata, displayName, description = '', profileUri = '', publicSafe = false }) {
     return this.#withLock(async () => {
       assertString(agentId, 'agentId');
       assertString(controllerId, 'controllerId');
       assertString(controllerPublicKey, 'controllerPublicKey');
+      if (typeof publicSafe !== 'boolean') throw new RegistryError('invalid_publication_state', 'publicSafe must be boolean');
       try { toPublicKeyObject(controllerPublicKey); } catch { throw new RegistryError('invalid_controller_key', 'controllerPublicKey is not a valid public key'); }
       const state = await this.#store.read();
       if (state.records[agentId]) throw new RegistryError('already_registered', `agent ${agentId} is already registered`);
@@ -1019,6 +1026,7 @@ export class RegistryControlPlane {
         profile_uri: profileUri,
         metadata,
         display_name: displayName,
+        public_safe: publicSafe,
         now,
       });
       const { event } = await this.#commit(state, (next) => {
@@ -1360,6 +1368,7 @@ export class RegistryControlPlane {
       ...(record.profile_uri ? { profile_uri: record.profile_uri } : {}),
       ...(record.metadata ? { metadata: clone(record.metadata) } : {}),
       ...(record.tags ? { tags: clone(record.tags) } : {}),
+      public_safe: record.public_safe === true,
       revoked: record.revoked,
       record_version: record.record_version,
       updated_at: record.updated_at,
@@ -1369,7 +1378,7 @@ export class RegistryControlPlane {
     assertNoUnknown(emitted, new Set([
       'schema_version', 'agent_id', 'controller_id', 'sequence', 'status', 'health', 'last_seen',
       'last_verified_at', 'display_name', 'description', 'profile_uri', 'metadata', 'tags', 'revoked',
-      'record_version', 'updated_at', 'authority_state',
+      'record_version', 'updated_at', 'authority_state', 'public_safe',
     ]));
     return emitted;
   }
@@ -1377,7 +1386,12 @@ export class RegistryControlPlane {
   async registryFeed() {
     const state = await this.#store.read();
     const records = [];
-    for (const agentId of Object.keys(state.records).sort()) records.push(await this.emitCanonicalRecord(agentId));
+    for (const agentId of Object.keys(state.records).sort()) {
+      const record = state.records[agentId];
+      if (record.public_safe === true && record.revoked === false) {
+        records.push(await this.emitCanonicalRecord(agentId));
+      }
+    }
     const feed = {
       schema_version: 'agent.registry.feed.v1',
       generated_at: new Date(this.#clock()).toISOString(),
