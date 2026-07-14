@@ -39,6 +39,7 @@ const routeChecks = [
 
 const failures = [];
 const jsonResponses = new Map();
+const RAW_BRAIN_MEMORY_ID_PATTERN = /\bmemory:\d+\b/;
 
 function check(condition, message) {
   if (!condition) failures.push(message);
@@ -248,6 +249,7 @@ function checkSources() {
   if (!sources) return;
 
   check(sources.data?.reviewRegistry, '/sources.json missing reviewRegistry');
+  check(!RAW_BRAIN_MEMORY_ID_PATTERN.test(JSON.stringify(sources)), '/sources.json leaked a raw Brain memory id');
 
   for (const source of sources.data?.sources ?? []) {
     check(Array.isArray(source.citationTargets) && source.citationTargets.length > 0, `${source.id} missing citationTargets`);
@@ -273,6 +275,7 @@ function checkAgents() {
   if (!agents) return;
 
   check((agents.data?.agents ?? []).length > 0, '/agents.json has no approved starter profiles');
+  check(!RAW_BRAIN_MEMORY_ID_PATTERN.test(JSON.stringify(agents)), '/agents.json leaked a raw Brain memory id');
 
   for (const agent of agents.data?.agents ?? []) {
     check(agent.identity, `${agent.id} missing identity`);
@@ -385,6 +388,10 @@ async function checkMcpGateway() {
   check(
     context?.result?.structuredContent?.status === 'source-grounded-context-ready',
     '/mcp get_bittrees_context returned unexpected status',
+  );
+  check(
+    !RAW_BRAIN_MEMORY_ID_PATTERN.test(JSON.stringify(context)),
+    '/mcp get_bittrees_context leaked a raw Brain memory id',
   );
 }
 

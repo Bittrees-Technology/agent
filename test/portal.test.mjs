@@ -172,6 +172,7 @@ const CONTRIBUTOR_SIGNING_ROLLOUT_GATE_IDS = [
 ];
 
 const PUBLIC_ROLLOUT_GATE_REDACTION_PATTERN = /rawPrivateKey|privateKey|private key|secretKey|secret key|mnemonic|seedPhrase|seed phrase|bearerToken|bearer token|oauthToken|sessionCookie|rawSignature/i;
+const RAW_BRAIN_MEMORY_ID_PATTERN = /\bmemory:\d+\b/;
 
 function assertContributorSigningRolloutGates(gates) {
   assert.ok(gates && typeof gates === 'object' && !Array.isArray(gates), 'rolloutGates must be an object');
@@ -497,6 +498,7 @@ test('sources JSON only serves explicitly public-safe source records', async () 
     );
     assert.ok(body.data.sources.every((source) => source.publicSafe === true));
     assert.doesNotMatch(JSON.stringify(body), /bittrees-research-executive-summary|ops-guide-1-5-1/);
+    assert.doesNotMatch(JSON.stringify(body), RAW_BRAIN_MEMORY_ID_PATTERN);
   });
 });
 
@@ -1046,8 +1048,10 @@ test('agents route advertises prelaunch registry management rather than manual-o
   const agentsRoute = JSON_ROUTE_MAP.get('/agents.json');
   const response = buildJsonResponse(agentsRoute, '2026-07-06T00:00:00.000Z');
   const submitStep = response.data.contributionWorkflow.find((step) => step.id === 'submit-review-packet');
+  const serializedResponse = JSON.stringify(response);
 
   assert.equal(response.status, 'prelaunch-registry-under-review');
+  assert.doesNotMatch(serializedResponse, RAW_BRAIN_MEMORY_ID_PATTERN);
   assert.equal(response.data.registryManagement.status, LIVE_AGENT_REGISTRY.status);
   assert.equal(response.data.registryManagement.currentState, REGISTRY_PROFILE_PUBLICATION_NOTICE);
   assert.equal(response.data.intakePolicy.currentState, REGISTRY_PROFILE_PUBLICATION_NOTICE);
@@ -1091,8 +1095,10 @@ test('agents route advertises prelaunch registry management rather than manual-o
 test('source registry is review-ready with citation and freshness metadata', () => {
   const sourcesRoute = JSON_ROUTE_MAP.get('/sources.json');
   const response = buildJsonResponse(sourcesRoute, '2026-07-06T00:00:00.000Z');
+  const serializedResponse = JSON.stringify(response);
 
   assert.equal(response.status, 'ready-for-review');
+  assert.doesNotMatch(serializedResponse, RAW_BRAIN_MEMORY_ID_PATTERN);
   assert.ok(response.data.reviewRegistry.requiredFields.includes('citationTargets'));
   for (const source of response.data.sources) {
     assert.ok(source.citationTargets.length > 0, `${source.id} should have citation targets`);
@@ -1750,6 +1756,10 @@ test('mcp tool calls are review-gated and structured', () => {
   const listResult = callMcpTool('list_contribution_opportunities', { priority: 'high' });
   assert.equal(listResult.isError, false);
   assert.ok(listResult.structuredContent.count >= 1);
+
+  const contextResult = callMcpTool('get_bittrees_context', {});
+  assert.equal(contextResult.structuredContent.status, 'source-grounded-context-ready');
+  assert.doesNotMatch(JSON.stringify(contextResult), RAW_BRAIN_MEMORY_ID_PATTERN);
 
   const submitResult = callMcpTool('submit_contribution', {
     agentId: 'external-agent-test',

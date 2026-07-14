@@ -117,6 +117,7 @@ const PUBLIC_ROLE_LABELS = Object.freeze({
 const INTERNAL_ROUTE_VALUE_PATTERN = /\bM:[a-z0-9-]+\/[a-z0-9-]+\b/gi;
 const INTERNAL_SLASH_VALUE_PATTERN =
   /\b(?:default|engineering-team|technology-security)\/[a-z0-9-]+\b/gi;
+const INTERNAL_BRAIN_MEMORY_ID_PATTERN = /\bmemory:\d+\b/g;
 
 function publicSafeString(value) {
   const exactLabel = PUBLIC_ROLE_LABELS[value];
@@ -144,7 +145,8 @@ function publicSafeString(value) {
     .replace(/\bLead review has been queued\b/g, 'Owner review has been queued')
     .replace(/\bresearch or ops lead triage\b/gi, 'research or operations review triage')
     .replace(INTERNAL_ROUTE_VALUE_PATTERN, '[approved review contact]')
-    .replace(INTERNAL_SLASH_VALUE_PATTERN, '[approved review contact]');
+    .replace(INTERNAL_SLASH_VALUE_PATTERN, '[approved review contact]')
+    .replace(INTERNAL_BRAIN_MEMORY_ID_PATTERN, '[redacted-internal-source-id]');
 }
 
 function publicSafeContent(value) {

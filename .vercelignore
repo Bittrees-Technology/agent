@@ -1,0 +1,9 @@
+output/
+test-results/
+.vercel/
+.env
+.env.*
+var/
+node_modules/
+coverage/
+package-lock.json

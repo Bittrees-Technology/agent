@@ -48,6 +48,7 @@ const WRITE_FLAG_NAMES = [
   'CONTRIBUTION_INTENTS_ENABLED',
   'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
 ];
+const RAW_BRAIN_MEMORY_ID_PATTERN = /\bmemory:\d+\b/;
 
 function buildContributionIntentFormBody({ summary, includeSafety = true } = {}) {
   const params = new URLSearchParams();
@@ -396,6 +397,13 @@ for (const check of CHECKS) {
     }
   }
 
+  if (res.statusCode === 200 && check.method === 'GET' && ['/agents.json', '/sources.json'].includes(check.path)) {
+    if (RAW_BRAIN_MEMORY_ID_PATTERN.test(res.body)) {
+      failed += 1;
+      console.error(`  FAIL: ${check.path} leaked a raw Brain memory id.`);
+    }
+  }
+
   checkTelemetryLine(telemetryLines, `${check.method} ${check.path}`, res.statusCode);
   checkHardeningHeaders(res.headers, `${check.method} ${check.path}`);
 }
@@ -449,6 +457,29 @@ for (const check of [
           failed += 1;
           console.error(`  FAIL: MCP tools/list missing ${toolName}.`);
         }
+      }
+    },
+  },
+  {
+    label: 'POST /mcp tools/call get_bittrees_context',
+    body: {
+      jsonrpc: '2.0',
+      id: 103,
+      method: 'tools/call',
+      params: {
+        name: 'get_bittrees_context',
+        arguments: {},
+      },
+    },
+    assertBody(parsedBody) {
+      if (parsedBody?.result?.structuredContent?.status !== 'source-grounded-context-ready') {
+        failed += 1;
+        console.error('  FAIL: MCP get_bittrees_context returned unexpected status.');
+      }
+
+      if (RAW_BRAIN_MEMORY_ID_PATTERN.test(JSON.stringify(parsedBody))) {
+        failed += 1;
+        console.error('  FAIL: MCP get_bittrees_context leaked a raw Brain memory id.');
       }
     },
   },
