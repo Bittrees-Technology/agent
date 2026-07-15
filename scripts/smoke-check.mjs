@@ -154,7 +154,10 @@ async function checkRoute(path, kind) {
 
   if (path === '/identity-keys') {
     for (const expectedText of [
-      'blocked-not-completed',
+      // Public HTML shows the humanized label; the precise machine slug
+      // (blocked-not-completed) stays on /identity-keys.json. The not-complete
+      // evidence below plus the completion guard keep this honest.
+      'Coming soon',
       '0/68 executed',
       '0 transaction hashes',
       '67 names uncreated',
@@ -211,16 +214,37 @@ function checkMonitoringRouteCoverage() {
   }
 }
 
+function checkMonitoringObservabilityCoverage() {
+  const monitoring = jsonResponses.get('/monitoring.json');
+  if (!monitoring) return;
+
+  const observability = monitoring.data?.monitoring?.observability;
+  check(Array.isArray(observability?.responseHeaders), '/monitoring.json missing observability responseHeaders');
+  check(Array.isArray(observability?.telemetryFields), '/monitoring.json missing observability telemetryFields');
+  check(
+    observability?.responseHeaders?.includes('X-Request-Id'),
+    '/monitoring.json observability responseHeaders missing X-Request-Id',
+  );
+  check(
+    observability?.telemetryFields?.includes('requestId'),
+    '/monitoring.json observability telemetryFields missing requestId',
+  );
+}
+
 async function checkErrorPaths() {
   const monitoring = jsonResponses.get('/monitoring.json');
   const errorPathChecks = monitoring?.data?.monitoring?.errorPathChecks ?? [];
+  const requestIdHeaderRequired = (monitoring?.data?.monitoring?.observability?.responseHeaders ?? [])
+    .includes('X-Request-Id');
   check(errorPathChecks.length > 0, '/monitoring.json has no error-path checks');
 
-  for (const expectation of errorPathChecks) {
+  for (const [index, expectation] of errorPathChecks.entries()) {
+    const requestId = `smoke-error-${index + 1}`;
     const response = await fetch(routeUrl(expectation.path), {
       method: expectation.method,
       headers: {
         'Content-Type': 'application/json',
+        'X-Request-Id': requestId,
         'User-Agent': 'agent.bittrees.org-smoke-check',
       },
       ...(expectation.request === 'empty-json' ? { body: '{}' } : {}),
@@ -239,6 +263,12 @@ async function checkErrorPaths() {
       `${expectation.method} ${expectation.path} returned ${response.status}; expected ${expectation.expectedStatus}`,
     );
     checkSecurityHeaders(response, `${expectation.method} ${expectation.path}`);
+    if (requestIdHeaderRequired) {
+      check(
+        response.headers.get('x-request-id') === requestId,
+        `${expectation.method} ${expectation.path} did not echo X-Request-Id`,
+      );
+    }
     if (expectation.expectedError) {
       check(body.error === expectation.expectedError, `${expectation.method} ${expectation.path} error code mismatch`);
     }
@@ -250,6 +280,9 @@ async function checkErrorPaths() {
     }
     for (const forbiddenText of expectation.forbiddenResponseText ?? []) {
       check(!text.includes(forbiddenText), `${expectation.method} ${expectation.path} leaked forbidden text ${forbiddenText}`);
+    }
+    if (Object.hasOwn(body, 'requestId')) {
+      check(body.requestId === requestId, `${expectation.method} ${expectation.path} requestId mismatch`);
     }
   }
 }
@@ -498,6 +531,7 @@ checkSources();
 checkAgents();
 checkOpportunities();
 checkMonitoringRouteCoverage();
+checkMonitoringObservabilityCoverage();
 await checkErrorPaths();
 await checkMcpGateway();
 await checkWorkflowDataRoutes();

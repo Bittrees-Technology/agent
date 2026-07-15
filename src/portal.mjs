@@ -40,6 +40,9 @@ const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
   [`${TERMS_OF_USE_SHORT_ROUTE}/index.html`, TERMS_OF_USE_SHORT_ROUTE],
 ]);
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
+export const REQUEST_ID_HEADER = 'X-Request-Id';
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const PORTAL_REQUEST_ID = Symbol('portalRequestId');
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
   readFileSync(new URL('../data/agent-onboarding/capability-descriptions.json', import.meta.url), 'utf8'),
@@ -187,16 +190,33 @@ export const REGISTRY_PROFILE_PUBLICATION_NOTICE =
 export const INTERNAL_OPPORTUNITY_REVIEW_NOTICE =
   'This route supports internal review and qualification only. Public visibility does not by itself create compensation, token, grant, equity, participation, application, or onboarding rights, and it is not a public job offer, public solicitation, fundraising communication, bounty, or authorization for external outreach or execution without owner approval.';
 
-export const PORTAL_SECURITY_HEADERS = {
+export const PORTAL_CACHE_HEADERS = Object.freeze({
+  'Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Vercel-CDN-Cache-Control': 'no-store',
+  Pragma: 'no-cache',
+});
+
+export const PORTAL_SECURITY_HEADERS = Object.freeze({
   'Content-Security-Policy':
     "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests",
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+  'X-DNS-Prefetch-Control': 'off',
+  'X-Permitted-Cross-Domain-Policies': 'none',
+  'Origin-Agent-Cluster': '?1',
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Resource-Policy': 'same-origin',
-};
+});
+
+export const PORTAL_RESPONSE_HARDENING_HEADERS = Object.freeze({
+  ...PORTAL_CACHE_HEADERS,
+  'X-Content-Type-Options': 'nosniff',
+  'X-Robots-Tag': 'noindex, nofollow',
+  ...PORTAL_SECURITY_HEADERS,
+});
 
 export const LAUNCH_STATUS = {
   status: 'prelaunch-contract-under-review',
@@ -1304,6 +1324,8 @@ const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
     accepted: { type: 'boolean' },
     liveWrite: { type: 'boolean' },
     message: { type: 'string' },
+    requestId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' },
+    error: { type: 'string' },
     receiptId: { type: 'string' },
     nextStep: { type: 'string' },
     errors: { type: 'array', items: { type: 'string' } },
@@ -1539,38 +1561,38 @@ export const LIVE_CONTRIBUTOR_PORTAL_WORKFLOW = new ContributorPortalWorkflow({
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-13T15:47:14Z',
+  checkedAt: '2026-07-15T01:26:00Z',
   latest: {
-    tag: 'v0.1.638',
-    name: 'v0.1.638',
-    publishedAt: '2026-07-13T15:21:19Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.638',
-    tagCommitSha: 'df41416356d9ab99509c25d91cbc45324695107d',
+    tag: 'v0.1.640',
+    name: 'v0.1.640',
+    publishedAt: '2026-07-14T15:03:38Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.640',
+    tagCommitSha: '8899e8a5332062b8ad5311554467b16922a6b1a7',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-13T15:47:14Z.',
-      'Release notes: prevent orphaned version tags.',
+      'Latest public GitHub release observed by the portal update on 2026-07-15T01:26:00Z.',
+      'Release notes: Identity & Keys: standardize root-controlled per-agent Safes and portable release publishing.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.638, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.638 on 2026-07-13T15:47:14Z.',
+        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.640, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.640 on 2026-07-15T01:26:00Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.638 resolved refs/tags/v0.1.638 at df41416356d9ab99509c25d91cbc45324695107d.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.638',
+        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.640 resolved refs/tags/v0.1.640 at 8899e8a5332062b8ad5311554467b16922a6b1a7.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.640',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.638-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.640-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.638/ID-Agents-Control-Center-0.1.638-arm64.zip',
-        sizeBytes: 102728091,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.640/ID-Agents-Control-Center-0.1.640-arm64.zip',
+        sizeBytes: 102731589,
         contentType: 'application/zip',
-        sha256: '2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779',
+        sha256: '09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779',
+            'sha256:09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025',
           localVerification:
-            'GitHub release API and expanded assets page reported sha256:2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779 for the 102728091-byte asset on 2026-07-13.',
+            'GitHub release API reported sha256:09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025 for the 102731589-byte asset on 2026-07-15.',
         },
       },
     ],
@@ -1663,6 +1685,12 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       'Approved claims must retain source ids, caveats, freshness metadata, and reviewer fields; excluded claims must remain present unless lead approves a source-backed change.',
     baselineApprovedClaimIds: APPROVED_CLAIMS.map((claim) => claim.id),
     baselineExcludedClaimIds: EXCLUDED_CLAIM_REVIEW.map((claim) => claim.id),
+  },
+  observability: {
+    requirement:
+      'Dynamic routes must emit telemetry-safe JSON logs with a request id and status, and error responses must echo the same request id without leaking filesystem paths, secrets, or internal host details.',
+    telemetryFields: ['timestamp', 'method', 'path', 'status', 'requestId', 'error', 'jsonRpcCode'],
+    responseHeaders: [REQUEST_ID_HEADER],
   },
   errorPathChecks: [
     {
@@ -3392,6 +3420,7 @@ export const ROUTE_DEFINITIONS = [
     description: 'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
     kind: 'html',
     status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
+    publicStatusHint: 'coming-soon',
   },
   {
     path: '/submission-status',
@@ -3546,6 +3575,7 @@ export const ROUTE_DEFINITIONS = [
     description: 'HTTP JSON feed of public-safe staged agent registry summaries.',
     kind: 'json',
     status: IDENTITY_KEYS_PUBLIC_CONTRACT.status,
+    publicStatusHint: 'under-review',
     staticAsset: false,
   },
   ...JSON_ROUTES.map((route) => ({ ...route, kind: 'json' })),
@@ -3561,6 +3591,86 @@ const CANONICAL_ROUTE_PATHS = new Set([
 
 function getRouteStatus(definition) {
   return typeof definition.status === 'function' ? definition.status() : definition.status;
+}
+
+// Presentation-only mapping from internal machine status slugs to human-readable
+// labels. This never mutates the machine-readable JSON contracts (the `status`
+// fields served by the API and asserted by tests); it only cleans up the text
+// shown to people on HTML pages. Truthful launch/legal/review gates are
+// preserved — a pending legal gate still reads as pending, not "complete".
+// Canonical five-state public status vocabulary. Every human-facing status
+// badge and route-card label collapses to one of these words so the public
+// portal never leaks internal queue vocabulary (ready-for-triage,
+// review-gated queue, source-grounded-context-ready, daily-smoke-ready,
+// prelaunch, blocked, disabled). Precise machine slugs stay on the JSON
+// contracts, which agents and tooling consume.
+export const PUBLIC_STATUS_VOCABULARY = Object.freeze({
+  available: 'Available',
+  preview: 'Preview',
+  comingSoon: 'Coming soon',
+  legalReviewPending: 'Legal review pending',
+  underReview: 'Under review',
+});
+
+// Exact internal-status -> public-state map. The four honest blockers stay
+// truthful: legal (terms/privacy) -> Legal review pending; identity/keys not
+// operational -> Coming soon; contribution/submission human-gated and the
+// agent directory not authoritative -> Under review.
+const PUBLIC_STATUS_BY_INTERNAL_STATUS = new Map([
+  ['blocked-pending-legal-approved-content', PUBLIC_STATUS_VOCABULARY.legalReviewPending],
+  ['pending-legal-approved-content', PUBLIC_STATUS_VOCABULARY.legalReviewPending],
+  ['blocked-without-explicit-controller-or-safe-approval', PUBLIC_STATUS_VOCABULARY.comingSoon],
+  ['blocked-not-completed', PUBLIC_STATUS_VOCABULARY.comingSoon],
+  ['future-agent-provisioning-required', PUBLIC_STATUS_VOCABULARY.comingSoon],
+  ['contract-only-disabled', PUBLIC_STATUS_VOCABULARY.comingSoon],
+  ['review-gated queue', PUBLIC_STATUS_VOCABULARY.underReview],
+  ['ready-for-triage', PUBLIC_STATUS_VOCABULARY.underReview],
+  ['prelaunch-registry-under-review', PUBLIC_STATUS_VOCABULARY.underReview],
+  ['prelaunch-profile-review-active', PUBLIC_STATUS_VOCABULARY.underReview],
+  ['prelaunch-contract-under-review', PUBLIC_STATUS_VOCABULARY.preview],
+  ['prelaunch-onboarding-contract-ready', PUBLIC_STATUS_VOCABULARY.preview],
+  ['human-view-ready', PUBLIC_STATUS_VOCABULARY.available],
+  ['source-grounded-context-ready', PUBLIC_STATUS_VOCABULARY.available],
+  ['brief-ready', PUBLIC_STATUS_VOCABULARY.available],
+  ['ready', PUBLIC_STATUS_VOCABULARY.available],
+]);
+
+// Optional per-render hint so a route/page can pin its public state when the
+// underlying machine slug is shared across surfaces (for example, the identity
+// page and the MCP gateway both carry prelaunch-contract-under-review, but the
+// identity/keys surface must read "Coming soon").
+const PUBLIC_STATUS_BY_HINT = new Map([
+  ['available', PUBLIC_STATUS_VOCABULARY.available],
+  ['preview', PUBLIC_STATUS_VOCABULARY.preview],
+  ['coming-soon', PUBLIC_STATUS_VOCABULARY.comingSoon],
+  ['legal-review-pending', PUBLIC_STATUS_VOCABULARY.legalReviewPending],
+  ['under-review', PUBLIC_STATUS_VOCABULARY.underReview],
+]);
+
+function humanizeStatus(rawStatus, hint) {
+  if (hint && PUBLIC_STATUS_BY_HINT.has(hint)) {
+    return PUBLIC_STATUS_BY_HINT.get(hint);
+  }
+  const value = String(rawStatus ?? '').trim();
+  const key = value.toLowerCase();
+  if (PUBLIC_STATUS_BY_INTERNAL_STATUS.has(key)) {
+    return PUBLIC_STATUS_BY_INTERNAL_STATUS.get(key);
+  }
+  // Token fallbacks, ordered so the four honest blockers win over generic
+  // "prelaunch"/"ready" states for any status string not mapped explicitly.
+  if (!key) return PUBLIC_STATUS_VOCABULARY.underReview;
+  if (key.includes('legal')) return PUBLIC_STATUS_VOCABULARY.legalReviewPending;
+  if (key.includes('review-gated') || key.includes('triage') || key.includes('registry')) {
+    return PUBLIC_STATUS_VOCABULARY.underReview;
+  }
+  if (key.includes('blocked') || key.includes('disabled')) {
+    return PUBLIC_STATUS_VOCABULARY.comingSoon;
+  }
+  if (key.includes('prelaunch')) return PUBLIC_STATUS_VOCABULARY.preview;
+  if (key.startsWith('ready') || key.endsWith('-ready') || key.includes('active')) {
+    return PUBLIC_STATUS_VOCABULARY.available;
+  }
+  return PUBLIC_STATUS_VOCABULARY.preview;
 }
 
 function getRouteData(definition) {
@@ -3580,8 +3690,21 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow' }) {
+function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow', image = null, imageAlt = '' }) {
   const canonicalUrl = new URL(path, PORTAL_BASE_URL).toString();
+  // Social-preview image is emitted only when an asset is supplied, so we never
+  // ship an og:image that 404s. When present it must be a same-origin path to
+  // satisfy the portal CSP (img-src 'self' data:). Absent an image, we keep the
+  // smaller `summary` card rather than claim a large one with no artwork.
+  const hasImage = typeof image === 'string' && image.length > 0;
+  const imageUrl = hasImage ? new URL(image, PORTAL_BASE_URL).toString() : null;
+  const imageTags = hasImage
+    ? `
+    <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:alt" content="${escapeHtml(imageAlt || title)}" />
+    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`
+    : '';
+  const twitterCard = hasImage ? 'summary_large_image' : 'summary';
 
   return `<meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="${escapeHtml(robots)}" />
@@ -3589,10 +3712,11 @@ function renderPageMetadata({ title, description, path, robots = 'noindex,nofoll
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
     <meta property="og:site_name" content="agent.bittrees.org" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
-    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />${imageTags}
+    <meta name="twitter:card" content="${twitterCard}" />
     <meta name="twitter:title" content="${escapeHtml(title)}" />
     <meta name="twitter:description" content="${escapeHtml(description)}" />
     <style>
@@ -3889,24 +4013,64 @@ function renderContributionIntentPageStyles() {
     </style>`;
 }
 
-const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
-  { path: '/', label: 'Home' },
-  { path: '/identity-keys', label: 'Identity' },
-  { path: '/mcp', label: 'Gateway' },
-  { path: '/mcp-docs', label: 'Docs' },
-  { path: '/submission-status', label: 'Status' },
-  { path: '/reputation', label: 'Reputation' },
-  { path: '/terms-of-use', label: 'Terms' },
-  { path: PRIVACY_PAGE_ROUTE, label: 'Privacy' },
+// Information-architecture reduction: the nine portal routes are grouped into
+// four task-oriented sections instead of a flat nine-item link farm, so a
+// visitor reads the site as Get started / Contribute / Reputation & registry /
+// Developers. Every route link is preserved; only the grouping changes.
+const PRIMARY_PORTAL_NAV_GROUPS = Object.freeze([
+  {
+    label: 'Get started',
+    items: [
+      { path: '/', label: 'Home' },
+      { path: '/onboarding', label: 'Onboarding' },
+    ],
+  },
+  {
+    label: 'Contribute',
+    items: [
+      { path: '/mcp', label: 'Gateway' },
+      { path: '/submission-status', label: 'Status' },
+    ],
+  },
+  {
+    label: 'Reputation & registry',
+    items: [
+      { path: '/reputation', label: 'Reputation' },
+      { path: '/identity-keys', label: 'Identity' },
+    ],
+  },
+  {
+    label: 'Developers',
+    items: [
+      { path: '/mcp-docs', label: 'Docs' },
+      { path: '/terms-of-use', label: 'Terms' },
+      { path: PRIVACY_PAGE_ROUTE, label: 'Privacy' },
+    ],
+  },
 ]);
 
+// Flattened view kept for any consumer that needs the full route list.
+const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze(
+  PRIMARY_PORTAL_NAV_GROUPS.flatMap((group) => group.items),
+);
+
+function navGroupId(label) {
+  return `nav-group-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+}
+
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
-  const links = PRIMARY_PORTAL_NAV_ITEMS.map(({ path, label }) => {
-    const currentAttribute = path === currentPath ? ' aria-current="page"' : '';
-    return `<a href="${escapeHtml(path)}"${currentAttribute}>${escapeHtml(label)}</a>`;
+  const groups = PRIMARY_PORTAL_NAV_GROUPS.map((group) => {
+    const groupId = navGroupId(group.label);
+    const links = group.items
+      .map(({ path, label }) => {
+        const currentAttribute = path === currentPath ? ' aria-current="page"' : '';
+        return `<a href="${escapeHtml(path)}"${currentAttribute}>${escapeHtml(label)}</a>`;
+      })
+      .join('');
+    return `<div class="nav-group" role="group" aria-labelledby="${groupId}"><span class="nav-group-label" id="${groupId}">${escapeHtml(group.label)}</span><span class="nav-group-links">${links}</span></div>`;
   }).join('');
 
-  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${links}</nav>`;
+  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${groups}</nav>`;
 }
 
 function renderPrimaryPortalNavStyles() {
@@ -3923,10 +4087,30 @@ function renderPrimaryPortalNavStyles() {
         display: flex;
         flex-wrap: wrap;
         justify-content: flex-end;
-        gap: 12px;
+        gap: 12px 22px;
         color: var(--muted);
         font-size: 0.9rem;
         font-weight: 700;
+      }
+
+      .nav-group {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .nav-group-label {
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .nav-group-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
       }
 
       .topnav a { color: var(--ink); }
@@ -4069,7 +4253,7 @@ function renderRouteCards() {
             <p>${escapeHtml(definition.label)}</p>
             ${renderRouteCardDestination(definition.path)}
           </div>
-          <span>${escapeHtml(getRouteStatus(definition))}</span>
+          <span>${escapeHtml(humanizeStatus(getRouteStatus(definition), definition.publicStatusHint))}</span>
         </article>
       `,
     )
@@ -5033,6 +5217,8 @@ function buildContributionIntentResponse({
   accepted,
   liveWrite,
   message,
+  requestId,
+  error,
   receiptId,
   nextStep,
   errors,
@@ -5051,29 +5237,34 @@ function buildContributionIntentResponse({
     accepted,
     liveWrite,
     message,
+    ...(requestId ? { requestId } : {}),
+    ...(error ? { error } : {}),
     ...(receiptId ? { receiptId } : {}),
     ...(nextStep ? { nextStep } : {}),
     ...(Array.isArray(errors) && errors.length ? { errors } : {}),
   };
 }
 
-function buildContributionIntentDisabledResponse(route = CONTRIBUTION_INTENT_CONTRACT_PATH) {
+function buildContributionIntentDisabledResponse(route = CONTRIBUTION_INTENT_CONTRACT_PATH, { requestId } = {}) {
   return buildContributionIntentResponse({
     route,
     status: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.status,
     accepted: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.accepted,
     liveWrite: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.liveWrite,
     message: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.message,
+    requestId,
+    error: 'write_disabled',
     nextStep: CONTRIBUTION_INTENT_CONTRACT.disabledResponse.nextStep,
   });
 }
 
-function buildContributionIntentAcceptedResponse(receiptId, nextStep, route = CONTRIBUTION_INTENT_CONTRACT_PATH) {
+function buildContributionIntentAcceptedResponse(receiptId, nextStep, route = CONTRIBUTION_INTENT_CONTRACT_PATH, { requestId } = {}) {
   return buildContributionIntentResponse({
     route,
     status: 'accepted',
     accepted: true,
     liveWrite: true,
+    requestId,
     receiptId,
     nextStep,
     message: 'Contribution intent accepted, persisted, and fleet notification queued.',
@@ -5085,6 +5276,7 @@ function buildContributionIntentRejectedResponse(
   nextStep,
   errors = [],
   route = CONTRIBUTION_INTENT_CONTRACT_PATH,
+  { requestId, error = 'invalid_request' } = {},
 ) {
   return buildContributionIntentResponse({
     route,
@@ -5092,6 +5284,8 @@ function buildContributionIntentRejectedResponse(
     accepted: false,
     liveWrite: true,
     message,
+    requestId,
+    error,
     nextStep,
     errors,
   });
@@ -5152,6 +5346,7 @@ function renderContributionIntentPage({ title, heading, lead, body, path = CONTR
       <p>${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
       ${body}
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -5359,6 +5554,8 @@ async function handleContributionIntentPost(
   telemetry,
   routePath = CONTRIBUTION_INTENT_CONTRACT_PATH,
 ) {
+  telemetry = withRequestTelemetry(req, telemetry, routePath);
+  const requestId = telemetry.requestId;
   const renderHtml = shouldRenderContributionIntentHtml(req);
   const intakeGate = buildContributionIntakeGate();
 
@@ -5369,8 +5566,9 @@ async function handleContributionIntentPost(
       'Submit directly to the Bittrees portal origin or use a server-to-server client without browser Origin.',
       ['Origin is not allowed for the contribution-intake gateway.'],
       routePath,
+      { requestId, error: 'origin_not_allowed' },
     );
-    const responseTelemetry = { ...telemetry, status: 403 };
+    const responseTelemetry = { ...telemetry, status: 403, error: 'origin_not_allowed', outcome: 'rejected' };
     if (renderHtml) {
       return sendBody(res, 403, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5380,8 +5578,8 @@ async function handleContributionIntentPost(
 
   if (!intakeGate.accepted) {
     req.resume?.();
-    const responseBody = buildContributionIntentDisabledResponse(routePath);
-    const responseTelemetry = { ...telemetry, status: 501 };
+    const responseBody = buildContributionIntentDisabledResponse(routePath, { requestId });
+    const responseTelemetry = { ...telemetry, status: 501, error: 'write_disabled', outcome: 'not_implemented' };
     if (renderHtml) {
       return sendBody(res, 501, renderContributionIntentDisabledPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5396,8 +5594,9 @@ async function handleContributionIntentPost(
       'Wait before retrying. Repeated submissions do not create contributor rights or review priority.',
       ['Too many contribution-intent POST requests from the same client.'],
       routePath,
+      { requestId, error: 'rate_limited' },
     );
-    const responseTelemetry = { ...telemetry, status: 429 };
+    const responseTelemetry = { ...telemetry, status: 429, error: 'rate_limited', outcome: 'rejected' };
     const headers = { 'Retry-After': String(rateLimit.retryAfterSeconds) };
     if (renderHtml) {
       return sendBody(res, 429, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry, headers);
@@ -5413,8 +5612,9 @@ async function handleContributionIntentPost(
       'Submit application/json or application/x-www-form-urlencoded data that matches the documented request schema.',
       ['Content-Type must be application/json or application/x-www-form-urlencoded.'],
       routePath,
+      { requestId, error: 'unsupported_media_type' },
     );
-    const responseTelemetry = { ...telemetry, status: 415 };
+    const responseTelemetry = { ...telemetry, status: 415, error: 'unsupported_media_type', outcome: 'rejected' };
     if (renderHtml) {
       return sendBody(res, 415, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5433,8 +5633,14 @@ async function handleContributionIntentPost(
       'Submit a valid contribution-intent request no larger than 1 MiB that matches the documented schema.',
       [],
       routePath,
+      { requestId, error: statusCode === 413 ? 'request_body_too_large' : 'request_body_unreadable' },
     );
-    const responseTelemetry = { ...telemetry, status: statusCode };
+    const responseTelemetry = {
+      ...telemetry,
+      status: statusCode,
+      error: statusCode === 413 ? 'request_body_too_large' : 'request_body_unreadable',
+      outcome: 'rejected',
+    };
     if (renderHtml) {
       return sendBody(res, statusCode, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5450,8 +5656,9 @@ async function handleContributionIntentPost(
       'Submit a JSON object or application/x-www-form-urlencoded body that matches the documented request schema.',
       ['Request body must be valid JSON unless it uses application/x-www-form-urlencoded form encoding.'],
       routePath,
+      { requestId, error: 'invalid_json' },
     );
-    const responseTelemetry = { ...telemetry, status: 400 };
+    const responseTelemetry = { ...telemetry, status: 400, error: 'invalid_json', outcome: 'rejected' };
     if (renderHtml) {
       return sendBody(res, 400, renderContributionIntentValidationPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5465,8 +5672,9 @@ async function handleContributionIntentPost(
       'Fix the validation errors and resubmit the contribution intent.',
       validation.errors,
       routePath,
+      { requestId, error: 'invalid_request' },
     );
-    const responseTelemetry = { ...telemetry, status: 400 };
+    const responseTelemetry = { ...telemetry, status: 400, error: 'invalid_request', outcome: 'rejected' };
     if (renderHtml) {
       return sendBody(res, 400, renderContributionIntentValidationPage(responseBody, payload), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5495,15 +5703,16 @@ async function handleContributionIntentPost(
 
   try {
     await persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord);
-  } catch {
-    console.error('Contribution intent persistence failed.');
+  } catch (error) {
+    logServerError('Contribution intent persistence failed.', error, telemetry);
     const responseBody = buildContributionIntentRejectedResponse(
       'Contribution intent could not be persisted for lead review.',
       'Retry later or contact the owning lead if the error persists.',
       [],
       routePath,
+      { requestId, error: 'internal_error' },
     );
-    const responseTelemetry = { ...telemetry, status: 500 };
+    const responseTelemetry = { ...telemetry, status: 500, error: 'internal_error', outcome: 'rejected' };
     if (renderHtml) {
       return sendBody(res, 500, renderContributionIntentValidationPage(responseBody, payload), 'text/html; charset=utf-8', includeBody, responseTelemetry);
     }
@@ -5514,8 +5723,9 @@ async function handleContributionIntentPost(
     receiptId,
     buildContributionIntentAcceptanceNextStep(notificationRecord),
     routePath,
+    { requestId },
   );
-  const responseTelemetry = { ...telemetry, status: 202 };
+  const responseTelemetry = { ...telemetry, status: 202, outcome: 'accepted' };
   if (renderHtml) {
     return sendBody(res, 202, renderContributionIntentReceiptPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
   }
@@ -5982,7 +6192,7 @@ export function renderLandingPage() {
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <div class="topline-meta">
           ${renderPrimaryPortalNav('/')}
-          <span class="status">${escapeHtml(LAUNCH_STATUS.status)}</span>
+          <span class="status">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</span>
         </div>
       </header>
       <p class="legal-notice">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
@@ -6111,6 +6321,7 @@ export function renderLandingPage() {
         </table>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6316,7 +6527,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
       </header>
 
       <section class="hero" aria-labelledby="mcp-title">
-        <p class="status">${escapeHtml(MCP_GATEWAY.status)}</p>
+        <p class="status">${escapeHtml(humanizeStatus(MCP_GATEWAY.status))}</p>
         <h1 id="mcp-title">${escapeHtml(pageHeading)}</h1>
         <p class="lede">${escapeHtml(pageLead)}</p>
         <p class="lede">
@@ -6352,6 +6563,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         <p>Direct external-agent production mutation, unsupported public Bittrees claims, and secret-bearing payloads are out of scope.</p>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6375,7 +6587,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
     (opportunity) => `
       <tr>
         <td><code>${escapeHtml(opportunity.id)}</code></td>
-        <td>${escapeHtml(opportunity.status)}</td>
+        <td>${escapeHtml(humanizeStatus(opportunity.status))}</td>
         <td>${escapeHtml(publicSafeString(opportunity.owner))}</td>
         <td>${escapeHtml(opportunity.nextAction)}</td>
       </tr>
@@ -6403,7 +6615,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <div class="topline-meta">
           ${renderPrimaryPortalNav('/submission-status')}
-          <span class="status">human-view-ready</span>
+          <span class="status">${escapeHtml(humanizeStatus('human-view-ready'))}</span>
         </div>
       </header>
 
@@ -6459,6 +6671,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
         </table>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6509,7 +6722,7 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <div class="topline-meta">
           ${renderPrimaryPortalNav('/reputation')}
-          <span class="status">human-view-ready</span>
+          <span class="status">${escapeHtml(humanizeStatus('human-view-ready'))}</span>
         </div>
       </header>
 
@@ -6555,6 +6768,87 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
         </table>
       </section>
     </main>
+    ${renderPortalFooter()}
+  </body>
+</html>`;
+}
+
+// Shared site footer landmark. Self-contained (scoped inline <style>, permitted
+// by the portal CSP style-src 'unsafe-inline') so it renders consistently on
+// every page without editing each page's own style block.
+function renderPortalFooter() {
+  const year = new Date().getUTCFullYear();
+  return `<footer class="site-footer" aria-label="Site information">
+      <style>
+        .site-footer {
+          width: min(1120px, calc(100% - 40px));
+          margin: 0 auto;
+          border-top: 1px solid var(--line, #cfd7d0);
+          padding: 22px 0 28px;
+          color: var(--muted, #5e6963);
+          font-size: 0.86rem;
+          line-height: 1.6;
+        }
+        .site-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 10px; font-weight: 700; }
+        .site-footer a { color: var(--ink, #17201c); }
+        .site-footer p { margin: 6px 0 0; max-width: 78ch; }
+      </style>
+      <nav aria-label="Footer routes">
+        <a href="/">Home</a>
+        <a href="/onboarding">Onboarding</a>
+        <a href="/mcp">Gateway</a>
+        <a href="/submission-status">Status</a>
+        <a href="/terms-of-use">Terms</a>
+        <a href="/privacy">Privacy</a>
+      </nav>
+      <p>agent.bittrees.org — the Bittrees agent contribution portal. Prelaunch staging surface; nothing here is legal, financial, tax, or professional advice, an offer, or a grant of authority.</p>
+      <p>&copy; ${year} Bittrees. All rights reserved.</p>
+    </footer>`;
+}
+
+export function renderNotFoundPage() {
+  const pageTitle = 'Page not found - agent.bittrees.org';
+  const pageDescription =
+    'The requested page was not found on the agent.bittrees.org contribution portal.';
+  const routeItems = ROUTE_DEFINITIONS
+    .filter((definition) => definition.kind === 'html' && definition.path !== '/')
+    .map((definition) => `<li><a href="${escapeHtml(definition.path)}">${escapeHtml(definition.label)}</a></li>`)
+    .join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/404' })}
+    ${renderHumanLookupStyles()}
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content">
+      <header class="topline">
+        <p class="brand"><a href="/">agent.bittrees.org</a></p>
+        <div class="topline-meta">
+          ${renderPrimaryPortalNav('/404')}
+          <span class="status">Not found</span>
+        </div>
+      </header>
+
+      <section class="hero" aria-labelledby="notfound-title">
+        <h1 id="notfound-title">Page not found.</h1>
+        <p class="lede">
+          The page you requested does not exist on this portal. Use the links below to reach a working route,
+          or return to the <a href="/">home page</a>.
+        </p>
+      </section>
+
+      <section class="band" aria-labelledby="notfound-routes-title">
+        <h2 id="notfound-routes-title">Portal pages</h2>
+        <ul>${routeItems}</ul>
+      </section>
+    </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6583,7 +6877,7 @@ export function renderTermsOfUsePage() {
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <div class="topline-meta">
           ${renderPrimaryPortalNav('/terms-of-use')}
-          <span class="status">${escapeHtml(termsStatus.status)}</span>
+          <span class="status">${escapeHtml(humanizeStatus(termsStatus.status))}</span>
         </div>
       </header>
 
@@ -6599,7 +6893,7 @@ export function renderTermsOfUsePage() {
         <h2 id="terms-status-title">Status</h2>
         <table>
           <tbody>
-            <tr><th>Content status</th><td><code>${escapeHtml(termsStatus.contentStatus)}</code></td></tr>
+            <tr><th>Content status</th><td><code>${escapeHtml(humanizeStatus(termsStatus.contentStatus))}</code></td></tr>
             <tr><th>Publication status</th><td>${escapeHtml(termsStatus.publicationStatus)}</td></tr>
             <tr><th>Legal content owner</th><td>${escapeHtml(termsStatus.legalContentOwner)}</td></tr>
             <tr><th>Required next action</th><td>${escapeHtml(termsStatus.requiredNextAction)}</td></tr>
@@ -6615,6 +6909,7 @@ export function renderTermsOfUsePage() {
         </div>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6643,7 +6938,7 @@ export function renderPrivacyPage() {
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <div class="topline-meta">
           ${renderPrimaryPortalNav(PRIVACY_PAGE_ROUTE)}
-          <span class="status">${escapeHtml(privacyStatus.status)}</span>
+          <span class="status">${escapeHtml(humanizeStatus(privacyStatus.status))}</span>
         </div>
       </header>
 
@@ -6666,7 +6961,7 @@ export function renderPrivacyPage() {
         <h2 id="privacy-status-title">Publication status</h2>
         <table>
           <tbody>
-            <tr><th>Content status</th><td><code>${escapeHtml(privacyStatus.contentStatus)}</code></td></tr>
+            <tr><th>Content status</th><td><code>${escapeHtml(humanizeStatus(privacyStatus.contentStatus))}</code></td></tr>
             <tr><th>Publication status</th><td>${escapeHtml(privacyStatus.publicationStatus)}</td></tr>
             <tr><th>Legal content owner</th><td>${escapeHtml(privacyStatus.legalContentOwner)}</td></tr>
             <tr><th>Required next action</th><td>${escapeHtml(privacyStatus.requiredNextAction)}</td></tr>
@@ -6682,6 +6977,7 @@ export function renderPrivacyPage() {
         </div>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6726,7 +7022,7 @@ export function renderOnboardingPage() {
     <main id="main-content">
       <header class="topline">
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">${escapeHtml(contract.status)}</span>
+        <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
       </header>
 
       <section class="hero" aria-labelledby="onboarding-title">
@@ -6761,6 +7057,7 @@ export function renderOnboardingPage() {
         </table>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -6789,7 +7086,11 @@ function rolloutGateSummaryItems(rolloutGates) {
 
   return ROLLOUT_GATE_IDS.map((gateId) => {
     const gate = isPlainObject(rolloutGates[gateId]) ? rolloutGates[gateId] : {};
-    const status = rolloutGatePublicStrings(gate, ['status', 'state', 'readiness', 'result'])[0] ?? 'not reported';
+    const rawStatus = rolloutGatePublicStrings(gate, ['status', 'state', 'readiness', 'result'])[0];
+    // Collapse the raw machine gate slug (e.g. "blocked") to the public status
+    // vocabulary so the human page never renders `status: blocked`. The precise
+    // slug stays on /identity-keys.json for machine consumers.
+    const status = rawStatus ? humanizeStatus(rawStatus) : 'not reported';
     const blockers = rolloutGatePublicStrings(gate, [
       'blocker',
       'blockerState',
@@ -6823,7 +7124,7 @@ export function renderIdentityKeysPage() {
   const ensRollout = IDENTITY_KEYS_PUBLIC_CONTRACT.ensPrimaryNameRollout;
   const ensCompletionEvidence = ensRollout.completionEvidence;
   const ensEvidenceRows = [
-    ['Status', ensRollout.status],
+    ['Status', humanizeStatus(ensRollout.status)],
     ['Execution', ensCompletionEvidence.executionProgress],
     ['Transaction hashes', `${ensCompletionEvidence.transactionHashCount} transaction hashes`],
     ['Uncreated names', `${ensCompletionEvidence.uncreatedNameCount} names uncreated`],
@@ -6858,7 +7159,7 @@ export function renderIdentityKeysPage() {
       (level) => `
         <tr>
           <td>${escapeHtml(level.level)}</td>
-          <td>${escapeHtml(level.automation)}</td>
+          <td>${escapeHtml(humanizeStatus(level.automation))}</td>
           <td>${escapeHtml(level.description)}</td>
         </tr>
       `,
@@ -7054,7 +7355,7 @@ export function renderIdentityKeysPage() {
         <p class="brand"><a href="/">agent.bittrees.org</a></p>
         <div class="topline-meta">
           ${renderPrimaryPortalNav('/identity-keys')}
-          <span class="status">${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.status)}</span>
+          <span class="status">${escapeHtml(humanizeStatus(IDENTITY_KEYS_PUBLIC_CONTRACT.status, 'coming-soon'))}</span>
         </div>
       </header>
 
@@ -7075,7 +7376,7 @@ export function renderIdentityKeysPage() {
         <div>
           <p class="lede">
             ${escapeHtml(ensRollout.scope)}
-            Current state: <code>${escapeHtml(ensRollout.status)}</code>.
+            Current state: <code>${escapeHtml(humanizeStatus(ensRollout.status))}</code>.
             This page reports status only and does not authorize ENS mutation, wallet changes, signing, or broadcasting.
           </p>
           <table>
@@ -7085,7 +7386,7 @@ export function renderIdentityKeysPage() {
           <ul>${ensRequiredGateItems}</ul>
           <p class="lede">
             Future-agent provisioning:
-            <code>${escapeHtml(ensRollout.futureAgentProvisioning.status)}</code>.
+            <code>${escapeHtml(humanizeStatus(ensRollout.futureAgentProvisioning.status, 'coming-soon'))}</code>.
             ${escapeHtml(ensRollout.futureAgentProvisioning.requirement)}
           </p>
           <ul>${futureAgentProvisioningItems}</ul>
@@ -7118,7 +7419,7 @@ export function renderIdentityKeysPage() {
       <section class="band" aria-labelledby="rollout-gates-title">
         <h2 id="rollout-gates-title">Contributor-signing rollout gates</h2>
         <div>
-          <p class="lede">Blocker state: <code>${escapeHtml(rolloutGateState)}</code></p>
+          <p class="lede">Blocker state: <code>${escapeHtml(humanizeStatus(rolloutGateState))}</code></p>
           ${rolloutBlockerItems ? `<ul>${rolloutBlockerItems}</ul>` : ''}
           <p class="lede">Gate summary:</p>
           <ul>${rolloutGateItems}</ul>
@@ -7139,6 +7440,7 @@ export function renderIdentityKeysPage() {
         </table>
       </section>
     </main>
+    ${renderPortalFooter()}
   </body>
 </html>`;
 }
@@ -7160,8 +7462,81 @@ export function buildJsonResponse(routeDefinition, generatedAt = new Date().toIS
   };
 }
 
-function logTelemetryRequest({ timestamp = new Date().toISOString(), method, path, status }) {
-  console.log(JSON.stringify({ timestamp, method, path, status }));
+function readSingleHeaderValue(headers, name) {
+  const value = headers?.[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function resolvePortalRequestId(req) {
+  if (req?.[PORTAL_REQUEST_ID]) return req[PORTAL_REQUEST_ID];
+  const candidate = String(readSingleHeaderValue(req?.headers, 'x-request-id') ?? '').trim();
+  const requestId = REQUEST_ID_PATTERN.test(candidate) ? candidate : randomUUID();
+  if (req) req[PORTAL_REQUEST_ID] = requestId;
+  return requestId;
+}
+
+function withRequestTelemetry(req, telemetry, defaultPath) {
+  return {
+    ...telemetry,
+    method: telemetry?.method ?? req?.method ?? 'GET',
+    path: telemetry?.path ?? defaultPath,
+    requestId: telemetry?.requestId ?? resolvePortalRequestId(req),
+  };
+}
+
+function augmentTelemetryFromJsonBody(telemetry, body) {
+  if (!telemetry || !body || typeof body !== 'object' || Array.isArray(body)) return telemetry;
+  const nextTelemetry = { ...telemetry };
+  if (!nextTelemetry.error) {
+    if (typeof body.error === 'string') nextTelemetry.error = body.error;
+    else if (body.error && typeof body.error === 'object') nextTelemetry.error = 'jsonrpc_error';
+  }
+  if (!nextTelemetry.outcome && typeof body.status === 'string') nextTelemetry.outcome = body.status;
+  if (
+    nextTelemetry.jsonRpcCode === undefined
+    && body.error
+    && typeof body.error === 'object'
+    && Number.isInteger(body.error.code)
+  ) {
+    nextTelemetry.jsonRpcCode = body.error.code;
+  }
+  return nextTelemetry;
+}
+
+function logTelemetryRequest({
+  timestamp = new Date().toISOString(),
+  method,
+  path,
+  status,
+  requestId,
+  error,
+  outcome,
+  jsonRpcCode,
+}) {
+  const entry = { timestamp, method, path, status };
+  if (requestId) entry.requestId = requestId;
+  if (error) entry.error = error;
+  if (outcome) entry.outcome = outcome;
+  if (jsonRpcCode !== undefined) entry.jsonRpcCode = jsonRpcCode;
+  console.log(JSON.stringify(entry));
+}
+
+function logServerError(message, error, telemetry = null) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level: 'error',
+    message,
+  };
+  if (telemetry?.requestId) entry.requestId = telemetry.requestId;
+  if (telemetry?.method) entry.method = telemetry.method;
+  if (telemetry?.path) entry.path = telemetry.path;
+  if (error instanceof Error) {
+    entry.errorMessage = error.message;
+    if (error.stack) entry.errorStack = error.stack;
+  } else if (error !== undefined) {
+    entry.errorMessage = String(error);
+  }
+  console.error(JSON.stringify(entry));
 }
 
 function sendBody(res, statusCode, body, contentType, includeBody = true, telemetry = null, extraHeaders = {}) {
@@ -7169,10 +7544,8 @@ function sendBody(res, statusCode, body, contentType, includeBody = true, teleme
   res.writeHead(statusCode, {
     'Content-Type': contentType,
     'Content-Length': payload.byteLength,
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Robots-Tag': 'noindex, nofollow',
-    ...PORTAL_SECURITY_HEADERS,
+    ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
+    ...PORTAL_RESPONSE_HARDENING_HEADERS,
     ...extraHeaders,
   });
   res.end(includeBody ? payload : undefined);
@@ -7181,16 +7554,22 @@ function sendBody(res, statusCode, body, contentType, includeBody = true, teleme
 }
 
 function sendJson(res, statusCode, body, includeBody = true, telemetry = null, extraHeaders = {}) {
-  sendBody(res, statusCode, `${JSON.stringify(body, null, 2)}\n`, 'application/json; charset=utf-8', includeBody, telemetry, extraHeaders);
+  sendBody(
+    res,
+    statusCode,
+    `${JSON.stringify(body, null, 2)}\n`,
+    'application/json; charset=utf-8',
+    includeBody,
+    augmentTelemetryFromJsonBody(telemetry, body),
+    extraHeaders,
+  );
 }
 
 function sendEmpty(res, statusCode, telemetry = null, extraHeaders = {}) {
   res.writeHead(statusCode, {
     'Content-Length': '0',
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Robots-Tag': 'noindex, nofollow',
-    ...PORTAL_SECURITY_HEADERS,
+    ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
+    ...PORTAL_RESPONSE_HARDENING_HEADERS,
     ...extraHeaders,
   });
   res.end();
@@ -7479,6 +7858,7 @@ export async function handleMcpRequest(
   telemetry = { method: req.method ?? 'GET', path: MCP_GATEWAY.path },
   workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
 ) {
+  telemetry = withRequestTelemetry(req, telemetry, MCP_GATEWAY.path);
   const includeBody = req.method !== 'HEAD';
   const audit = (details) => appendMcpAuditEvent(req, details);
 
@@ -7618,11 +7998,12 @@ function registryErrorStatus(error) {
   return 400;
 }
 
-function registryErrorBody(error) {
+function registryErrorBody(error, requestId) {
   return {
     $schema: 'agent.registry.error.v1',
     error: error.code ?? 'registry_error',
     message: error.message,
+    ...(requestId ? { requestId } : {}),
     ...(error.details?.audit_event_id ? { audit_event_id: error.details.audit_event_id } : {}),
     ...(error.details?.quarantine_id ? { quarantine_id: error.details.quarantine_id } : {}),
   };
@@ -7652,10 +8033,12 @@ export async function handleRegistryRequest(
   telemetry = { method: req.method ?? 'GET', path: req.url ?? '/v1/registry' },
   controlPlane = LIVE_REGISTRY_CONTROL_PLANE,
 ) {
+  telemetry = withRequestTelemetry(req, telemetry, req.url ?? '/v1/registry');
   const includeBody = req.method !== 'HEAD';
   const pathname = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`).pathname;
   const agentMatch = pathname.match(/^\/v1\/registry\/agents\/([^/]+)$/);
   const agentId = agentMatch ? decodeURIComponent(agentMatch[1]) : undefined;
+  const buildRegistryErrorBody = (error) => registryErrorBody(error, telemetry.requestId);
 
   try {
     if (req.method === 'GET' || req.method === 'HEAD') {
@@ -7666,17 +8049,17 @@ export async function handleRegistryRequest(
         const feed = buildPublicRegistryFeed(await controlPlane.registryFeed());
         const record = feed.records.find((candidate) => candidate.agentId === agentId);
         if (!record) {
-          return sendJson(res, 404, registryErrorBody(Object.assign(new Error('registry record not found'), { code: 'unknown_agent' })), includeBody, { ...telemetry, status: 404 });
+          return sendJson(res, 404, buildRegistryErrorBody(Object.assign(new Error('registry record not found'), { code: 'unknown_agent' })), includeBody, { ...telemetry, status: 404 });
         }
         return sendJson(res, 200, record, includeBody, { ...telemetry, status: 200 });
       }
-      return sendJson(res, 404, registryErrorBody(new Error('registry route not found')), includeBody, { ...telemetry, status: 404 });
+      return sendJson(res, 404, buildRegistryErrorBody(new Error('registry route not found')), includeBody, { ...telemetry, status: 404 });
     }
 
     if (req.method !== 'PUT' && req.method !== 'POST') {
       req.resume?.();
       return sendJson(res, 405, {
-        ...registryErrorBody(Object.assign(new Error('registry route method is not allowed'), { code: 'method_not_allowed' })),
+        ...buildRegistryErrorBody(Object.assign(new Error('registry route method is not allowed'), { code: 'method_not_allowed' })),
         allowedMethods: pathname === '/v1/registry/heartbeats' ? ['POST'] : ['GET', 'HEAD', 'PUT'],
       }, includeBody, { ...telemetry, status: 405 }, { Allow: pathname === '/v1/registry/heartbeats' ? 'GET, HEAD, POST' : 'GET, HEAD, PUT' });
     }
@@ -7684,13 +8067,13 @@ export async function handleRegistryRequest(
     const mediaType = String(req.headers['content-type'] ?? '').toLowerCase();
     if (!mediaType.includes('application/json')) {
       req.resume?.();
-      return sendJson(res, 415, registryErrorBody(Object.assign(new Error('Content-Type must be application/json'), { code: 'unsupported_media_type' })), includeBody, { ...telemetry, status: 415 });
+      return sendJson(res, 415, buildRegistryErrorBody(Object.assign(new Error('Content-Type must be application/json'), { code: 'unsupported_media_type' })), includeBody, { ...telemetry, status: 415 });
     }
 
     const isHeartbeat = pathname === '/v1/registry/heartbeats';
     if ((!isHeartbeat && !agentId) || (isHeartbeat && req.method !== 'POST') || (!isHeartbeat && req.method !== 'PUT')) {
       req.resume?.();
-      return sendJson(res, 405, registryErrorBody(Object.assign(new Error('registry route method is not allowed'), { code: 'method_not_allowed' })), includeBody, { ...telemetry, status: 405 });
+      return sendJson(res, 405, buildRegistryErrorBody(Object.assign(new Error('registry route method is not allowed'), { code: 'method_not_allowed' })), includeBody, { ...telemetry, status: 405 });
     }
 
     let rawBody;
@@ -7703,14 +8086,14 @@ export async function handleRegistryRequest(
     } catch (error) {
       await recordRegistryParseFailure(controlPlane, isHeartbeat ? 'heartbeat' : 'registry_write', rawBody, error);
       const statusCode = error.statusCode ?? (error.code === 'invalid_json' || error.code === 'duplicate_json_key' ? 400 : 413);
-      return sendJson(res, statusCode, registryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
+      return sendJson(res, statusCode, buildRegistryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
     }
 
     if (!isHeartbeat) {
       const submittedAgentId = payload?.agent_id ?? payload?.agentId;
       if (submittedAgentId !== agentId) {
         const error = Object.assign(new Error('agent_id must match the URL path'), { code: 'agent_binding_mismatch' });
-        return sendJson(res, 400, registryErrorBody(error), includeBody, { ...telemetry, status: 400 });
+        return sendJson(res, 400, buildRegistryErrorBody(error), includeBody, { ...telemetry, status: 400 });
       }
     }
 
@@ -7721,13 +8104,14 @@ export async function handleRegistryRequest(
   } catch (error) {
     if (error instanceof RegistryError) {
       const statusCode = registryErrorStatus(error);
-      return sendJson(res, statusCode, registryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
+      return sendJson(res, statusCode, buildRegistryErrorBody(error), includeBody, { ...telemetry, status: statusCode });
     }
-    console.error('Registry request failed unexpectedly.');
+    logServerError('Registry request failed unexpectedly.', error, telemetry);
     const body = {
       $schema: 'agent.registry.error.v1',
       error: 'internal_error',
       message: 'The registry request could not be processed. Try again later.',
+      requestId: telemetry.requestId,
     };
     return sendJson(res, 500, body, includeBody, { ...telemetry, status: 500 });
   }
@@ -7738,10 +8122,8 @@ function sendRedirect(res, statusCode, location, telemetry = null) {
     Location: location,
     'Content-Type': 'text/plain; charset=utf-8',
     'Content-Length': '0',
-    'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-    'X-Robots-Tag': 'noindex, nofollow',
-    ...PORTAL_SECURITY_HEADERS,
+    ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
+    ...PORTAL_RESPONSE_HARDENING_HEADERS,
   });
   res.end();
 
@@ -7916,7 +8298,7 @@ export function createRequestHandler({
     const pathname = rawPathname === CONTRIBUTIONS_API_ALIAS_BASE_PATH || rawPathname.startsWith(`${CONTRIBUTIONS_API_ALIAS_BASE_PATH}/`)
       ? `${WORKFLOW_API_BASE_PATH}${rawPathname.slice(CONTRIBUTIONS_API_ALIAS_BASE_PATH.length)}`
       : rawPathname;
-    const telemetry = { method: req.method ?? 'GET', path: rawPathname };
+    const telemetry = withRequestTelemetry(req, { method: req.method ?? 'GET', path: rawPathname }, rawPathname);
     const normalizedPath = normalizeCanonicalPath(pathname);
 
     if (pathname !== normalizedPath && CANONICAL_ROUTE_PATHS.has(normalizedPath)) {
@@ -8204,6 +8586,18 @@ export function createRequestHandler({
       return sendJson(res, 200, buildJsonResponse(routeDefinition, undefined, { releaseMetadata }), includeBody, {
         ...telemetry,
         status: 200,
+      });
+    }
+
+    // Browsers get a branded HTML 404; machine clients keep the JSON contract
+    // (stable error/availableRoutes shape) so agents and tooling are unaffected.
+    const acceptsHtml = String(req.headers?.accept ?? '').toLowerCase().includes('text/html');
+    if (acceptsHtml) {
+      return sendBody(res, 404, renderNotFoundPage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 404,
+        error: 'not_found',
+        outcome: 'not-found-html',
       });
     }
 

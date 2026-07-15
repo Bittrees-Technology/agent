@@ -45,6 +45,7 @@ import {
   createRequestHandler,
   getMcpAuditEvents,
   handleRegistryRequest,
+  PUBLIC_STATUS_VOCABULARY,
   renderIdentityKeysPage,
   renderLandingPage,
   renderMcpDocsPage,
@@ -56,6 +57,57 @@ import {
   renderTermsOfUsePage,
 } from '../src/portal.mjs';
 import { ONBOARDING_FLOW_CONTRACTS } from '../src/onboarding-contracts.mjs';
+
+const EXPECTED_ENV_EXAMPLE_NAMES = Object.freeze([
+  'AGENT_DEPLOYMENT_ID',
+  'AGENT_RELEASE_COMMIT_SHA',
+  'AGENT_RELEASE_TAG',
+  'AGENT_RELEASE_VERSION',
+  'BASE_URL',
+  'BITTREES_AGENT_MCP_URL',
+  'BITTREES_MCP_HTTP_URL',
+  'BRAIN_AGENT_ID',
+  'BRAIN_MCP_BASE_URL',
+  'BRAIN_URL',
+  'CONTRIBUTION_INTENTS_DATA_DIR',
+  'CONTRIBUTION_INTENTS_ENABLED',
+  'CONTRIBUTION_INTENTS_WRITE_ENABLED',
+  'CONTRIBUTION_POST_RATE_LIMIT_MAX',
+  'CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS',
+  'EXPECTED_RELEASE_COMMIT',
+  'EXPECTED_RELEASE_TAG',
+  'EXPECTED_RELEASE_VERSION',
+  'GATEWAY_ALLOWED_ORIGINS',
+  'GITHUB_REF_NAME',
+  'GITHUB_REF_TYPE',
+  'GITHUB_SHA',
+  'HOST',
+  'ID_AGENT_NAME',
+  'ID_AGENT_TEAM',
+  'ID_TEAM',
+  'MANAGER_URL',
+  'MCP_ALLOWED_ORIGINS',
+  'MCP_HTTP_TIMEOUT_MS',
+  'MCP_HTTP_URL',
+  'MCP_POST_RATE_LIMIT_MAX',
+  'MCP_POST_RATE_LIMIT_WINDOW_MS',
+  'MCP_PROTOCOL_VERSION',
+  'MCP_TARGET_URL',
+  'MCP_WRITE_TOKENS',
+  'PORT',
+  'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
+  'PORTAL_RELEASE_COMMIT_SHA',
+  'PORTAL_RELEASE_TAG',
+  'PORTAL_RELEASE_VERSION',
+  'PORTAL_WORKFLOW_STATE_PATH',
+  'RELEASE_TAG',
+  'REGISTRY_STATE_PATH',
+  'SOURCE_VERSION',
+  'VERCEL',
+  'VERCEL_DEPLOYMENT_ID',
+  'VERCEL_GIT_COMMIT_REF',
+  'VERCEL_GIT_COMMIT_SHA',
+]);
 
 async function withPortalServer(callback) {
   const server = createServer(createRequestHandler());
@@ -971,19 +1023,24 @@ test('contribution intent POST rejects unsupported media types when writes are e
     CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-media-${Date.now()}`, import.meta.url)),
   }, async () => {
     await withPortalServer(async (baseUrl) => {
+      const requestId = 'intent-media-test-01';
       const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'text/plain',
+          'X-Request-Id': requestId,
         },
         body: JSON.stringify(buildValidContributionIntentPayload()),
       });
       const body = await response.json();
 
       assert.equal(response.status, 415);
+      assert.equal(response.headers.get('x-request-id'), requestId);
       assert.equal(body.accepted, false);
       assert.equal(body.status, 'rejected');
+      assert.equal(body.requestId, requestId);
+      assert.equal(body.error, 'unsupported_media_type');
       assert.match(body.errors.join('\n'), /Content-Type must be application\/json/);
     });
   });
@@ -1124,8 +1181,20 @@ test('portal security headers enforce browser launch gate', () => {
   assert.equal(PORTAL_SECURITY_HEADERS['X-Frame-Options'], 'DENY');
   assert.equal(PORTAL_SECURITY_HEADERS['Referrer-Policy'], 'no-referrer');
   assert.equal(PORTAL_SECURITY_HEADERS['Permissions-Policy'], 'camera=(), geolocation=(), microphone=(), payment=(), usb=()');
+  assert.equal(PORTAL_SECURITY_HEADERS['X-DNS-Prefetch-Control'], 'off');
+  assert.equal(PORTAL_SECURITY_HEADERS['X-Permitted-Cross-Domain-Policies'], 'none');
+  assert.equal(PORTAL_SECURITY_HEADERS['Origin-Agent-Cluster'], '?1');
   assert.equal(PORTAL_SECURITY_HEADERS['Cross-Origin-Opener-Policy'], 'same-origin');
   assert.equal(PORTAL_SECURITY_HEADERS['Cross-Origin-Resource-Policy'], 'same-origin');
+});
+
+test('.env.example tracks the names-only portal env inventory', () => {
+  const names = readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.match(/^([A-Z_][A-Z0-9_]*)=/)?.[1] ?? null)
+    .filter(Boolean)
+    .sort();
+  assert.deepEqual(names, [...EXPECTED_ENV_EXAMPLE_NAMES].sort());
 });
 
 test('human pages expose a keyboard skip target and visible focus treatment', () => {
@@ -1154,6 +1223,9 @@ test('vercel catch-all headers mirror the portal launch gate', () => {
     assert.equal(configuredHeaders[header], value);
   }
 
+  assert.equal(configuredHeaders['CDN-Cache-Control'], 'no-store');
+  assert.equal(configuredHeaders['Vercel-CDN-Cache-Control'], 'no-store');
+  assert.equal(configuredHeaders.Pragma, 'no-cache');
   assert.equal(configuredHeaders['X-Content-Type-Options'], 'nosniff');
   assert.equal(configuredHeaders['X-Robots-Tag'], 'noindex, nofollow');
 });
@@ -1163,8 +1235,12 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
 
   assert.match(html, /Identity and keys\./);
   assert.match(html, /agent-signed-staged-state-with-guarded-authority-changes/);
-  assert.match(html, /blocked-without-explicit-controller-or-safe-approval/);
-  assert.match(html, /blocked-not-completed/);
+  // The HTML surface shows the five-state public status vocabulary; the precise
+  // machine slugs remain asserted on the JSON contract below. Both keep the
+  // truthful "identity/keys not operational, rollout not complete" state
+  // visible: the public label collapses to "Coming soon" while the execution
+  // evidence (0/68 executed, uncreated names, required gates) stays.
+  assert.match(html, /Coming soon/);
   assert.match(html, /0\/68 executed/);
   assert.match(html, /0 transaction hashes/);
   assert.match(html, /67 names uncreated/);
@@ -1173,7 +1249,14 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
   assert.match(html, /isolated-custody-attestations/);
   assert.match(html, /numeric-spend-cap/);
   assert.match(html, /broadcaster-authority/);
-  assert.match(html, /future-agent-provisioning-required/);
+  // The human identity page humanizes rollout/gate status slugs to the public
+  // vocabulary. The raw machine slug `future-agent-provisioning-required` stays
+  // on /identity-keys.json only (asserted in the JSON contract test below), so
+  // the human page renders it as "Coming soon" while keeping the truthful
+  // fail-closed requirement prose visible — the page never overstates readiness.
+  assert.doesNotMatch(html, /future-agent-provisioning-required/);
+  assert.match(html, /Future-agent provisioning:\s*<code>Coming soon<\/code>/);
+  assert.match(html, /fail closed/);
   assert.doesNotMatch(html, /live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i);
   assert.doesNotMatch(html, /rawPrivateKey|secretKey|mnemonic|seedPhrase/);
 });
@@ -1238,6 +1321,14 @@ test('identity and keys HTML renders rollout-gate summary and blocker state with
     const renderedGateLabel = gateId.replace(/[A-Z]/g, (letter) => `[- /_]?${letter.toLowerCase()}`);
     assert.match(html, new RegExp(renderedGateLabel, 'i'), `${gateId} gate should be rendered`);
   }
+
+  // Gate summaries humanize the machine status slug: the human page renders the
+  // public "Coming soon" state, never the raw `status: blocked` gate slug. The
+  // raw slug stays on /identity-keys.json (asserted in the JSON contract test).
+  // Truthful blocker prose is retained as a documented human-view exemption.
+  assert.doesNotMatch(html, /status:\s*blocked/i);
+  assert.match(html, /status: Coming soon/);
+  assert.match(html, /blocker: Pending public staging validation/);
 
   assert.doesNotMatch(html, PUBLIC_ROLLOUT_GATE_REDACTION_PATTERN);
 });
@@ -1359,6 +1450,8 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.schemaValidity.routes.includes('/gateway/contribution-intents'));
   assert.ok(response.data.monitoring.claimDrift.baselineApprovedClaimIds.includes(APPROVED_CLAIMS[0].id));
   assert.ok(response.data.monitoring.claimDrift.baselineExcludedClaimIds.includes(EXCLUDED_CLAIM_REVIEW[0].id));
+  assert.equal(response.data.monitoring.observability.responseHeaders.includes('X-Request-Id'), true);
+  assert.equal(response.data.monitoring.observability.telemetryFields.includes('requestId'), true);
   assert.ok(response.data.monitoring.errorPathChecks.some((check) => (
     check.method === 'POST'
     && check.path === '/v1/registry/heartbeats'
@@ -1601,7 +1694,11 @@ test('heartbeats route sanitizes unexpected filesystem failures instead of leaki
   const req = new EventEmitter();
   req.method = 'POST';
   req.url = '/v1/registry/heartbeats';
-  req.headers = { host: 'agent.bittrees.org', 'content-type': 'application/json' };
+  req.headers = {
+    host: 'agent.bittrees.org',
+    'content-type': 'application/json',
+    'x-request-id': 'registry-heartbeat-test-01',
+  };
   req.body = {};
   req.resume = () => req;
 
@@ -1618,7 +1715,14 @@ test('heartbeats route sanitizes unexpected filesystem failures instead of leaki
     },
   };
 
-  await handleRegistryRequest(req, res, undefined, brokenControlPlane);
+  const errorLogs = [];
+  const originalConsoleError = console.error;
+  console.error = (line) => errorLogs.push(JSON.parse(line));
+  try {
+    await handleRegistryRequest(req, res, undefined, brokenControlPlane);
+  } finally {
+    console.error = originalConsoleError;
+  }
 
   assert.equal(res.statusCode, 500);
   assert.doesNotMatch(res.body, /ENOENT/);
@@ -1626,9 +1730,57 @@ test('heartbeats route sanitizes unexpected filesystem failures instead of leaki
   assert.doesNotMatch(res.body, /mkdir/);
 
   const body = JSON.parse(res.body);
+  assert.equal(res.headers['X-Request-Id'], 'registry-heartbeat-test-01');
   assert.equal(body.$schema, 'agent.registry.error.v1');
   assert.equal(body.error, 'internal_error');
+  assert.equal(body.requestId, 'registry-heartbeat-test-01');
   assert.doesNotMatch(body.message, /ENOENT|var\/task|mkdir/);
+  assert.equal(errorLogs.length, 1);
+  assert.equal(errorLogs[0].requestId, 'registry-heartbeat-test-01');
+  assert.equal(errorLogs[0].message, 'Registry request failed unexpectedly.');
+  assert.match(errorLogs[0].errorMessage, /ENOENT/);
+  assert.match(errorLogs[0].errorStack, /ENOENT/);
+});
+
+test('portal telemetry logs request ids and stable error metadata for not found responses', async () => {
+  const handler = createRequestHandler();
+  const req = new EventEmitter();
+  req.method = 'GET';
+  req.url = '/does-not-exist';
+  req.headers = {
+    host: 'agent.bittrees.org',
+    'x-request-id': 'portal-telemetry-test-01',
+  };
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  const entries = [];
+  const originalConsoleLog = console.log;
+  console.log = (line) => entries.push(JSON.parse(line));
+  try {
+    await handler(req, res);
+  } finally {
+    console.log = originalConsoleLog;
+  }
+
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.headers['X-Request-Id'], 'portal-telemetry-test-01');
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].requestId, 'portal-telemetry-test-01');
+  assert.equal(entries[0].status, 404);
+  assert.equal(entries[0].error, 'not_found');
 });
 
 test('workflow registration route requires authorized bearer token and queues review records', async () => {
@@ -1940,6 +2092,67 @@ test('human pages expose shared primary navigation and route metadata', () => {
     );
     assert.match(page.html, /<meta name="theme-color" content="#f6f7f2" \/>/);
   }
+});
+
+test('public status badges and route cards only use the five-state public vocabulary', () => {
+  const allowed = new Set(Object.values(PUBLIC_STATUS_VOCABULARY));
+  assert.deepEqual(
+    [...allowed].sort(),
+    ['Available', 'Coming soon', 'Legal review pending', 'Preview', 'Under review'],
+  );
+
+  const pages = [
+    renderLandingPage(),
+    renderMcpGatewayPage(),
+    renderMcpDocsPage(),
+    renderIdentityKeysPage(),
+    renderSubmissionStatusPage(),
+    renderReputationPage(),
+    renderTermsOfUsePage(),
+    renderPrivacyPage(),
+    renderOnboardingPage(),
+  ].join('\n');
+
+  // Every header status badge collapses to one of the five public states.
+  const badgeValues = [...pages.matchAll(/<span class="status">([^<]*)<\/span>/g)].map(
+    (match) => match[1].trim(),
+  );
+  assert.ok(badgeValues.length > 0, 'expected at least one status badge');
+  for (const value of badgeValues) {
+    assert.ok(allowed.has(value), `status badge "${value}" is not in the public vocabulary`);
+  }
+
+  // Route-card status labels (the machine-route action grid) collapse too.
+  const routeCardStatuses = [
+    ...renderLandingPage().matchAll(/<article class="route-card">[\s\S]*?<span>([^<]*)<\/span>\s*<\/article>/g),
+  ].map((match) => match[1].trim());
+  assert.ok(routeCardStatuses.length > 0, 'expected route-card status labels');
+  for (const value of routeCardStatuses) {
+    assert.ok(allowed.has(value), `route-card status "${value}" leaks internal vocabulary`);
+  }
+
+  // Internal queue vocabulary must not appear in any status badge or route-card
+  // status label. (Detailed technical evidence in page bodies is exempt.)
+  const publicStatusLabels = [...badgeValues, ...routeCardStatuses].join(' | ').toLowerCase();
+  for (const leak of [
+    'ready-for-triage',
+    'review-gated queue',
+    'source-grounded-context-ready',
+    'daily-smoke-ready',
+    'prelaunch',
+    'human-view-ready',
+    'brief-ready',
+  ]) {
+    assert.ok(
+      !publicStatusLabels.includes(leak.toLowerCase()),
+      `internal label "${leak}" leaked into a public status label`,
+    );
+  }
+
+  // The four honest blockers keep truthful public wording.
+  assert.match(renderTermsOfUsePage(), /Legal review pending/);
+  assert.match(renderPrivacyPage(), /Legal review pending/);
+  assert.match(renderIdentityKeysPage(), /Coming soon/);
 });
 
 test('human status and reputation views render lookup results and caveats', () => {
@@ -2669,11 +2882,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.638');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.640');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
-  assert.equal(asset.sha256, '2cc2b53143e1439700243ab0ea1999d232ec41f5b317dbdf17bfa1a1cbc38779');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'df41416356d9ab99509c25d91cbc45324695107d');
-  assert.match(asset.sha256Provenance.localVerification, /102728091-byte asset/);
+  assert.equal(asset.sha256, '09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '8899e8a5332062b8ad5311554467b16922a6b1a7');
+  assert.match(asset.sha256Provenance.localVerification, /102731589-byte asset/);
   assert.equal(response.data.releases.length, 1);
 });

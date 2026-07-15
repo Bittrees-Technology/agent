@@ -41,3 +41,28 @@ jobs:
 
       - name: Build deployable static assets
         run: npm run build
+
+  push-main-verify-and-smoke:
+    name: Push main / verify:api + deployed smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Build deployable static assets
+        run: npm run build
+
+      - name: Verify the API handler contract
+        run: npm run verify:api
+
+      - name: Run the deployed route smoke suite
+        run: npm run smoke
