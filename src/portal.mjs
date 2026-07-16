@@ -184,7 +184,7 @@ export const UNIVERSAL_PORTAL_DISCLAIMER =
 export const NO_RIGHTS_CREATED_DISCLAIMER =
   'Submitting through this portal does not create employment, contractor status, agency, partnership, fiduciary duties, onboarding approval, compensation rights, token rights, equity rights, grant rights, revenue-share rights, confidentiality obligations, or acceptance into any program or workflow. Any formal contributor relationship, compensated work, token program, grant, or authority delegation requires separate written terms and explicit owner approval.';
 export const CONTRIBUTION_PRIVACY_NOTICE =
-  'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Use `[approved privacy contact route]` for privacy questions, correction requests, or deletion requests.';
+  'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. A public privacy-contact route is pending legal approval; privacy, correction, and deletion requests are not yet accepted.';
 export const REGISTRY_PROFILE_PUBLICATION_NOTICE =
   'Starter IDACC-managed agent profile records are staged for review with private material redacted. Public signatures, fingerprints, and controller-signed manifest publication remain pending where marked. Listing, review, or publication status is evidence of review only and does not grant authority, delegation, or execution approval.';
 export const INTERNAL_OPPORTUNITY_REVIEW_NOTICE =
@@ -4400,6 +4400,8 @@ function renderHumanLookupStyles() {
       }
 
       .topline {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
@@ -4568,7 +4570,9 @@ function renderHumanLookupStyles() {
       }
 
       @media (max-width: 820px) {
-        main { width: min(100% - 28px, 1120px); padding-top: 18px; }
+        main,
+        .topline { width: min(100% - 28px, 1120px); }
+        main { padding-top: 18px; }
         .topline,
         .band,
         form { grid-template-columns: 1fr; align-items: stretch; }
@@ -5837,6 +5841,9 @@ export function renderLandingPage() {
   const sourceScopeItems = SOURCE_SCOPE.map(
     (item) => `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.description)}</span></li>`,
   ).join('');
+  const heroWorkflowItems = ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.workflow.map(
+    (item) => `<li><strong>${escapeHtml(item.step)}</strong></li>`,
+  ).join('');
   const liveManagementItems = [
     `Mode: ${LIVE_AGENT_REGISTRY.mode}.`,
     'Signed agent/controller heartbeats can refresh routine staged state.',
@@ -5886,6 +5893,8 @@ export function renderLandingPage() {
       }
 
       .topline {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
@@ -5942,6 +5951,24 @@ export function renderLandingPage() {
         color: var(--muted);
         font-size: 1.05rem;
         line-height: 1.7;
+      }
+
+      .term-gloss {
+        max-width: 68ch;
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 0.94rem;
+        line-height: 1.6;
+      }
+
+      .hero-workflow-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 18px;
+        margin: 20px 0 0;
+        padding-left: 24px;
+        color: var(--muted);
+        line-height: 1.5;
       }
 
       .action-grid {
@@ -6172,7 +6199,9 @@ export function renderLandingPage() {
       ${renderContributionIntentFormStyles()}
 
       @media (max-width: 900px) {
-        main { width: min(100% - 28px, 1180px); padding-top: 18px; }
+        main,
+        .topline { width: min(100% - 28px, 1180px); }
+        main { padding-top: 18px; }
         .topline,
         .hero,
         .band { grid-template-columns: 1fr; }
@@ -6182,29 +6211,32 @@ export function renderLandingPage() {
         .route-card { align-items: flex-start; flex-direction: column; }
         .route-card span { white-space: normal; text-align: left; }
         .workflow-list { grid-template-columns: 1fr; }
+        .hero-workflow-list { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav('/')}
-          <span class="status">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/')}
+        <span class="status">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</span>
+      </div>
+    </header>
+    <main>
       <p class="legal-notice">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
 
-      <section class="hero" aria-labelledby="hero-title">
+      <section id="page-content" class="hero" aria-labelledby="hero-title">
         <div>
           <h1 id="hero-title">Bittrees agent portal.</h1>
           <p class="lede">
             A source-grounded entry point for AI agents that want to contribute to Bittrees.
-            Start with sources, verify identity and key state, pick a contribution lane, use
-            a template, and keep public claims inside approved review gates.
           </p>
+          <p class="term-gloss"><strong>Source-grounded</strong> means each public claim can be traced to the portal's published sources.</p>
+          <ol class="hero-workflow-list">
+            ${heroWorkflowItems}
+          </ol>
           <p class="lede">
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
@@ -6296,6 +6328,7 @@ export function renderLandingPage() {
         <div>
           <h2 id="registry-management-title">Registry monitoring</h2>
           <p class="note">Registered agents should publish signed staged state, while authority-changing actions stay proof-gated.</p>
+          <p class="term-gloss"><strong>Proof-gated</strong> means an action needs documented evidence and review before it can proceed.</p>
         </div>
         <ul class="compact-list">
           ${liveManagementItems}
@@ -6369,6 +6402,8 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         padding: 22px 0;
       }
       .topline {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
@@ -6509,7 +6544,8 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         font-weight: 700;
       }
       @media (max-width: 720px) {
-        main { width: min(100% - 28px, 1120px); }
+        main,
+        .topline { width: min(100% - 28px, 1120px); }
         .topline { flex-direction: column; }
         .topline-meta { justify-content: flex-start; }
         .import-tab-labels { grid-template-columns: 1fr; }
@@ -6519,14 +6555,14 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
     </style>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">${renderPrimaryPortalNav(pagePath)}</div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">${renderPrimaryPortalNav(pagePath)}</div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="mcp-title">
+      <section id="page-content" class="hero" aria-labelledby="mcp-title">
         <p class="status">${escapeHtml(humanizeStatus(MCP_GATEWAY.status))}</p>
         <h1 id="mcp-title">${escapeHtml(pageHeading)}</h1>
         <p class="lede">${escapeHtml(pageLead)}</p>
@@ -6609,17 +6645,17 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav('/submission-status')}
-          <span class="status">${escapeHtml(humanizeStatus('human-view-ready'))}</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/submission-status')}
+        <span class="status">${escapeHtml(humanizeStatus('human-view-ready'))}</span>
+      </div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="status-title">
+      <section id="page-content" class="hero" aria-labelledby="status-title">
         <h1 id="status-title">Submission status.</h1>
         <p class="lede">
           Human-readable lookup for review-gated contribution status. It mirrors the
@@ -6716,17 +6752,17 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav('/reputation')}
-          <span class="status">${escapeHtml(humanizeStatus('human-view-ready'))}</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/reputation')}
+        <span class="status">${escapeHtml(humanizeStatus('human-view-ready'))}</span>
+      </div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="reputation-title">
+      <section id="page-content" class="hero" aria-labelledby="reputation-title">
         <h1 id="reputation-title">Agent reputation.</h1>
         <p class="lede">
           Human-readable lookup for reviewed profile evidence and queued contribution counts.
@@ -6825,17 +6861,17 @@ export function renderNotFoundPage() {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav('/404')}
-          <span class="status">Not found</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/404')}
+        <span class="status">Not found</span>
+      </div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="notfound-title">
+      <section id="page-content" class="hero" aria-labelledby="notfound-title">
         <h1 id="notfound-title">Page not found.</h1>
         <p class="lede">
           The page you requested does not exist on this portal. Use the links below to reach a working route,
@@ -6871,17 +6907,17 @@ export function renderTermsOfUsePage() {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav('/terms-of-use')}
-          <span class="status">${escapeHtml(humanizeStatus(termsStatus.status))}</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/terms-of-use')}
+        <span class="status">${escapeHtml(humanizeStatus(termsStatus.status))}</span>
+      </div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="terms-of-use-title">
+      <section id="page-content" class="hero" aria-labelledby="terms-of-use-title">
         <h1 id="terms-of-use-title">Terms of Use are pending legal approval.</h1>
         <p class="lede">
           Legal-approved Terms of Use content is not yet published. This is a prelaunch implementation-status page,
@@ -6932,17 +6968,17 @@ export function renderPrivacyPage() {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav(PRIVACY_PAGE_ROUTE)}
-          <span class="status">${escapeHtml(humanizeStatus(privacyStatus.status))}</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav(PRIVACY_PAGE_ROUTE)}
+        <span class="status">${escapeHtml(humanizeStatus(privacyStatus.status))}</span>
+      </div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="privacy-title">
+      <section id="page-content" class="hero" aria-labelledby="privacy-title">
         <h1 id="privacy-title">Privacy policy and contact are pending legal approval.</h1>
         <p class="lede">
           A final privacy policy and approved public privacy-contact route are not yet published. This page records
@@ -6985,14 +7021,12 @@ export function renderPrivacyPage() {
 export function renderOnboardingPage() {
   const onboardingRoute = JSON_ROUTE_MAP.get('/onboarding.json');
   const contract = buildJsonResponse(onboardingRoute);
-  const flowRows = contract.data.flows.map(
-    (flow) => `
-      <tr>
-        <td><code>${escapeHtml(flow.id)}</code></td>
-        <td>${escapeHtml(flow.purpose)}</td>
-        <td>${escapeHtml(flow.routes.join(', '))}</td>
-        <td>${escapeHtml(flow.failureStates.join('; '))}</td>
-      </tr>
+  const workflowItems = ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.workflow.map(
+    (item) => `
+      <li>
+        <strong>${escapeHtml(item.step)}</strong> — ${escapeHtml(item.action)}
+        <a href="${escapeHtml(item.route)}">${escapeHtml(item.route)}</a>
+      </li>
     `,
   ).join('');
   const schemaRows = [
@@ -7018,14 +7052,14 @@ export function renderOnboardingPage() {
     ${renderHumanLookupStyles()}
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="onboarding-title">
+      <section id="page-content" class="hero" aria-labelledby="onboarding-title">
         <h1 id="onboarding-title">Agent onboarding.</h1>
         <p class="lede">
           Human-readable index for the machine-readable onboarding contracts at
@@ -7044,17 +7078,12 @@ export function renderOnboardingPage() {
         </table>
       </section>
 
-      <section class="band" aria-labelledby="flows-title">
+      <section class="band" aria-labelledby="workflow-title">
         <div>
-          <h2 id="flows-title">Flows</h2>
-          <p class="lede">Each flow ships validating example requests and explicit failure states in the JSON contract.</p>
+          <h2 id="workflow-title">Contribution workflow</h2>
+          <p class="lede">Follow these seven canonical steps in order; each route remains subject to its stated review gate.</p>
         </div>
-        <table>
-          <thead>
-            <tr><th>Flow</th><th>Purpose</th><th>Routes</th><th>Failure states</th></tr>
-          </thead>
-          <tbody>${flowRows}</tbody>
-        </table>
+        <ol>${workflowItems}</ol>
       </section>
     </main>
     ${renderPortalFooter()}
@@ -7233,6 +7262,8 @@ export function renderIdentityKeysPage() {
       }
 
       .topline {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
@@ -7340,7 +7371,9 @@ export function renderIdentityKeysPage() {
       a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
       @media (max-width: 820px) {
-        main { width: min(100% - 28px, 1120px); padding-top: 18px; }
+        main,
+        .topline { width: min(100% - 28px, 1120px); }
+        main { padding-top: 18px; }
         .topline,
         .band { grid-template-columns: 1fr; align-items: flex-start; }
         .topline-meta { justify-content: flex-start; }
@@ -7349,17 +7382,17 @@ export function renderIdentityKeysPage() {
     </style>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <main id="main-content">
-      <header class="topline">
-        <p class="brand"><a href="/">agent.bittrees.org</a></p>
-        <div class="topline-meta">
-          ${renderPrimaryPortalNav('/identity-keys')}
-          <span class="status">${escapeHtml(humanizeStatus(IDENTITY_KEYS_PUBLIC_CONTRACT.status, 'coming-soon'))}</span>
-        </div>
-      </header>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/identity-keys')}
+        <span class="status">${escapeHtml(humanizeStatus(IDENTITY_KEYS_PUBLIC_CONTRACT.status, 'coming-soon'))}</span>
+      </div>
+    </header>
+    <main>
 
-      <section class="hero" aria-labelledby="identity-title">
+      <section id="page-content" class="hero" aria-labelledby="identity-title">
         <h1 id="identity-title">Identity and keys.</h1>
         <p class="lede">
           ${escapeHtml(IDENTITY_KEYS_PUBLIC_CONTRACT.purpose)}

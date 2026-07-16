@@ -8,12 +8,24 @@ import {
   REQUEST_ID_HEADER,
   createRequestHandler,
 } from './portal.mjs';
-import {
-  createRoleApplicationRequestHandler,
-  isRoleApplicationPath,
-} from './role-applications/http.mjs';
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+// Role-application routing is an opt-in, injection-only feature. The predicate
+// is inlined here so production (which never injects a service) boots without
+// importing the role-application module. Keep in sync with
+// ./role-applications/http.mjs::isRoleApplicationPath.
+const ROLE_APPLICATION_STATUS_PATTERN = /^\/api\/role-applications\/([^/]+)\/status$/;
+const ROLE_APPLICATION_ADMIN_REVIEW_PATTERN = /^\/api\/admin\/role-applications\/([^/]+)\/review$/;
+
+function isRoleApplicationPath(pathname) {
+  return pathname === '/api/role-applications'
+    || pathname === '/api/role-applications/mine'
+    || pathname === '/api/admin/role-applications'
+    || pathname === '/api/admin/role-applications/summary'
+    || ROLE_APPLICATION_STATUS_PATTERN.test(pathname)
+    || ROLE_APPLICATION_ADMIN_REVIEW_PATTERN.test(pathname);
+}
 
 function requestId(req) {
   const candidate = String(req.headers?.['x-request-id'] ?? '').trim();
@@ -38,13 +50,23 @@ function sendRoleRouteNotFound(req, res) {
  */
 export function createServerRequestHandler({ roleApplicationService, resolvePrincipal, ...portalOptions } = {}) {
   const portalHandler = createRequestHandler(portalOptions);
-  const roleHandler = roleApplicationService
-    ? createRoleApplicationRequestHandler({ roleApplicationService, resolvePrincipal })
-    : null;
+  // Load the role-application handler lazily and only when a service is
+  // injected, so production never depends on the module being present on disk.
+  let roleHandlerPromise = null;
+  function loadRoleHandler() {
+    if (!roleHandlerPromise) {
+      roleHandlerPromise = import('./role-applications/http.mjs').then(
+        ({ createRoleApplicationRequestHandler }) =>
+          createRoleApplicationRequestHandler({ roleApplicationService, resolvePrincipal }),
+      );
+    }
+    return roleHandlerPromise;
+  }
   return async function serverRequestHandler(req, res) {
     const pathname = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`).pathname;
     if (isRoleApplicationPath(pathname)) {
-      if (!roleHandler) return sendRoleRouteNotFound(req, res);
+      if (!roleApplicationService) return sendRoleRouteNotFound(req, res);
+      const roleHandler = await loadRoleHandler();
       return roleHandler(req, res);
     }
     return portalHandler(req, res);

@@ -351,12 +351,12 @@
       "capabilityId": "skillmesh-skill-10",
       "label": "auto-ocr-image-text",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for ocr-image-text",
+      "summary": "Auto-proposed from 1 demand signal for ocr-image-text",
       "inputs": [
         "Task inputs required by the immutable auto-ocr-image-text definition."
       ],
       "outputs": [
-        "The catalog-described auto-ocr-image-text result: Auto-proposed from 1 demand signals for ocr-image-text"
+        "The catalog-described auto-ocr-image-text result: Auto-proposed from 1 demand signal for ocr-image-text"
       ],
       "evidencePolicy": "Use live SkillMesh skill 10, definition 0xbf3411b3931a1681c600b6f2280d8a9587447252d5eb1418fed1ff02514f68ba, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -414,7 +414,7 @@
       "outputs": [
         "The catalog-described text-summarize result: Summarize a block of text into a concise summary of a target length."
       ],
-      "evidencePolicy": "Use live SkillMesh skill 12, definition 0xd1f19a4608ec2861ac98ef8e61f9bf40cef56c524960c97e71db52ab82e0bf13, version undefined, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "evidencePolicy": "Use live SkillMesh skill 12, definition 0xd1f19a4608ec2861ac98ef8e61f9bf40cef56c524960c97e71db52ab82e0bf13, definition version unavailable, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
         "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
         "https://cloudflare-ipfs.com/ipfs/bafkreig3xfe2ugo5lwlb7pqniwn4jo63cvtmefi6yutzg6x3dmx5vna2jy"
@@ -442,7 +442,7 @@
       "outputs": [
         "The catalog-described speech-synthesize result: Convert text into spoken audio with a selectable voice and output format."
       ],
-      "evidencePolicy": "Use live SkillMesh skill 13, definition 0x78c5ffd83cc1de2d0ca7d58a12b1719b5376d6911035fa645f438f2d39ef9d00, version undefined, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "evidencePolicy": "Use live SkillMesh skill 13, definition 0x78c5ffd83cc1de2d0ca7d58a12b1719b5376d6911035fa645f438f2d39ef9d00, definition version unavailable, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
         "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
         "https://cloudflare-ipfs.com/ipfs/bafkreiajw6upfjq23xrhzpv76yoa7qkihhwzcpou4hopyszzrg5sgh7764"
@@ -463,12 +463,12 @@
       "capabilityId": "skillmesh-skill-14",
       "label": "auto-language-translate",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for language-translate",
+      "summary": "Auto-proposed from 1 demand signal for language-translate",
       "inputs": [
         "Task inputs required by the immutable auto-language-translate definition."
       ],
       "outputs": [
-        "The catalog-described auto-language-translate result: Auto-proposed from 1 demand signals for language-translate"
+        "The catalog-described auto-language-translate result: Auto-proposed from 1 demand signal for language-translate"
       ],
       "evidencePolicy": "Use live SkillMesh skill 14, definition 0x7e29f536ff290311aadd7626341c7afe6a5fe9ebc923ad8f8003b74fa50016e6, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -491,12 +491,12 @@
       "capabilityId": "skillmesh-skill-15",
       "label": "auto-json-schema-validate",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for json-schema-validate",
+      "summary": "Auto-proposed from 1 demand signal for json-schema-validate",
       "inputs": [
         "Task inputs required by the immutable auto-json-schema-validate definition."
       ],
       "outputs": [
-        "The catalog-described auto-json-schema-validate result: Auto-proposed from 1 demand signals for json-schema-validate"
+        "The catalog-described auto-json-schema-validate result: Auto-proposed from 1 demand signal for json-schema-validate"
       ],
       "evidencePolicy": "Use live SkillMesh skill 15, definition 0xce236b0a94e4d1a58e1220ff71866872393a164e9ff96b77e1c03c578944a494, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -519,12 +519,12 @@
       "capabilityId": "skillmesh-skill-16",
       "label": "auto-audio-transcribe",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for audio-transcribe",
+      "summary": "Auto-proposed from 1 demand signal for audio-transcribe",
       "inputs": [
         "Task inputs required by the immutable auto-audio-transcribe definition."
       ],
       "outputs": [
-        "The catalog-described auto-audio-transcribe result: Auto-proposed from 1 demand signals for audio-transcribe"
+        "The catalog-described auto-audio-transcribe result: Auto-proposed from 1 demand signal for audio-transcribe"
       ],
       "evidencePolicy": "Use live SkillMesh skill 16, definition 0xb8e093e76a25fa2c1a78e0d0d12e49d06fd7792f3f372341780c04f4f0ba545c, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -547,12 +547,12 @@
       "capabilityId": "skillmesh-skill-17",
       "label": "auto-html-to-markdown",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for html-to-markdown",
+      "summary": "Auto-proposed from 1 demand signal for html-to-markdown",
       "inputs": [
         "Task inputs required by the immutable auto-html-to-markdown definition."
       ],
       "outputs": [
-        "The catalog-described auto-html-to-markdown result: Auto-proposed from 1 demand signals for html-to-markdown"
+        "The catalog-described auto-html-to-markdown result: Auto-proposed from 1 demand signal for html-to-markdown"
       ],
       "evidencePolicy": "Use live SkillMesh skill 17, definition 0x04df0282ac02d31dcc2455661cda6c11ca9e630c06be429e80f4af3cde3b7bcf, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -575,12 +575,12 @@
       "capabilityId": "skillmesh-skill-18",
       "label": "auto-table-to-markdown",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for table-to-markdown",
+      "summary": "Auto-proposed from 1 demand signal for table-to-markdown",
       "inputs": [
         "Task inputs required by the immutable auto-table-to-markdown definition."
       ],
       "outputs": [
-        "The catalog-described auto-table-to-markdown result: Auto-proposed from 1 demand signals for table-to-markdown"
+        "The catalog-described auto-table-to-markdown result: Auto-proposed from 1 demand signal for table-to-markdown"
       ],
       "evidencePolicy": "Use live SkillMesh skill 18, definition 0xa2f0e823ce3853b3576e877d197eb38233a34259db0b7d8e66700cfdc2078d32, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -603,12 +603,12 @@
       "capabilityId": "skillmesh-skill-19",
       "label": "auto-text-summarize",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for text-summarize",
+      "summary": "Auto-proposed from 1 demand signal for text-summarize",
       "inputs": [
         "Task inputs required by the immutable auto-text-summarize definition."
       ],
       "outputs": [
-        "The catalog-described auto-text-summarize result: Auto-proposed from 1 demand signals for text-summarize"
+        "The catalog-described auto-text-summarize result: Auto-proposed from 1 demand signal for text-summarize"
       ],
       "evidencePolicy": "Use live SkillMesh skill 19, definition 0x6d163ee477e2f58ab3f9ceec8eccc56c4075c6a5155577d930fbc02804d4b3ce, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -631,12 +631,12 @@
       "capabilityId": "skillmesh-skill-20",
       "label": "auto-csv-to-json",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for csv-to-json",
+      "summary": "Auto-proposed from 1 demand signal for csv-to-json",
       "inputs": [
         "Task inputs required by the immutable auto-csv-to-json definition."
       ],
       "outputs": [
-        "The catalog-described auto-csv-to-json result: Auto-proposed from 1 demand signals for csv-to-json"
+        "The catalog-described auto-csv-to-json result: Auto-proposed from 1 demand signal for csv-to-json"
       ],
       "evidencePolicy": "Use live SkillMesh skill 20, definition 0xe2106b712f32f0fc1267f825dc1f90678a331d820a2195a33e40af1a868b79d1, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -659,12 +659,12 @@
       "capabilityId": "skillmesh-skill-21",
       "label": "auto-speech-synthesize",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for speech-synthesize",
+      "summary": "Auto-proposed from 1 demand signal for speech-synthesize",
       "inputs": [
         "Task inputs required by the immutable auto-speech-synthesize definition."
       ],
       "outputs": [
-        "The catalog-described auto-speech-synthesize result: Auto-proposed from 1 demand signals for speech-synthesize"
+        "The catalog-described auto-speech-synthesize result: Auto-proposed from 1 demand signal for speech-synthesize"
       ],
       "evidencePolicy": "Use live SkillMesh skill 21, definition 0xb05fba95a298dbce467b97e985fc13b2a5a6d4d77141a58920b64f10a7d1b33a, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -771,12 +771,12 @@
       "capabilityId": "skillmesh-skill-25",
       "label": "auto-sentiment-score",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for sentiment-score",
+      "summary": "Auto-proposed from 1 demand signal for sentiment-score",
       "inputs": [
         "Task inputs required by the immutable auto-sentiment-score definition."
       ],
       "outputs": [
-        "The catalog-described auto-sentiment-score result: Auto-proposed from 1 demand signals for sentiment-score"
+        "The catalog-described auto-sentiment-score result: Auto-proposed from 1 demand signal for sentiment-score"
       ],
       "evidencePolicy": "Use live SkillMesh skill 25, definition 0x754391749a77f11a1754d941c6fd37fa9ffe34ba076ca5f8cf678d26a2d51a23, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -799,12 +799,12 @@
       "capabilityId": "skillmesh-skill-26",
       "label": "auto-qr-code-decode",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for qr-code-decode",
+      "summary": "Auto-proposed from 1 demand signal for qr-code-decode",
       "inputs": [
         "Task inputs required by the immutable auto-qr-code-decode definition."
       ],
       "outputs": [
-        "The catalog-described auto-qr-code-decode result: Auto-proposed from 1 demand signals for qr-code-decode"
+        "The catalog-described auto-qr-code-decode result: Auto-proposed from 1 demand signal for qr-code-decode"
       ],
       "evidencePolicy": "Use live SkillMesh skill 26, definition 0x76e16e542b568a38cb82b7f78f068a9085307937d074f9c68cbc29f51788154b, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -827,12 +827,12 @@
       "capabilityId": "skillmesh-skill-27",
       "label": "auto-xml-to-json",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for xml-to-json",
+      "summary": "Auto-proposed from 1 demand signal for xml-to-json",
       "inputs": [
         "Task inputs required by the immutable auto-xml-to-json definition."
       ],
       "outputs": [
-        "The catalog-described auto-xml-to-json result: Auto-proposed from 1 demand signals for xml-to-json"
+        "The catalog-described auto-xml-to-json result: Auto-proposed from 1 demand signal for xml-to-json"
       ],
       "evidencePolicy": "Use live SkillMesh skill 27, definition 0xccae2b86b1015da249e547e349aca507b35d85864b3105617992f42c9f7da0d2, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -1023,14 +1023,14 @@
       "capabilityId": "skillmesh-skill-34",
       "label": "auto-image-resize",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for image-resize",
+      "summary": "Auto-proposed from 1 demand signal for image-resize",
       "inputs": [
         "Task inputs required by the immutable auto-image-resize definition."
       ],
       "outputs": [
-        "The catalog-described auto-image-resize result: Auto-proposed from 1 demand signals for image-resize"
+        "The catalog-described auto-image-resize result: Auto-proposed from 1 demand signal for image-resize"
       ],
-      "evidencePolicy": "Use live SkillMesh skill 34, definition 0x3b36c2ad3a1aa61d042ad8147afa53a5cd4d23411f573e6371b2fd6b10c45c48, version undefined, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "evidencePolicy": "Use live SkillMesh skill 34, definition 0x3b36c2ad3a1aa61d042ad8147afa53a5cd4d23411f573e6371b2fd6b10c45c48, definition version unavailable, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
         "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
         "https://cloudflare-ipfs.com/ipfs/bafkreie424sma6w2mcftydjjsdsvt5yghr5xwxyq2gd6cowuvnorp7ydwy"
@@ -1051,12 +1051,12 @@
       "capabilityId": "skillmesh-skill-35",
       "label": "auto-language-detect",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for language-detect",
+      "summary": "Auto-proposed from 1 demand signal for language-detect",
       "inputs": [
         "Task inputs required by the immutable auto-language-detect definition."
       ],
       "outputs": [
-        "The catalog-described auto-language-detect result: Auto-proposed from 1 demand signals for language-detect"
+        "The catalog-described auto-language-detect result: Auto-proposed from 1 demand signal for language-detect"
       ],
       "evidencePolicy": "Use live SkillMesh skill 35, definition 0xfda2061c866836e2ecc48536a49f921a80dbf20872405bb845d4b08ed0beaa8a, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
@@ -1079,12 +1079,12 @@
       "capabilityId": "skillmesh-skill-36",
       "label": "auto-markdown-to-html",
       "lane": "discovery",
-      "summary": "Auto-proposed from 1 demand signals for markdown-to-html",
+      "summary": "Auto-proposed from 1 demand signal for markdown-to-html",
       "inputs": [
         "Task inputs required by the immutable auto-markdown-to-html definition."
       ],
       "outputs": [
-        "The catalog-described auto-markdown-to-html result: Auto-proposed from 1 demand signals for markdown-to-html"
+        "The catalog-described auto-markdown-to-html result: Auto-proposed from 1 demand signal for markdown-to-html"
       ],
       "evidencePolicy": "Use live SkillMesh skill 36, definition 0xb0aa356a9c7ccfaefc2f546a364c09e135c28bcfb7da2d34adf6d0f065eadbac, version 0.1.0, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [

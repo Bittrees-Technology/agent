@@ -50,6 +50,7 @@ import {
   renderLandingPage,
   renderMcpDocsPage,
   renderMcpGatewayPage,
+  renderNotFoundPage,
   renderOnboardingPage,
   renderPrivacyPage,
   renderReputationPage,
@@ -906,7 +907,7 @@ test('legal disclaimers and privacy notice are present across public route outpu
   );
   assert.equal(
     CONTRIBUTION_PRIVACY_NOTICE,
-    'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Use `[approved privacy contact route]` for privacy questions, correction requests, or deletion requests.',
+    'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. A public privacy-contact route is pending legal approval; privacy, correction, and deletion requests are not yet accepted.',
   );
   assert.equal(
     LAUNCH_STATUS.publicLaunchGate,
@@ -1203,13 +1204,17 @@ test('human pages expose a keyboard skip target and visible focus treatment', ()
     renderMcpGatewayPage(),
     renderSubmissionStatusPage(),
     renderReputationPage(),
+    renderNotFoundPage(),
     renderIdentityKeysPage(),
     renderTermsOfUsePage(),
+    renderPrivacyPage(),
+    renderOnboardingPage(),
   ];
 
   for (const html of pages) {
-    assert.match(html, /class="skip-link" href="#main-content"/);
-    assert.match(html, /<main id="main-content">/);
+    assert.match(html, /class="skip-link" href="#page-content"/);
+    assert.match(html, /<header class="topline">[\s\S]*?<\/header>\s*<main>/);
+    assert.match(html, /<section id="page-content" class="hero"/);
     assert.match(html, /:where\(a, button, input, select, textarea\):focus-visible/);
   }
 });
