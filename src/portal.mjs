@@ -3438,11 +3438,12 @@ export const ROUTE_DEFINITIONS = [
   },
   {
     path: TERMS_PAGE_ROUTE,
-    label: 'Terms status page',
+    label: 'Terms status page alias',
     description:
-      'Public terms route for the prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
+      'Compatibility alias for the prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
     kind: 'html',
     status: TERMS_OF_USE_LEGAL_STATUS.status,
+    canonicalPath: TERMS_OF_USE_PAGE_ROUTE,
   },
   {
     path: '/terms-of-use',
@@ -4244,8 +4245,18 @@ function renderWorkflowRouteDestination(path) {
           <p><a href="${escapeHtml(presentation.href)}">${escapeHtml(presentation.linkText)}</a></p>`;
 }
 
+// Keep alias routes served and advertised in machine contracts, but avoid
+// duplicate links for the same human page in visible route lists.
+function isCanonicalAliasRoute(definition) {
+  return typeof definition.canonicalPath === 'string';
+}
+
+function shouldRenderVisibleRouteListItem(definition) {
+  return definition.path !== '/' && !isCanonicalAliasRoute(definition);
+}
+
 function renderRouteCards() {
-  return ROUTE_DEFINITIONS.filter((definition) => definition.path !== '/')
+  return ROUTE_DEFINITIONS.filter(shouldRenderVisibleRouteListItem)
     .map(
       (definition) => `
         <article class="route-card">
@@ -6847,7 +6858,7 @@ export function renderNotFoundPage() {
   const pageDescription =
     'The requested page was not found on the agent.bittrees.org contribution portal.';
   const routeItems = ROUTE_DEFINITIONS
-    .filter((definition) => definition.kind === 'html' && definition.path !== '/')
+    .filter((definition) => definition.kind === 'html' && shouldRenderVisibleRouteListItem(definition))
     .map((definition) => `<li><a href="${escapeHtml(definition.path)}">${escapeHtml(definition.label)}</a></li>`)
     .join('');
 

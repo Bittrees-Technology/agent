@@ -143,6 +143,60 @@ async function mcpPost(baseUrl, body, headers = {}) {
   };
 }
 
+const CANONICAL_CONTENT_PATHS_FOR_TEST = new Map(
+  TERMS_OF_USE_LEGAL_STATUS.aliasRoutes.map((aliasRoute) => [aliasRoute, TERMS_OF_USE_LEGAL_STATUS.pageRoute]),
+);
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function canonicalPortalDestination(destination) {
+  const methodMatch = destination.match(/^([A-Z]+)\s+(.+)$/);
+  if (methodMatch) {
+    return `${methodMatch[1]} ${canonicalPortalDestination(methodMatch[2])}`;
+  }
+
+  const [path] = destination.split(/[?#]/);
+  return CANONICAL_CONTENT_PATHS_FOR_TEST.get(path) ?? path;
+}
+
+function assertNoDuplicateCanonicalDestinations(scope, destinations) {
+  const seen = new Map();
+
+  for (const destination of destinations) {
+    const canonicalDestination = canonicalPortalDestination(destination);
+    assert.equal(
+      seen.has(canonicalDestination),
+      false,
+      `${scope} links ${seen.get(canonicalDestination)} and ${destination} to ${canonicalDestination}`,
+    );
+    seen.set(canonicalDestination, destination);
+  }
+}
+
+function extractNavByAriaLabel(html, ariaLabel) {
+  const navMatch = html.match(new RegExp(`<nav\\b(?=[^>]*aria-label="${escapeRegExp(ariaLabel)}")[^>]*>([\\s\\S]*?)<\\/nav>`));
+  assert.ok(navMatch, `expected nav landmark "${ariaLabel}"`);
+  return navMatch[1];
+}
+
+function extractHrefValues(html) {
+  return [...html.matchAll(/\bhref="([^"]+)"/g)].map((match) => match[1]);
+}
+
+function extractRouteCardDestinations(html) {
+  return [...html.matchAll(/<article class="route-card">([\s\S]*?)<\/article>/g)].map((match) => {
+    const [, cardHtml] = match;
+    const linkedHeading = cardHtml.match(/<h2><a href="([^"]+)">/);
+    if (linkedHeading) return linkedHeading[1];
+
+    const codedHeading = cardHtml.match(/<h2><code>([^<]+)<\/code><\/h2>/);
+    assert.ok(codedHeading, `expected route-card destination heading in ${cardHtml}`);
+    return codedHeading[1];
+  });
+}
+
 const CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST = [
   'CONTRIBUTION_INTENTS_WRITE_ENABLED',
   'CONTRIBUTION_INTENTS_ENABLED',
@@ -607,11 +661,14 @@ test('static build includes all advertised routes', () => {
   const manifest = buildPortalManifest('2026-07-06T00:00:00.000Z');
   const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
   const assetPaths = new Set(assets.map((asset) => asset.path));
+  const termsAliasRoute = ROUTE_DEFINITIONS.find((route) => route.path === '/terms');
 
   assert.deepEqual(
     manifest.routes.map((route) => route.path),
     ROUTE_DEFINITIONS.map((route) => route.path),
   );
+  assert.ok(termsAliasRoute);
+  assert.equal(termsAliasRoute.canonicalPath, '/terms-of-use');
   assert.equal(manifest.sourceSnapshotEvidence.label, 'SOURCE SNAPSHOT evidence');
   assert.equal(manifest.sourceSnapshotEvidence.sourceSnapshot.termsRoute, '/terms');
   assert.ok(manifest.sourceSnapshotEvidence.sourceSnapshot.evidenceRoutes.includes('/terms'));
@@ -704,25 +761,34 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
     assert.equal(publicRouteResponse.status, 200);
     assert.match(publicRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(publicRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await publicRouteResponse.text(), /Terms of Use are pending legal approval/);
+    const publicRouteBody = await publicRouteResponse.text();
+    assert.match(publicRouteBody, /Terms of Use are pending legal approval/);
 
     assert.equal(publicRouteSlashResponse.status, 200);
     assert.equal(publicRouteSlashResponse.url, `${baseUrl}/terms`);
-    assert.match(await publicRouteSlashResponse.text(), /Terms of Use are pending legal approval/);
+    const publicRouteSlashBody = await publicRouteSlashResponse.text();
+    assert.match(publicRouteSlashBody, /Terms of Use are pending legal approval/);
 
     assert.equal(publicRouteAssetResponse.status, 200);
     assert.equal(publicRouteAssetResponse.url, `${baseUrl}/terms`);
-    assert.match(await publicRouteAssetResponse.text(), /Terms of Use are pending legal approval/);
+    const publicRouteAssetBody = await publicRouteAssetResponse.text();
+    assert.match(publicRouteAssetBody, /Terms of Use are pending legal approval/);
 
     assert.equal(pageResponse.status, 200);
     assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await pageResponse.text(), /pending legal approval/);
+    const pageBody = await pageResponse.text();
+    assert.match(pageBody, /pending legal approval/);
 
     assert.equal(shortRouteResponse.status, 200);
     assert.match(shortRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(shortRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await shortRouteResponse.text(), /Terms of Use are pending legal approval/);
+    const shortRouteBody = await shortRouteResponse.text();
+    assert.match(shortRouteBody, /Terms of Use are pending legal approval/);
+    assert.equal(publicRouteBody, pageBody);
+    assert.equal(publicRouteSlashBody, pageBody);
+    assert.equal(publicRouteAssetBody, pageBody);
+    assert.equal(shortRouteBody, pageBody);
 
     assert.equal(contractResponse.status, 200);
     assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
@@ -857,6 +923,34 @@ test('landing route links use working examples or documentation for templates an
   assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
   assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
   assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
+});
+
+test('visible route lists collapse canonical alias destinations', () => {
+  const html = renderLandingPage();
+  const actionGrid = extractNavByAriaLabel(html, 'Machine-readable routes');
+  const routeCardDestinations = extractRouteCardDestinations(actionGrid);
+  const primaryNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Primary portal routes'));
+  const footerNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Footer routes'));
+  const notFoundHtml = renderNotFoundPage();
+  const notFoundRoutesMatch = notFoundHtml.match(
+    /<h2 id="notfound-routes-title">Portal pages<\/h2>\s*<ul>([\s\S]*?)<\/ul>/,
+  );
+
+  assert.ok(notFoundRoutesMatch, 'expected not-found portal route list');
+  const notFoundRouteHrefs = extractHrefValues(notFoundRoutesMatch[1]);
+
+  assert.equal(routeCardDestinations.includes('/terms'), false);
+  assert.equal(routeCardDestinations.includes('/tou'), false);
+  assert.ok(routeCardDestinations.includes('/terms-of-use'));
+  assert.doesNotMatch(actionGrid, /Terms status page alias/);
+  assert.equal(notFoundRouteHrefs.includes('/terms'), false);
+  assert.equal(notFoundRouteHrefs.includes('/tou'), false);
+  assert.ok(notFoundRouteHrefs.includes('/terms-of-use'));
+  assertNoDuplicateCanonicalDestinations('landing route cards', routeCardDestinations);
+  assertNoDuplicateCanonicalDestinations('primary portal nav', primaryNavHrefs);
+  assertNoDuplicateCanonicalDestinations('footer nav', footerNavHrefs);
+  assertNoDuplicateCanonicalDestinations('not-found portal route list', notFoundRouteHrefs);
+  assertNoDuplicateCanonicalDestinations('JSON routes', [...JSON_ROUTE_MAP.keys()]);
 });
 
 test('contribution intent contract security gate tracks the write flag', () => {
