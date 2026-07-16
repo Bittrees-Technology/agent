@@ -44,6 +44,7 @@ import {
   callMcpTool,
   createRequestHandler,
   getMcpAuditEvents,
+  getSecurityAuditEvents,
   handleRegistryRequest,
   PUBLIC_STATUS_VOCABULARY,
   renderIdentityKeysPage,
@@ -56,7 +57,9 @@ import {
   renderReputationPage,
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
+  verifySecurityAuditChain,
 } from '../src/portal.mjs';
+import { createContributionService } from '../src/contributions/service.mjs';
 import { ONBOARDING_FLOW_CONTRACTS } from '../src/onboarding-contracts.mjs';
 
 const EXPECTED_ENV_EXAMPLE_NAMES = Object.freeze([
@@ -110,8 +113,8 @@ const EXPECTED_ENV_EXAMPLE_NAMES = Object.freeze([
   'VERCEL_GIT_COMMIT_SHA',
 ]);
 
-async function withPortalServer(callback) {
-  const server = createServer(createRequestHandler());
+async function withPortalServer(callback, handlerOptions = {}) {
+  const server = createServer(createRequestHandler(handlerOptions));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
@@ -682,7 +685,9 @@ test('static build includes all advertised routes', () => {
 
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('identity-keys/index.html'));
-  assert.ok(assetPaths.has('submission-status/index.html'));
+  // This query-driven page must remain dynamic. A generated index.html shadows
+  // the Vercel function route and can self-refresh instead of loading status.
+  assert.equal(assetPaths.has('submission-status/index.html'), false);
   assert.ok(assetPaths.has('reputation/index.html'));
   assert.ok(assetPaths.has('terms/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
@@ -895,6 +900,82 @@ test('contribution intent form exposes accessible labels instructions and mobile
     assert.match(html, new RegExp(`<label class="checkbox-label" for="${id}">`));
     assert.match(html, new RegExp(`<input id="${id}" type="checkbox"`));
   }
+});
+
+test('contribution intent form ships a transparent-signing island inside the form', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<form class="intent-form" id="intent-form"[^>]*>[\s\S]*<section class="signing-island" id="intent-signing-island"[\s\S]*<\/section>\s*<button type="submit">/);
+});
+
+test('signing island shows the exact wallet message preview before any wallet prompt', () => {
+  const html = renderLandingPage();
+
+  assert.match(
+    html,
+    /<code id="intent-signing-message">Bittrees — application encryption key \(v1\)\n\nSign to derive your private decryption key for contributor applications\. No gas; this only proves wallet ownership\.<\/code>/,
+  );
+  assert.match(
+    html,
+    /This wallet signature derives a local encryption key\. It is not a transaction, does not spend funds, and does not grant Bittrees, IDACC, or this portal authority over your wallet\./,
+  );
+  assert.match(
+    html,
+    /The wallet prompt signs only the key-derivation message above\. Your form contents are shown here for review and are handled by the portal write gate separately\./,
+  );
+});
+
+test('signing island shows the review package preview, chain/domain/context row, and wallet account display', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<p class="signing-context-row" id="intent-context-row">Base \(8453\) - agent\.bittrees\.org - contributor review intake<\/p>/);
+  assert.match(html, /<button type="button" class="signing-connect-button" id="intent-connect-wallet">Connect wallet<\/button>/);
+  assert.match(html, /<p class="signing-account" id="intent-connected-account" hidden><\/p>/);
+  assert.match(html, /<summary>Review package preview<\/summary>/);
+  assert.match(html, /<dt>Purpose<\/dt><dd>Contributor application \/ contribution review intake<\/dd>/);
+  assert.match(html, /<dt>Portal<\/dt><dd>agent\.bittrees\.org<\/dd>/);
+  assert.match(html, /<dt>Network<\/dt><dd>Base \(8453\)<\/dd>/);
+  assert.match(html, /<dt>Account<\/dt><dd id="intent-payload-account">Not connected<\/dd>/);
+  assert.match(html, /<dt>Review gate<\/dt><dd>review_required_before_publication_or_assignment<\/dd>/);
+  assert.match(html, /<dd id="intent-payload-form-summary">Lane: [^<]+ \| Name: \(not set\) \| Summary length: 0 chars \| Source IDs: 0<\/dd>/);
+});
+
+test('signing island write posture reflects the fail-closed gate by default and the enabled flag when set', () => {
+  withContributionIntentWriteFlags({}, () => {
+    const html = renderLandingPage();
+    assert.match(html, /<dd id="intent-payload-write-posture">read-only public launch default<\/dd>/);
+  });
+
+  withContributionIntentWriteFlags({ CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true' }, () => {
+    const html = renderLandingPage();
+    assert.match(html, /<dd id="intent-payload-write-posture">non-production write-enabled<\/dd>/);
+  });
+});
+
+test('signing island exposes the four accessible state regions and gate-closed retry copy', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<section class="signing-island" id="intent-signing-island" data-signing-state="pending" aria-live="polite">/);
+  assert.match(html, /<p class="caveat" id="intent-chain-warning" role="alert" hidden><\/p>/);
+  assert.match(html, /<p class="caveat" id="intent-signing-failure" role="alert" hidden><\/p>/);
+  assert.match(html, /<div class="signing-success" id="intent-signing-success" hidden>/);
+  assert.match(html, /Contribution package received for review\./);
+  assert.match(html, /Reviewer acceptance is required before publication, assignment, reputation credit, authority, or any public attestation\./);
+  assert.match(html, /<div class="signing-retry" id="intent-signing-retry" hidden>/);
+  assert.match(html, /<button type="button" id="intent-retry-button">Try again<\/button>/);
+  assert.match(html, /<button type="button" id="intent-edit-button">Edit application<\/button>/);
+
+  const script = html.match(/<script>\n\(function \(\) \{[\s\S]*?\}\)\(\);\n<\/script>/)?.[0];
+  assert.ok(script, 'signing island inline script is present');
+  assert.match(
+    script,
+    /var GATE_CLOSED_RETRY_COPY = "Live contribution writes are not enabled on this portal yet\. Nothing was submitted on-chain or accepted as a public attestation\. You can review the packet and try again after intake is enabled\.";/,
+  );
+  assert.match(script, /var BASE_CHAIN_HEX = "0x2105";/);
+  assert.match(script, /response\.status === 501 \|\| \(body && body\.error === 'write_disabled'\)/);
+  assert.match(script, /provider\.request\(\{\s*method: 'personal_sign',\s*params: \[SIGNING_MESSAGE, account\],/);
+  assert.doesNotMatch(script, /writeContract/);
+  assert.doesNotMatch(script, /rawSignature/i);
 });
 
 test('human lookup forms expose mobile accessible labels and instructions', () => {
@@ -1112,6 +1193,190 @@ test('post-capable routes stay dynamic and return disabled responses for POST', 
   });
 });
 
+test('disabled contribution intent gate exposes discovery but never reaches the domain service', async () => {
+  let submitCalls = 0;
+  const contributionService = {
+    submit() {
+      submitCalls += 1;
+      throw new Error('disabled gate must not reach contributionService.submit');
+    },
+  };
+
+  await withContributionIntentWriteFlags({}, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const discovery = await fetch(`${baseUrl}/contribution-intents`);
+      const discoveryBody = await discovery.json();
+      assert.equal(discovery.status, 200);
+      assert.equal(discoveryBody.data.contract.securityGate.accepted, false);
+
+      const response = await fetch(`${baseUrl}/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer disabled-gate-token',
+        },
+        body: JSON.stringify(buildValidContributionIntentPayload()),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 501);
+      assert.equal(body.error, 'write_disabled');
+      assert.equal(body.accepted, false);
+      assert.equal(body.liveWrite, false);
+      assert.equal(body.reviewGate.productionMutationAllowed, false);
+      assert.equal(body.reviewGate.walletAuthorityGranted, false);
+      assert.equal(body.reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(body.reviewGate.registryMutationAllowed, false);
+      assert.equal(submitCalls, 0);
+    }, { contributionService });
+  });
+});
+
+test('enabled contribution intent routes expose idempotent receipt, private status, and recoverable retry matrix', async () => {
+  const agentId = 'intent-route-matrix-agent';
+  const token = 'intent-route-matrix-token';
+  const contributionService = createContributionService();
+
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_POST_RATE_LIMIT_MAX: '20',
+    MCP_WRITE_TOKENS: JSON.stringify({
+      [token]: { subject: agentId, scopes: ['contributor:submit'] },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const discovery = await fetch(`${baseUrl}/gateway/contribution-intents`);
+      const discoveryBody = await discovery.json();
+      assert.equal(discovery.status, 200);
+      assert.equal(discoveryBody.data.contract.securityGate.accepted, true);
+
+      const payload = buildValidContributionIntentPayload({
+        intentId: `intent-route-${Date.now()}`,
+        contributor: {
+          kind: 'agent',
+          name: 'Intent Route Matrix Agent',
+          agentId,
+          contactRoute: 'https://example.invalid/intent-route-agent',
+        },
+        handoff: {
+          requestedOwnerRoute: 'engineering review owner',
+          goalId: 'goal_plan_1fgpnd5',
+          expectedOutput: 'Review-queued contribution receipt with private status lookup.',
+          acceptanceCriteria: ['Receipt replay returns the original submission id'],
+          outOfScope: ['Wallet authority or transaction broadcast'],
+          backlogPolicy: 'Park optional work until the owning reviewer accepts the packet.',
+          sourceIds: ['memory:7517'],
+        },
+      });
+      const idempotencyKey = `route-retry-${Date.now()}`;
+      const headers = {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        'X-Forwarded-For': `198.51.100.${Math.floor(Math.random() * 200) + 1}`,
+      };
+
+      const unauthorizedResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': headers['X-Forwarded-For'],
+        },
+        body: JSON.stringify(payload),
+      });
+      const unauthorized = await unauthorizedResponse.json();
+      assert.equal(unauthorizedResponse.status, 401);
+      assert.equal(unauthorized.error, 'unauthorized');
+      assert.equal(unauthorized.code, 'unauthorized');
+      assert.equal(unauthorized.accepted, false);
+      assert.equal(unauthorized.receiptId, undefined);
+      assert.equal(unauthorized.reviewGate.walletAuthorityGranted, false);
+      assert.equal(unauthorized.reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(unauthorized.reviewGate.registryMutationAllowed, false);
+
+      const firstResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const first = await firstResponse.json();
+
+      assert.equal(firstResponse.status, 202);
+      assert.equal(first.accepted, true);
+      assert.equal(first.submission.status, 'queued_for_review');
+      assert.equal(first.submission.created, true);
+      assert.equal(first.submission.replayed, false);
+      assert.equal(first.receiptId, first.submission.receiptId);
+      assert.match(first.receiptId, /^sub_/);
+      assert.equal(first.statusLookup, `/v1/workflow/status?id=${encodeURIComponent(first.receiptId)}&kind=submission`);
+
+      for (const gate of [first.reviewGate, first.submission.projection.reviewGate]) {
+        assert.equal(gate.productionMutationAllowed, false);
+        assert.equal(gate.walletAuthorityGranted, false);
+        assert.equal(gate.transactionSubmissionAllowed, false);
+        assert.equal(gate.registryMutationAllowed, false);
+      }
+
+      const replayResponse = await fetch(`${baseUrl}/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const replay = await replayResponse.json();
+      assert.equal(replayResponse.status, 202);
+      assert.equal(replay.submission.created, false);
+      assert.equal(replay.submission.replayed, true);
+      assert.equal(replay.receiptId, first.receiptId);
+      assert.match(replay.message, /no duplicate/i);
+
+      const anonymousStatusResponse = await fetch(`${baseUrl}${first.statusLookup}`);
+      const anonymousStatus = await anonymousStatusResponse.json();
+      assert.equal(anonymousStatusResponse.status, 200);
+      assert.equal(anonymousStatus.lookup.status, 'not_found');
+      assert.equal(anonymousStatus.lookup.result, null);
+
+      const ownerStatusResponse = await fetch(`${baseUrl}${first.statusLookup}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const ownerStatus = await ownerStatusResponse.json();
+      assert.equal(ownerStatusResponse.status, 200);
+      assert.equal(ownerStatus.lookup.status, 'status_found');
+      assert.equal(ownerStatus.lookup.result.submissionId, first.receiptId);
+      assert.equal(ownerStatus.lookup.result.status, 'queued_for_review');
+      assert.equal(ownerStatus.lookup.result.reviewGate.walletAuthorityGranted, false);
+      assert.equal(ownerStatus.lookup.result.reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(ownerStatus.lookup.result.reviewGate.registryMutationAllowed, false);
+
+      const conflictResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...payload, summary: `${payload.summary} Changed after the first receipt.` }),
+      });
+      const conflict = await conflictResponse.json();
+      assert.equal(conflictResponse.status, 409);
+      assert.equal(conflict.error, 'conflict');
+      assert.equal(conflict.code, 'idempotency_conflict');
+      assert.equal(conflict.accepted, false);
+      assert.equal(conflict.reviewGate.walletAuthorityGranted, false);
+
+      const recoveredResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: { ...headers, 'Idempotency-Key': `${idempotencyKey}-recovered` },
+        body: JSON.stringify({ ...payload, summary: `${payload.summary} Changed after the first receipt.` }),
+      });
+      const recovered = await recoveredResponse.json();
+      assert.equal(recoveredResponse.status, 202);
+      assert.equal(recovered.submission.created, true);
+      assert.equal(recovered.submission.replayed, false);
+      assert.notEqual(recovered.receiptId, first.receiptId);
+      assert.equal(recovered.reviewGate.transactionSubmissionAllowed, false);
+    }, { contributionService });
+  });
+});
+
 test('contribution intent POST rejects unsupported media types when writes are enabled', async () => {
   await withContributionIntentWriteFlags({
     CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
@@ -1173,10 +1438,14 @@ test('contribution intent POST rate limits repeated write attempts', async () =>
     CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-rate-${Date.now()}`, import.meta.url)),
     CONTRIBUTION_POST_RATE_LIMIT_MAX: '2',
     CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS: '60000',
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'contribution-rate-token': { subject: 'contribution-rate-agent', scopes: ['contributor:submit'] },
+    }),
   }, async () => {
     await withPortalServer(async (baseUrl) => {
       const headers = {
         Accept: 'application/json',
+        Authorization: 'Bearer contribution-rate-token',
         'Content-Type': 'application/json',
         'X-Forwarded-For': `203.0.113.${Math.floor(Math.random() * 200) + 1}`,
       };
@@ -1839,6 +2108,54 @@ test('heartbeats route sanitizes unexpected filesystem failures instead of leaki
   assert.equal(errorLogs[0].message, 'Registry request failed unexpectedly.');
   assert.match(errorLogs[0].errorMessage, /ENOENT/);
   assert.match(errorLogs[0].errorStack, /ENOENT/);
+});
+
+test('unexpected server-error logs redact secret-bearing exception text', async () => {
+  const rawSecret = `Bearer sk-log-redaction-regression-${Math.random().toString(16).slice(2)}abcdef`;
+  const brokenControlPlane = {
+    ingestSignedHeartbeat() {
+      throw new Error(`backend rejected credential ${rawSecret}`);
+    },
+  };
+
+  const req = new EventEmitter();
+  req.method = 'POST';
+  req.url = '/v1/registry/heartbeats';
+  req.headers = {
+    host: 'agent.bittrees.org',
+    'content-type': 'application/json',
+    'x-request-id': 'registry-secret-log-test-01',
+  };
+  req.body = {};
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  const errorLogs = [];
+  const originalConsoleError = console.error;
+  console.error = (line) => errorLogs.push(String(line));
+  try {
+    await handleRegistryRequest(req, res, undefined, brokenControlPlane);
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(res.statusCode, 500);
+  assert.doesNotMatch(res.body, new RegExp(rawSecret));
+  assert.equal(errorLogs.length, 1);
+  assert.doesNotMatch(errorLogs.join('\n'), new RegExp(rawSecret));
+  assert.match(errorLogs[0], /Registry request failed unexpectedly/);
 });
 
 test('portal telemetry logs request ids and stable error metadata for not found responses', async () => {
@@ -2541,6 +2858,143 @@ test('mcp gateway audit trail structurally redacts bearer and nested secret payl
   }
 });
 
+test('security audit entries are tamper-evident and include authorization denials', async () => {
+  await withContributionIntentWriteFlags({
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'token-a-submit-only': {
+        subject: 'agent-a',
+        scopes: ['contributor:submit'],
+        expiresAt: '2999-01-01T00:00:00.000Z',
+      },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const denied = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'audit-authz-denial',
+        method: 'tools/call',
+        params: {
+          name: 'claim_contribution',
+          arguments: {
+            agentId: 'agent-a',
+            opportunityId: 'source-registry-hardening',
+            contributionSummary: 'Authorization denial audit coverage.',
+            evidencePlan: ['portal-route:/sources.json'],
+          },
+        },
+      }, {
+        Authorization: 'Bearer token-a-submit-only',
+      });
+
+      assert.equal(denied.response.status, 403);
+      assert.equal(denied.json.error.data.requiredScope, 'contributor:claim');
+    });
+  });
+
+  const events = getSecurityAuditEvents();
+  const denial = events.find((event) => (
+    event.event_name === 'authz.check.deny'
+    && event.action === 'claim_contribution'
+    && event.reason.code === 'scope_forbidden'
+  ));
+  assert.ok(denial, 'expected an authz denial audit event');
+  assert.equal(denial.actor.id, 'agent-a');
+  assert.equal(denial.resource.type, 'mcp_tool');
+  assert.equal(denial.decision, 'deny');
+  assert.match(denial.integrity.event_hash, /^[a-f0-9]{64}$/);
+  assert.match(denial.integrity.prev_hash, /^[a-f0-9]{64}$/);
+  assert.match(denial.integrity.signature, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(verifySecurityAuditChain(events).ok, true);
+  assert.equal(verifySecurityAuditChain(events.slice(1)).ok, true);
+
+  const tampered = JSON.parse(JSON.stringify(events));
+  tampered[tampered.length - 1].reason.code = 'tampered';
+  const tamperedResult = verifySecurityAuditChain(tampered);
+  assert.equal(tamperedResult.ok, false);
+  assert.equal(tamperedResult.reason, 'event_hash_mismatch');
+});
+
+test('mcp error responses redact secret-looking request fields before logging', async () => {
+  const rawSecret = `sk-mcp-error-redaction-${Math.random().toString(16).slice(2)}abcdef`;
+
+  await withPortalServer(async (baseUrl) => {
+    const result = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'mcp-error-secret-redaction',
+      method: rawSecret,
+    });
+
+    assert.equal(result.response.status, 200);
+    assert.equal(result.json.error.message, 'MCP request rejected.');
+    assert.doesNotMatch(JSON.stringify(result.json), new RegExp(rawSecret));
+  });
+
+  const serializedMcpAudit = JSON.stringify(getMcpAuditEvents().filter(
+    (event) => event.request?.jsonRpc?.id === 'mcp-error-secret-redaction',
+  ));
+  const serializedSecurityAudit = JSON.stringify(getSecurityAuditEvents().filter(
+    (event) => event.request?.jsonRpc?.id === 'mcp-error-secret-redaction',
+  ));
+  assert.doesNotMatch(serializedMcpAudit, new RegExp(rawSecret));
+  assert.doesNotMatch(serializedSecurityAudit, new RegExp(rawSecret));
+});
+
+test('contribution intent rejects value-level secrets without log or audit leakage', async () => {
+  const rawSecret = `sk-secret-redaction-regression-${Math.random().toString(16).slice(2)}abcdef`;
+  const logLines = [];
+  const originalConsoleLog = console.log;
+
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-secret-${Date.now()}`, import.meta.url)),
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'secret-reject-token': { subject: 'secret-reject-agent', scopes: ['contributor:submit'] },
+    }),
+  }, async () => {
+    console.log = (line) => logLines.push(String(line));
+    try {
+      await withPortalServer(async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: 'Bearer secret-reject-token',
+            'Content-Type': 'application/json',
+            'X-Request-Id': 'secret-redaction-regression-01',
+          },
+          body: JSON.stringify(buildValidContributionIntentPayload({
+            contributor: {
+              kind: 'agent',
+              name: 'Secret Rejection Agent',
+              agentId: 'secret-reject-agent',
+              contactRoute: 'https://example.invalid/contact',
+            },
+            summary: `Prepare a review packet. Internal credential ${rawSecret} must be blocked.`,
+          })),
+        });
+        const body = await response.json();
+
+        assert.equal(response.status, 400);
+        assert.equal(body.accepted, false);
+        assert.equal(body.status, 'rejected');
+        assert.equal(body.error, 'invalid_request');
+        assert.match(body.errors.join('\n'), /API key|credential/i);
+        assert.doesNotMatch(JSON.stringify(body), new RegExp(rawSecret));
+      });
+    } finally {
+      console.log = originalConsoleLog;
+    }
+  });
+
+  assert.doesNotMatch(logLines.join('\n'), new RegExp(rawSecret));
+  const serializedAudit = JSON.stringify(getSecurityAuditEvents());
+  assert.doesNotMatch(serializedAudit, new RegExp(rawSecret));
+  assert.ok(getSecurityAuditEvents().some((event) => (
+    event.event_name === 'admin.secret_access.blocked'
+    && event.request_id === 'secret-redaction-regression-01'
+  )));
+});
+
 test('mcp HTTP write-like tools require active scoped bearer tokens bound to agentId', async () => {
   await withContributionIntentWriteFlags({
     MCP_WRITE_TOKENS: JSON.stringify({
@@ -2981,11 +3435,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.640');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.645');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
-  assert.equal(asset.sha256, '09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '8899e8a5332062b8ad5311554467b16922a6b1a7');
-  assert.match(asset.sha256Provenance.localVerification, /102731589-byte asset/);
+  assert.equal(asset.sha256, '0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '0cbd97515b38d46c166c8effbc051ff86091fd7b');
+  assert.match(asset.sha256Provenance.localVerification, /118044815-byte asset/);
   assert.equal(response.data.releases.length, 1);
 });

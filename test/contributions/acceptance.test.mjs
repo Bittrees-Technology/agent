@@ -63,13 +63,9 @@ test('unauthenticated status routes do not delegate to compatibility or queue pr
   });
 });
 
-test('static status asset is only a delegation shell and its URL redirects with query intact', async () => {
+test('status route has no static shadow and its index alias redirects with query intact', async () => {
   const asset = buildStaticAssets().find((item) => item.path === 'submission-status/index.html');
-  assert.ok(asset);
-  assert.match(asset.body, /meta name="status-loader" content="server"/);
-  assert.match(asset.body, /meta name="status-route" content="\/v1\/workflow\/status"/);
-  assert.match(asset.body, /http-equiv="refresh" content="0; url=\/submission-status"/);
-  assert.doesNotMatch(asset.body, /dynamic-loader-acceptance-marker/);
+  assert.equal(asset, undefined);
 
   await withServer({ loadStatusProjection: () => ({ status: 'not_found' }) }, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/submission-status/index.html?id=sub_dynamic&kind=submission`, {
