@@ -40,3 +40,12 @@ test('contributor onboarding is linked from the README and documents reproducibl
   assert.match(guide, /agent-onboarding-interface-contracts\.md/);
   assert.match(guide, /does not authorize production deployment/i);
 });
+
+test('capability catalog avoids unresolved generated copy defects', () => {
+  const catalogText = readRepositoryFile('data/agent-onboarding/capability-descriptions.json');
+  const catalog = JSON.parse(catalogText);
+
+  assert.doesNotMatch(catalogText, /version undefined/);
+  assert.doesNotMatch(catalogText, /1 demand signals/);
+  assert.equal(catalog.capabilities.length, catalog.counts.total);
+});
