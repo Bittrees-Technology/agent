@@ -177,6 +177,14 @@ test('requirement inspection exposes both projections and rejects unknown opport
       assert.equal(unknown.body.$schema, fixture.schemaUrl);
       assert.equal(unknown.body.error, fixture.errors.unknownOpportunity.error);
       assert.match(unknown.body.message, /opportunity/i);
+
+      const malformed = await jsonRequest(
+        baseUrl,
+        route.replace(':opportunityId', fixture.opportunity.malformedId),
+      );
+      assert.equal(malformed.response.status, fixture.errors.malformedOpportunity.statusCode);
+      assert.equal(malformed.body.$schema, fixture.schemaUrl);
+      assert.equal(malformed.body.error, fixture.errors.malformedOpportunity.error);
     }
   });
 });
@@ -259,33 +267,40 @@ test('workflow start validates identity, JSON, authorization, and the queued suc
       assert.equal(serializedRegistration.includes(fixture.registration.token), false);
       assert.equal(serializedRegistration.includes(fixture.registration.validPayload.contact.value), false);
 
-      const missingIdentityPayload = { ...fixture.registration.validPayload };
-      delete missingIdentityPayload.agentId;
       const missingIdentity = await jsonRequest(baseUrl, fixture.routes.registration, {
         method: 'POST',
-        token: fixture.registration.token,
-        body: missingIdentityPayload,
+        body: fixture.registration.validPayload,
       });
       assert.equal(missingIdentity.response.status, fixture.errors.missingIdentity.statusCode);
       assert.equal(missingIdentity.body.error, fixture.errors.missingIdentity.error);
-      assert.match(missingIdentity.body.message, new RegExp(fixture.errors.missingIdentity.messagePattern, 'i'));
 
       const invalidIdentity = await jsonRequest(baseUrl, fixture.routes.registration, {
-        method: 'POST',
-        token: fixture.registration.invalidIdentityToken,
-        body: fixture.registration.invalidIdentityPayload,
-      });
-      assert.equal(invalidIdentity.response.status, fixture.errors.invalidIdentity.statusCode);
-      assert.equal(invalidIdentity.body.error, fixture.errors.invalidIdentity.error);
-      assert.match(invalidIdentity.body.message, new RegExp(fixture.errors.invalidIdentity.messagePattern, 'i'));
-
-      const invalidToken = await jsonRequest(baseUrl, fixture.routes.registration, {
         method: 'POST',
         token: fixture.registration.unknownToken,
         body: fixture.registration.validPayload,
       });
-      assert.equal(invalidToken.response.status, fixture.errors.invalidToken.statusCode);
-      assert.equal(invalidToken.body.error, fixture.errors.invalidToken.error);
+      assert.equal(invalidIdentity.response.status, fixture.errors.invalidIdentity.statusCode);
+      assert.equal(invalidIdentity.body.error, fixture.errors.invalidIdentity.error);
+
+      const missingAgentIdPayload = { ...fixture.registration.validPayload };
+      delete missingAgentIdPayload.agentId;
+      const missingAgentId = await jsonRequest(baseUrl, fixture.routes.registration, {
+        method: 'POST',
+        token: fixture.registration.token,
+        body: missingAgentIdPayload,
+      });
+      assert.equal(missingAgentId.response.status, fixture.errors.missingAgentId.statusCode);
+      assert.equal(missingAgentId.body.error, fixture.errors.missingAgentId.error);
+      assert.match(missingAgentId.body.message, new RegExp(fixture.errors.missingAgentId.messagePattern, 'i'));
+
+      const invalidAgentId = await jsonRequest(baseUrl, fixture.routes.registration, {
+        method: 'POST',
+        token: fixture.registration.invalidIdentityToken,
+        body: fixture.registration.invalidIdentityPayload,
+      });
+      assert.equal(invalidAgentId.response.status, fixture.errors.invalidAgentId.statusCode);
+      assert.equal(invalidAgentId.body.error, fixture.errors.invalidAgentId.error);
+      assert.match(invalidAgentId.body.message, new RegExp(fixture.errors.invalidAgentId.messagePattern, 'i'));
 
       const malformed = await jsonRequest(baseUrl, fixture.routes.registration, {
         method: 'POST',

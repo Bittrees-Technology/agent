@@ -16,6 +16,7 @@
     "lane": "research",
     "priority": "high",
     "unknownId": "unknown-route-contract-opportunity",
+    "malformedId": "%ZZ",
     "emptyFilter": {
       "lane": "no-such-route-contract-lane"
     },
@@ -113,19 +114,27 @@
       "statusCode": 404,
       "error": "opportunity_not_found"
     },
+    "malformedOpportunity": {
+      "statusCode": 400,
+      "error": "invalid_opportunity_id"
+    },
     "missingIdentity": {
-      "statusCode": 422,
-      "error": "registration_rejected",
-      "messagePattern": "agentId is required"
-    },
-    "invalidIdentity": {
-      "statusCode": 422,
-      "error": "registration_rejected",
-      "messagePattern": "agentId is required"
-    },
-    "invalidToken": {
       "statusCode": 401,
       "error": "unauthorized"
+    },
+    "invalidIdentity": {
+      "statusCode": 401,
+      "error": "unauthorized"
+    },
+    "missingAgentId": {
+      "statusCode": 422,
+      "error": "registration_rejected",
+      "messagePattern": "agentId is required"
+    },
+    "invalidAgentId": {
+      "statusCode": 422,
+      "error": "registration_rejected",
+      "messagePattern": "agentId is required"
     },
     "malformedJson": {
       "statusCode": 400,
