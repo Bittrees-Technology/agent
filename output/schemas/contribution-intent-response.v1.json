@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/contribution-intent-response.v1.json",
+  "title": "agent.bittrees.org contribution intent response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema",
+    "route",
+    "canonicalUrl",
+    "generatedAt",
+    "requestSchema",
+    "responseSchema",
+    "securityGate",
+    "status",
+    "accepted",
+    "liveWrite",
+    "message"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "schema": {
+      "const": "agent.bittrees.contribution-intent.response.v1",
+      "type": "string"
+    },
+    "route": {
+      "enum": [
+        "/contribution-intents",
+        "/gateway/contribution-intents"
+      ],
+      "type": "string"
+    },
+    "canonicalUrl": {
+      "type": "string",
+      "format": "uri"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestSchema": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "responseSchema": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "securityGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted",
+        "mode",
+        "liveWritesEnabled",
+        "liveWriteReason",
+        "blockedUntil",
+        "securityOwner",
+        "storagePolicy",
+        "noGoItems"
+      ],
+      "properties": {
+        "accepted": { "type": "boolean" },
+        "mode": { "type": "string" },
+        "liveWritesEnabled": { "type": "boolean" },
+        "liveWriteReason": { "type": "string" },
+        "blockedUntil": { "type": "string" },
+        "securityOwner": { "type": "string" },
+        "storagePolicy": { "type": "string" },
+        "noGoItems": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "not_implemented",
+        "accepted",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "accepted": { "type": "boolean" },
+    "liveWrite": { "type": "boolean" },
+    "message": { "type": "string" },
+    "requestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "error": { "type": "string" },
+    "code": { "type": "string" },
+    "details": { "type": "object", "additionalProperties": true },
+    "receiptId": { "type": "string" },
+    "statusLookup": { "type": "string" },
+    "submission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receiptId",
+        "status",
+        "created",
+        "replayed",
+        "projection",
+        "attestation"
+      ],
+      "properties": {
+        "receiptId": { "type": "string" },
+        "status": {
+          "const": "queued_for_review",
+          "type": "string"
+        },
+        "created": { "type": "boolean" },
+        "replayed": { "type": "boolean" },
+        "projection": { "type": "object", "additionalProperties": true },
+        "attestation": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    },
+    "nextStep": { "type": "string" },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

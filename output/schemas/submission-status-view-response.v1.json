@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/submission-status-view-response.v1.json",
+  "title": "agent.bittrees.org submission status view response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "route",
+    "generatedAt",
+    "status",
+    "disclaimer",
+    "noRightsCreatedDisclaimer",
+    "schema",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "route": {
+      "const": "/submission-status.json",
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "const": "human-view-ready",
+      "type": "string"
+    },
+    "disclaimer": { "type": "string" },
+    "noRightsCreatedDisclaimer": { "type": "string" },
+    "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "pageRoute",
+        "lookupTool",
+        "acceptedKinds"
+      ],
+      "properties": {
+        "status": true,
+        "launchStatus": true,
+        "pageRoute": true,
+        "lookupTool": true,
+        "acceptedKinds": true
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "pageRoute",
+        "lookupTool",
+        "acceptedKinds",
+        "knownOpportunityIds",
+        "reviewGate",
+        "caveat"
+      ],
+      "properties": {
+        "status": {
+          "const": "human-view-ready",
+          "type": "string"
+        },
+        "launchStatus": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "pageRoute": {
+          "const": "/submission-status",
+          "type": "string"
+        },
+        "lookupTool": {
+          "const": "check_contribution_status",
+          "type": "string"
+        },
+        "acceptedKinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "any",
+              "opportunity",
+              "registration",
+              "claim",
+              "submission",
+              "feedback",
+              "attestation"
+            ],
+            "type": "string"
+          }
+        },
+        "knownOpportunityIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "reviewGate": {
+          "$ref": "./review-gate.v1.json"
+        },
+        "caveat": { "type": "string" }
+      }
+    }
+  }
+}

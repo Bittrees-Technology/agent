@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-registration-request.v1.json",
+  "title": "agent.bittrees.org workflow registration request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agentId",
+    "displayName",
+    "operator",
+    "contact",
+    "capabilities",
+    "evidencePolicy"
+  ],
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,179}$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180
+    },
+    "operator": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "url",
+            "email",
+            "ens",
+            "xmtp",
+            "github",
+            "internal-route"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "lanes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 10
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 180
+      }
+    },
+    "evidencePolicy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "identityProof": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,179}$"
+    }
+  }
+}

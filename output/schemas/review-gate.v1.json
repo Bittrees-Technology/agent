@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/review-gate.v1.json",
+  "title": "agent.bittrees.org review gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "productionMutationAllowed",
+    "contributorCapabilityGranted",
+    "walletAuthorityGranted",
+    "transactionSubmissionAllowed",
+    "registryMutationAllowed",
+    "status"
+  ],
+  "properties": {
+    "productionMutationAllowed": { "const": false, "type": "boolean" },
+    "contributorCapabilityGranted": { "const": false, "type": "boolean" },
+    "walletAuthorityGranted": { "const": false, "type": "boolean" },
+    "transactionSubmissionAllowed": { "const": false, "type": "boolean" },
+    "registryMutationAllowed": { "const": false, "type": "boolean" },
+    "status": {
+      "const": "review_required_before_publication_or_assignment",
+      "type": "string"
+    },
+    "persistenceMode": { "type": "string" },
+    "reviewers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "policy": { "type": "string" }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-registration-response.v1.json",
+  "title": "agent.bittrees.org workflow registration response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "created",
+    "replayed",
+    "status",
+    "reviewGate",
+    "kind",
+    "registration",
+    "authorizedRoute",
+    "statusLookup",
+    "record"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "created": { "type": "boolean" },
+    "replayed": { "type": "boolean" },
+    "status": {
+      "const": "queued_for_review",
+      "type": "string"
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    },
+    "kind": {
+      "const": "registration",
+      "type": "string"
+    },
+    "registration": {
+      "allOf": [
+        { "$ref": "./contributor-portal-status.v1.json" },
+        {
+          "properties": {
+            "kind": {
+              "const": "registration"
+            }
+          }
+        }
+      ]
+    },
+    "authorizedRoute": {
+      "const": "/v1/workflow/registrations",
+      "type": "string"
+    },
+    "statusLookup": {
+      "const": "/v1/workflow/status",
+      "type": "string"
+    },
+    "record": {
+      "allOf": [
+        { "$ref": "./contributor-portal-status.v1.json" },
+        {
+          "properties": {
+            "kind": {
+              "const": "registration"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-status-response.v1.json",
+  "title": "agent.bittrees.org workflow status response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "status",
+    "launchStatus",
+    "query",
+    "lookup",
+    "acceptedKinds",
+    "knownOpportunityIds",
+    "humanRoute",
+    "reviewGate",
+    "caveat"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "status_lookup_ready",
+        "status_found",
+        "not_found"
+      ],
+      "type": "string"
+    },
+    "launchStatus": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "any",
+            "opportunity",
+            "registration",
+            "claim",
+            "submission",
+            "feedback",
+            "attestation"
+          ],
+          "type": "string"
+        }
+      }
+    },
+    "lookup": {
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "./workflow-status-lookup.v1.json" }
+      ]
+    },
+    "acceptedKinds": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "any",
+          "opportunity",
+          "registration",
+          "claim",
+          "submission",
+          "feedback",
+          "attestation"
+        ],
+        "type": "string"
+      }
+    },
+    "knownOpportunityIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "humanRoute": {
+      "const": "/submission-status",
+      "type": "string"
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    },
+    "caveat": { "type": "string" }
+  }
+}

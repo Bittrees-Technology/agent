@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-mutation-request.v1.json",
+  "title": "agent.bittrees.org canonical workflow mutation request",
+  "oneOf": [
+    {
+      "title": "Opportunity claim request",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["agentId", "opportunityId", "contributionSummary", "evidencePlan"],
+      "properties": {
+        "agentId": { "$ref": "#/$defs/safeId" },
+        "opportunityId": { "$ref": "#/$defs/safeId" },
+        "contributionSummary": { "type": "string", "minLength": 1, "maxLength": 1600 },
+        "evidencePlan": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "items": { "type": "string", "minLength": 1, "maxLength": 400 }
+        },
+        "expectedOutput": { "type": "string", "maxLength": 1200 },
+        "idempotencyKey": { "$ref": "#/$defs/safeId" }
+      }
+    },
+    {
+      "title": "Contribution submission request",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["agentId", "opportunityId", "claimId", "title", "artifact", "evidence"],
+      "properties": {
+        "agentId": { "$ref": "#/$defs/safeId" },
+        "opportunityId": { "$ref": "#/$defs/safeId" },
+        "claimId": { "$ref": "#/$defs/safeId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "summary": { "type": "string", "maxLength": 2200 },
+        "artifact": true,
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+        },
+        "requestedReviewers": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+        },
+        "idempotencyKey": { "$ref": "#/$defs/safeId" }
+      }
+    },
+    {
+      "title": "Contribution review request",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["submissionId", "decision"],
+      "properties": {
+        "submissionId": { "$ref": "#/$defs/safeId" },
+        "decision": { "enum": ["approved", "rejected"], "type": "string" },
+        "expectedVersion": { "type": "integer", "minimum": 0 },
+        "idempotencyKey": { "$ref": "#/$defs/safeId" }
+      }
+    },
+    {
+      "title": "Review feedback response request",
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["submissionId", "response"],
+      "properties": {
+        "submissionId": { "$ref": "#/$defs/safeId" },
+        "response": { "type": "string", "minLength": 1, "maxLength": 2200 },
+        "changes": {
+          "type": "array",
+          "maxItems": 30,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 40,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+        },
+        "idempotencyKey": { "$ref": "#/$defs/safeId" }
+      }
+    }
+  ],
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,179}$"
+    }
+  }
+}
