@@ -1,10 +1,16 @@
+import { fileURLToPath } from 'node:url';
+
+import { requestUrl } from './request-url.mjs';
+
 const DEFAULT_BASE_URL = 'https://agent.bittrees.org';
+const rootDir = fileURLToPath(new URL('..', import.meta.url));
 
 const args = process.argv.slice(2);
 const baseUrlArg = args.find((arg) => arg.startsWith('--base-url='));
 const expectedReleaseVersionArg = args.find((arg) => arg.startsWith('--expected-release-version='));
 const expectedReleaseTagArg = args.find((arg) => arg.startsWith('--expected-release-tag='));
 const expectedReleaseCommitArg = args.find((arg) => arg.startsWith('--expected-release-commit='));
+const vercelDeploymentArg = args.find((arg) => arg.startsWith('--vercel-deployment='));
 const baseUrl = new URL(baseUrlArg ? baseUrlArg.split('=').slice(1).join('=') : process.env.BASE_URL ?? DEFAULT_BASE_URL);
 const expectedReleaseVersion = expectedReleaseVersionArg?.split('=').slice(1).join('=')
   || process.env.EXPECTED_RELEASE_VERSION;
@@ -12,6 +18,10 @@ const expectedReleaseTag = expectedReleaseTagArg?.split('=').slice(1).join('=')
   || process.env.EXPECTED_RELEASE_TAG;
 const expectedReleaseCommit = expectedReleaseCommitArg?.split('=').slice(1).join('=')
   || process.env.EXPECTED_RELEASE_COMMIT;
+const defaultVercelDeployment = vercelDeploymentArg?.split('=').slice(1).join('=')
+  || process.env.VERCEL_DEPLOYMENT
+  || '';
+const vercelProtected = args.includes('--vercel-protected');
 
 const routeChecks = [
   { path: '/', kind: 'html' },
@@ -71,8 +81,22 @@ function routeUrl(path) {
   return new URL(path, baseUrl).toString();
 }
 
+function deploymentTargetFor(url) {
+  if (defaultVercelDeployment) return defaultVercelDeployment;
+  return vercelProtected ? new URL(url).origin : '';
+}
+
+async function requestPortal(path, options = {}) {
+  const targetUrl = routeUrl(path);
+  return requestUrl(targetUrl, {
+    ...options,
+    vercelDeployment: deploymentTargetFor(targetUrl),
+    cwd: rootDir,
+  });
+}
+
 async function readJson(path) {
-  const response = await fetch(routeUrl(path), {
+  const response = await requestPortal(path, {
     headers: { 'User-Agent': 'agent.bittrees.org-smoke-check' },
   });
   const text = await response.text();
@@ -94,7 +118,7 @@ async function readJson(path) {
 }
 
 async function checkRoute(path, kind) {
-  const response = await fetch(routeUrl(path), {
+  const response = await requestPortal(path, {
     headers: { 'User-Agent': 'agent.bittrees.org-smoke-check' },
   });
   const text = await response.text();
@@ -214,7 +238,7 @@ async function checkRoute(path, kind) {
 
 async function checkStaticStatusDelegation() {
   const path = '/submission-status/index.html?id=smoke-status&kind=submission';
-  const response = await fetch(routeUrl(path), {
+  const response = await requestPortal(path, {
     redirect: 'manual',
     headers: { 'User-Agent': 'agent.bittrees.org-smoke-check' },
   });
@@ -227,6 +251,50 @@ async function checkStaticStatusDelegation() {
   checkSecurityHeaders(response, path);
   check((response.headers.get('x-robots-tag') ?? '').toLowerCase().includes('noindex'), `${path} missing noindex header`);
   check((response.headers.get('x-robots-tag') ?? '').toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
+}
+
+async function checkNotFoundContentNegotiation() {
+  const path = '/does-not-exist-smoke';
+  const browserResponse = await requestPortal(path, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'agent.bittrees.org-browser-smoke-check',
+    },
+  });
+  const browserBody = await browserResponse.text();
+  const browserContentType = browserResponse.headers.get('content-type') ?? '';
+  const browserRobots = browserResponse.headers.get('x-robots-tag') ?? '';
+
+  check(browserResponse.status === 404, `${path} browser request returned ${browserResponse.status}`);
+  check(browserContentType.startsWith('text/html'), `${path} browser request did not return HTML`);
+  check(browserBody.includes('<title>Page not found - agent.bittrees.org</title>'), `${path} missing branded 404 title`);
+  check(browserBody.includes('<footer class="site-footer"'), `${path} missing footer landmark`);
+  check(browserBody.includes('<meta name="description"'), `${path} missing page description metadata`);
+  checkSecurityHeaders(browserResponse, `${path} browser request`);
+  check(browserRobots.toLowerCase().includes('noindex'), `${path} browser request missing noindex header`);
+  check(browserRobots.toLowerCase().includes('nofollow'), `${path} browser request missing nofollow header`);
+
+  const agentResponse = await requestPortal(path, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'agent.bittrees.org-agent-smoke-check',
+    },
+  });
+  const agentBodyText = await agentResponse.text();
+  const agentContentType = agentResponse.headers.get('content-type') ?? '';
+  let agentBody;
+
+  try {
+    agentBody = JSON.parse(agentBodyText);
+  } catch (error) {
+    check(false, `${path} agent response was not JSON: ${error.message}`);
+  }
+
+  check(agentResponse.status === 404, `${path} agent request returned ${agentResponse.status}`);
+  check(agentContentType.startsWith('application/json'), `${path} agent request did not return JSON`);
+  check(agentBody?.error === 'not_found', `${path} agent response changed the not_found error contract`);
+  check(Array.isArray(agentBody?.availableRoutes), `${path} agent response missing availableRoutes`);
+  checkSecurityHeaders(agentResponse, `${path} agent request`);
 }
 
 function checkMonitoringRouteCoverage() {
@@ -265,7 +333,7 @@ async function checkErrorPaths() {
 
   for (const [index, expectation] of errorPathChecks.entries()) {
     const requestId = `smoke-error-${index + 1}`;
-    const response = await fetch(routeUrl(expectation.path), {
+    const response = await requestPortal(expectation.path, {
       method: expectation.method,
       headers: {
         'Content-Type': 'application/json',
@@ -368,7 +436,7 @@ function checkOpportunities() {
 }
 
 async function postMcp(body) {
-  const response = await fetch(routeUrl('/mcp'), {
+  const response = await requestPortal('/mcp', {
     method: 'POST',
     headers: {
       Accept: 'application/json, text/event-stream',
@@ -559,6 +627,7 @@ check(
 );
 
 await checkStaticStatusDelegation();
+await checkNotFoundContentNegotiation();
 checkSources();
 checkAgents();
 checkOpportunities();

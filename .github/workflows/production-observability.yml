@@ -1,0 +1,145 @@
+name: Production observability and backups
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-observability-${{ github.event_name }}-${{ github.event.schedule || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  PRODUCTION_BASE_URL: https://agent.bittrees.org
+
+jobs:
+  monitor:
+    name: Health and route-contract monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Prepare evidence directory
+        run: mkdir -p output/production-observability
+
+      - name: Check production health
+        run: >
+          npm run health -- --base-url="${PRODUCTION_BASE_URL}"
+          --summary-file=output/production-observability/health-summary.json
+
+      - name: Check production route contract
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run smoke -- --base-url="${PRODUCTION_BASE_URL}" 2>&1 \
+            | tee output/production-observability/smoke.log
+
+      - name: Upload monitoring evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-observability-${{ github.run_id }}
+          path: output/production-observability
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Open or update production monitor alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: agent.bittrees.org production monitor failed
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="$(cat <<EOF
+Production monitoring failed for ${PRODUCTION_BASE_URL}.
+
+- Workflow run: ${run_url}
+- Commit: ${GITHUB_SHA}
+- Trigger: ${GITHUB_EVENT_NAME}
+- Artifact: production-observability-${GITHUB_RUN_ID}
+
+Check the uploaded health summary and smoke log before changing deployment, DNS, TLS, or secrets.
+EOF
+)"
+          existing="$(gh issue list --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
+          if [[ -n "${existing}" ]]; then
+            gh issue comment "${existing}" --body "${body}"
+          else
+            gh issue create --title "${TITLE}" --body "${body}"
+          fi
+
+  backup:
+    name: Production service-state backup
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 2 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Capture production backup
+        run: >
+          npm run backup:production -- --base-url="${PRODUCTION_BASE_URL}"
+          --output-dir=output/production-backups
+          --skip-vercel
+
+      - name: Upload production backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-backup-${{ github.run_id }}
+          path: output/production-backups
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Open or update production backup alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: agent.bittrees.org production backup failed
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="$(cat <<EOF
+Production backup failed for ${PRODUCTION_BASE_URL}.
+
+- Workflow run: ${run_url}
+- Commit: ${GITHUB_SHA}
+- Trigger: ${GITHUB_EVENT_NAME}
+- Artifact name attempted: production-backup-${GITHUB_RUN_ID}
+
+Do not change deployment, DNS, TLS, or secrets from this alert; restore or rerun the backup procedure from the runbook.
+EOF
+)"
+          existing="$(gh issue list --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
+          if [[ -n "${existing}" ]]; then
+            gh issue comment "${existing}" --body "${body}"
+          else
+            gh issue create --title "${TITLE}" --body "${body}"
+          fi

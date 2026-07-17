@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
+import { requestUrl } from './request-url.mjs';
+
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_BASE_URL = 'https://agent.bittrees.org';
 const HEALTH_ROUTE = '/api/health';
@@ -20,7 +22,7 @@ function normalizeUrl(value, fallback = DEFAULT_BASE_URL) {
 }
 
 function help() {
-  console.log(`Usage: node scripts/rollout-check.mjs --base-url=https://... [--rollback-url=https://...] [--health-only]
+  console.log(`Usage: node scripts/rollout-check.mjs --base-url=https://... [--rollback-url=https://...] [--health-only] [--vercel-protected] [--vercel-deployment=https://...]
 
 Checks the dynamic /api/health route and, unless --health-only is passed,
 runs the existing smoke suite against the primary deployment and optional
@@ -65,11 +67,13 @@ function assertReleaseMetadataMatches(releaseMetadata, { expectedReleaseVersion,
 
 async function verifyHealth(baseUrl, label, expectations) {
   const healthUrl = new URL(HEALTH_ROUTE, baseUrl);
-  const response = await fetch(healthUrl, {
+  const response = await requestUrl(healthUrl, {
     headers: {
       Accept: 'application/json',
       'User-Agent': 'agent.bittrees.org-rollout-check',
     },
+    vercelDeployment: deploymentTargetFor(baseUrl),
+    cwd: rootDir,
   });
 
   const requestId = requiredHeader(response, 'x-request-id', label);
@@ -111,6 +115,13 @@ async function runSmoke(baseUrl, label, expectations) {
     'scripts/smoke-check.mjs',
     `--base-url=${baseUrl.toString()}`,
   ];
+  if (vercelProtected && !defaultVercelDeployment) {
+    args.push('--vercel-protected');
+  }
+  const deploymentTarget = deploymentTargetFor(baseUrl);
+  if (deploymentTarget && defaultVercelDeployment) {
+    args.push(`--vercel-deployment=${deploymentTarget}`);
+  }
   if (expectations.expectedReleaseVersion) {
     args.push(`--expected-release-version=${expectations.expectedReleaseVersion}`);
   }
@@ -165,12 +176,19 @@ const rollbackUrlValue = readArg('--rollback-url', process.env.ROLLBACK_BASE_URL
 const rollbackUrl = rollbackUrlValue ? normalizeUrl(rollbackUrlValue, rollbackUrlValue) : null;
 const summaryFile = readArg('--summary-file', process.env.ROLLOUT_SUMMARY_FILE ?? '');
 const healthOnly = process.argv.includes('--health-only');
+const vercelProtected = process.argv.includes('--vercel-protected');
+const defaultVercelDeployment = readArg('--vercel-deployment', process.env.VERCEL_DEPLOYMENT ?? '');
 
 const expectations = {
   expectedReleaseVersion: readArg('--expected-release-version', process.env.EXPECTED_RELEASE_VERSION ?? ''),
   expectedReleaseTag: readArg('--expected-release-tag', process.env.EXPECTED_RELEASE_TAG ?? ''),
   expectedReleaseCommit: readArg('--expected-release-commit', process.env.EXPECTED_RELEASE_COMMIT ?? ''),
 };
+
+function deploymentTargetFor(url) {
+  if (defaultVercelDeployment) return defaultVercelDeployment;
+  return vercelProtected ? url.origin : '';
+}
 
 const summary = {
   generatedAt: new Date().toISOString(),
