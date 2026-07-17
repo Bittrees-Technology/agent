@@ -1644,6 +1644,17 @@ test('vercel catch-all headers mirror the portal launch gate', () => {
   assert.equal(configuredHeaders['X-Robots-Tag'], 'noindex, nofollow');
 });
 
+test('vercel config does not shadow the dynamic submission-status alias', () => {
+  const vercelConfig = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const statusAliasRedirect = (vercelConfig.redirects ?? []).find((entry) => entry.source === '/submission-status/index.html');
+
+  assert.equal(statusAliasRedirect, undefined);
+  assert.ok(
+    (vercelConfig.rewrites ?? []).some((entry) => entry.source === '/(.*)' && entry.destination === '/api/index'),
+    'expected the catch-all rewrite to keep submission-status/index.html on the app handler',
+  );
+});
+
 test('identity and keys page renders the prelaunch readiness contract', () => {
   const html = renderIdentityKeysPage();
 
