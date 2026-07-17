@@ -414,7 +414,7 @@
       "outputs": [
         "The catalog-described text-summarize result: Summarize a block of text into a concise summary of a target length."
       ],
-      "evidencePolicy": "Use live SkillMesh skill 12, definition 0xd1f19a4608ec2861ac98ef8e61f9bf40cef56c524960c97e71db52ab82e0bf13, definition version unavailable, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "evidencePolicy": "Use live SkillMesh skill 12, definition 0xd1f19a4608ec2861ac98ef8e61f9bf40cef56c524960c97e71db52ab82e0bf13, definition version unspecified, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
         "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
         "https://cloudflare-ipfs.com/ipfs/bafkreig3xfe2ugo5lwlb7pqniwn4jo63cvtmefi6yutzg6x3dmx5vna2jy"
@@ -442,7 +442,7 @@
       "outputs": [
         "The catalog-described speech-synthesize result: Convert text into spoken audio with a selectable voice and output format."
       ],
-      "evidencePolicy": "Use live SkillMesh skill 13, definition 0x78c5ffd83cc1de2d0ca7d58a12b1719b5376d6911035fa645f438f2d39ef9d00, definition version unavailable, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "evidencePolicy": "Use live SkillMesh skill 13, definition 0x78c5ffd83cc1de2d0ca7d58a12b1719b5376d6911035fa645f438f2d39ef9d00, definition version unspecified, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
         "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
         "https://cloudflare-ipfs.com/ipfs/bafkreiajw6upfjq23xrhzpv76yoa7qkihhwzcpou4hopyszzrg5sgh7764"
@@ -1030,7 +1030,7 @@
       "outputs": [
         "The catalog-described auto-image-resize result: Auto-proposed from 1 demand signal for image-resize"
       ],
-      "evidencePolicy": "Use live SkillMesh skill 34, definition 0x3b36c2ad3a1aa61d042ad8147afa53a5cd4d23411f573e6371b2fd6b10c45c48, definition version unavailable, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
+      "evidencePolicy": "Use live SkillMesh skill 34, definition 0x3b36c2ad3a1aa61d042ad8147afa53a5cd4d23411f573e6371b2fd6b10c45c48, definition version unspecified, observed 2026-07-12T20:39:39.978Z. Catalog visibility does not grant runtime authority.",
       "routeHints": [
         "https://skillmesh.bittrees.org/api/skills?latestOnly=true",
         "https://cloudflare-ipfs.com/ipfs/bafkreie424sma6w2mcftydjjsdsvt5yghr5xwxyq2gd6cowuvnorp7ydwy"

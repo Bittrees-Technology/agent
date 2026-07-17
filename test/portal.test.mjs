@@ -106,11 +106,18 @@ const EXPECTED_ENV_EXAMPLE_NAMES = Object.freeze([
   'PORTAL_WORKFLOW_STATE_PATH',
   'RELEASE_TAG',
   'REGISTRY_STATE_PATH',
+  'ROLLBACK_BASE_URL',
   'SOURCE_VERSION',
   'VERCEL',
   'VERCEL_DEPLOYMENT_ID',
+  'VERCEL_ENV',
   'VERCEL_GIT_COMMIT_REF',
   'VERCEL_GIT_COMMIT_SHA',
+  'VERCEL_ORG_ID',
+  'VERCEL_PROJECT',
+  'VERCEL_PROJECT_ID',
+  'VERCEL_SCOPE',
+  'VERCEL_TOKEN',
 ]);
 
 async function withPortalServer(callback, handlerOptions = {}) {
@@ -908,6 +915,16 @@ test('contribution intent form ships a transparent-signing island inside the for
   assert.match(html, /<form class="intent-form" id="intent-form"[^>]*>[\s\S]*<section class="signing-island" id="intent-signing-island"[\s\S]*<\/section>\s*<button type="submit">/);
 });
 
+test('contribution intent form exposes a server-rendered no-JS fallback path', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<div class="signing-server-fallback" role="note" aria-labelledby="intent-server-fallback-title">/);
+  assert.match(html, /<h3 id="intent-server-fallback-title">Offline packet path<\/h3>/);
+  assert.match(html, /submitting this form returns a server-rendered offline contribution packet/);
+  assert.match(html, /does not create an assignment, approval, public attestation, onchain action, or wallet grant/);
+  assert.match(html, /<noscript>Client scripting is unavailable, so this form will use the offline packet path\.<\/noscript>/);
+});
+
 test('signing island shows the exact wallet message preview before any wallet prompt', () => {
   const html = renderLandingPage();
 
@@ -1008,7 +1025,7 @@ test('landing route links use working examples or documentation for templates an
 
 test('visible route lists collapse canonical alias destinations', () => {
   const html = renderLandingPage();
-  const actionGrid = extractNavByAriaLabel(html, 'Machine-readable routes');
+  const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
   const routeCardDestinations = extractRouteCardDestinations(actionGrid);
   const primaryNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Primary portal routes'));
   const footerNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Footer routes'));
@@ -1032,6 +1049,35 @@ test('visible route lists collapse canonical alias destinations', () => {
   assertNoDuplicateCanonicalDestinations('footer nav', footerNavHrefs);
   assertNoDuplicateCanonicalDestinations('not-found portal route list', notFoundRouteHrefs);
   assertNoDuplicateCanonicalDestinations('JSON routes', [...JSON_ROUTE_MAP.keys()]);
+});
+
+test('landing route directory groups human pages contracts and workflow APIs', () => {
+  const html = renderLandingPage();
+  const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
+
+  assert.match(actionGrid, /<h2 id="route-group-portal-pages">Portal pages<\/h2>/);
+  assert.match(actionGrid, /Human-readable pages for onboarding, status, reputation, legal gates, and documentation\./);
+  assert.match(actionGrid, /<h2 id="route-group-agent-contracts">Agent-readable contracts<\/h2>/);
+  assert.match(actionGrid, /Text and JSON contracts for crawlers, agent clients, release checks, and source verification\./);
+  assert.match(actionGrid, /<h2 id="route-group-workflow-apis">Workflow APIs<\/h2>/);
+  assert.match(actionGrid, /Review-gated HTTP and MCP routes for contribution discovery, submission, and status lookup\./);
+
+  const portalGroup = actionGrid.match(/id="route-group-portal-pages"[\s\S]*?<\/section>/)?.[0] ?? '';
+  const contractsGroup = actionGrid.match(/id="route-group-agent-contracts"[\s\S]*?<\/section>/)?.[0] ?? '';
+  const workflowGroup = actionGrid.match(/id="route-group-workflow-apis"[\s\S]*?<\/section>/)?.[0] ?? '';
+
+  assert.match(portalGroup, /href="\/onboarding"/);
+  assert.match(portalGroup, /href="\/submission-status"/);
+  assert.doesNotMatch(portalGroup, /href="\/agents\.json"/);
+
+  assert.match(contractsGroup, /href="\/agents\.json"/);
+  assert.match(contractsGroup, /href="\/llms\.txt"/);
+  assert.match(contractsGroup, /href="\/api\/health"/);
+  assert.doesNotMatch(contractsGroup, /href="\/v1\/workflow\/opportunities"/);
+
+  assert.match(workflowGroup, /href="\/mcp"/);
+  assert.match(workflowGroup, /href="\/v1\/workflow\/opportunities"/);
+  assert.match(workflowGroup, /href="\/gateway\/contribution-intents"/);
 });
 
 test('contribution intent contract security gate tracks the write flag', () => {
@@ -1806,6 +1852,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/privacy'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/tou'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/api/health'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding.json'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
@@ -1826,6 +1873,30 @@ test('homepage and monitoring expose contribution workflow', () => {
     && check.expectedStatus === 400
     && check.forbiddenResponseText.includes('/var/task')
   )));
+});
+
+test('runtime health route exposes rollout and observability contracts', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/health`, {
+      headers: { Accept: 'application/json' },
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /^application\/json/);
+    assert.ok(response.headers.get('x-request-id'));
+    assert.equal(body.route, '/api/health');
+    assert.equal(body.status, 'ok');
+    assert.equal(body.health.overall, 'ok');
+    assert.equal(body.observability.requestIdHeader, 'X-Request-Id');
+    assert.ok(body.observability.telemetryFields.includes('requestId'));
+    assert.equal(body.rollback.smokeContract, '/monitoring.json');
+    assert.match(body.rollback.verificationCommand, /npm run rollout:check -- --base-url=<candidate-url> --rollback-url=<ready-production-url>/);
+    assert.equal(body.reviewGate.publicAuthority, 'health status does not grant authority or approval');
+    assert.ok(body.health.checks.some((check) => check.id === 'release-metadata'));
+    assert.ok(body.health.checks.some((check) => check.id === 'request-correlation'));
+    assert.ok(body.health.checks.some((check) => check.id === 'monitoring-contract'));
+  });
 });
 
 test('workflow API supports discovery brief and status journeys', async () => {
@@ -2497,6 +2568,7 @@ test('human pages expose shared primary navigation and route metadata', () => {
     { path: '/reputation', label: 'Reputation', html: renderReputationPage() },
     { path: '/terms-of-use', label: 'Terms', html: renderTermsOfUsePage() },
     { path: '/privacy', label: 'Privacy', html: renderPrivacyPage() },
+    { path: '/onboarding', label: 'Onboarding', html: renderOnboardingPage() },
   ];
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

@@ -393,3 +393,84 @@ test('workflow JSON store survives a new process object and terminal outcome emi
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('versioned contribution intake receipts replay safely with non-secret correlation and pending-only attestations', () => {
+  const workflow = newWorkflow();
+  const actor = { subject: 'agent-contract', scopes: ['contributor:submit'] };
+  const input = {
+    actor,
+    submissionId: 'sub_intake_contract_1',
+    opportunityId: 'source-registry-hardening',
+    agentId: 'agent-contract',
+    idempotencyKey: 'intake-contract-1',
+    intake: {
+      schema: 'agent.bittrees.contribution-intent.v1',
+      intentId: 'intent-contract-1',
+      submittedAt: '2026-07-16T20:45:00.000Z',
+      summary: 'This is deliberately digest-only receipt material.',
+    },
+  };
+
+  const first = workflow.queueContributionIntake(input);
+  assert.equal(first.created, true);
+  assert.equal(first.replayed, false);
+  assert.equal(first.receipt.schema, 'agent.bittrees.contribution-intake-receipt.v1');
+  assert.equal(first.receipt.receiptId, input.submissionId);
+  assert.equal(first.receipt.intake.schema, 'agent.bittrees.contribution-intent.v1');
+  assert.equal(first.receipt.intake.version, 1);
+  assert.equal(first.receipt.correlation.schema, 'agent.bittrees.contribution-intake-correlation.v1');
+  assert.match(first.receipt.correlation.payloadDigest, /^[a-f0-9]{64}$/);
+  assert.match(first.receipt.correlation.correlationId, /^[a-f0-9]{64}$/);
+  assert.equal(first.receipt.correlation.containsSecrets, false);
+  assert.doesNotMatch(JSON.stringify(first.receipt), /deliberately digest-only receipt material/i);
+
+  assert.equal(first.attestation.publicAttestation, false);
+  assert.equal(first.attestation.attestationStatus, 'review_pending_not_publicly_attested');
+  assert.equal(first.attestation.intakeReceipt.receiptId, first.receipt.receiptId);
+  for (const gate of [first.reviewGate, first.receipt.reviewGate, first.attestation.reviewGate]) {
+    assert.equal(gate.productionMutationAllowed, false);
+    assert.equal(gate.contributorCapabilityGranted, false);
+    assert.equal(gate.walletAuthorityGranted, false);
+    assert.equal(gate.transactionSubmissionAllowed, false);
+    assert.equal(gate.registryMutationAllowed, false);
+  }
+  for (const field of [
+    'signatureMaterialAccepted',
+    'signatureMaterialStored',
+    'signatureUsedForAuthority',
+    'walletAuthorityGranted',
+    'transactionSubmissionAllowed',
+    'publicAttestationAllowed',
+  ]) {
+    assert.equal(first.receipt.signingPosture[field], false);
+  }
+
+  const replay = workflow.queueContributionIntake(input);
+  assert.equal(replay.created, false);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.receipt.receiptId, first.receipt.receiptId);
+  assert.equal(replay.receipt.correlation.correlationId, first.receipt.correlation.correlationId);
+  assert.equal(replay.attestation.id, first.attestation.id);
+
+  const ownerStatus = workflow.status({ id: first.attestation.id, kind: 'attestation', actor });
+  assert.equal(ownerStatus.status, 'status_found');
+  assert.equal(ownerStatus.result.intakeReceipt.receiptId, first.receipt.receiptId);
+  assert.equal(ownerStatus.result.intakeReceipt.signingPosture.signatureMaterialStored, false);
+
+  assert.throws(
+    () => workflow.queueContributionIntake({
+      ...input,
+      intake: { ...input.intake, intentId: 'intent-contract-2' },
+    }),
+    (error) => error.code === 'idempotency_conflict',
+  );
+  assert.throws(
+    () => workflow.queueContributionIntake({
+      ...input,
+      submissionId: 'sub_intake_contract_2',
+      idempotencyKey: 'intake-contract-2',
+      intake: { ...input.intake, signature: '0xnot-accepted' },
+    }),
+    (error) => error.code === 'sensitive_payload',
+  );
+});

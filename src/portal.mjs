@@ -33,6 +33,7 @@ const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
 const TERMS_PAGE_ROUTE = '/terms';
 const TERMS_OF_USE_SHORT_ROUTE = '/tou';
 const PRIVACY_PAGE_ROUTE = '/privacy';
+const HEALTH_CHECK_PATH = '/api/health';
 const SUBMISSION_STATUS_STATIC_ASSET_ROUTE = '/submission-status/index.html';
 const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
   [`${TERMS_PAGE_ROUTE}/index.html`, TERMS_PAGE_ROUTE],
@@ -1668,6 +1669,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/sources.json',
     '/opportunities.json',
     '/onboarding.json',
+    HEALTH_CHECK_PATH,
     WORKFLOW_OPPORTUNITIES_PATH,
     `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
     `${WORKFLOW_STATUS_PATH}?id=source-registry-hardening&kind=opportunity`,
@@ -1700,6 +1702,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/sources.json',
       '/opportunities.json',
       '/onboarding.json',
+      HEALTH_CHECK_PATH,
       WORKFLOW_OPPORTUNITIES_PATH,
       `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
       `${WORKFLOW_STATUS_PATH}?id=source-registry-hardening&kind=opportunity`,
@@ -3339,6 +3342,72 @@ function buildPrivacyStatus() {
   };
 }
 
+function deploymentEnvironment() {
+  const vercelEnv = String(process.env.VERCEL_ENV ?? '').trim();
+  if (vercelEnv) return vercelEnv;
+  return process.env.VERCEL === '1' ? 'vercel-runtime' : 'local';
+}
+
+function buildHealthRouteResponse({ releaseMetadata = DEPLOYED_RELEASE_METADATA } = {}) {
+  const writesEnabled = isContributionIntentsWriteEnabled();
+
+  return {
+    status: 'ok',
+    service: 'agent.bittrees.org',
+    route: HEALTH_CHECK_PATH,
+    launchStatus: LAUNCH_STATUS,
+    deployment: {
+      environment: deploymentEnvironment(),
+      platform: process.env.VERCEL === '1' ? 'vercel' : 'local',
+      releaseSource: releaseMetadata.source,
+    },
+    releaseMetadata,
+    health: {
+      overall: 'ok',
+      checks: [
+        {
+          id: 'release-metadata',
+          status: releaseMetadata.source === 'package-fallback' ? 'warn' : 'ok',
+          detail: releaseMetadata.source === 'package-fallback'
+            ? 'Release identity fell back to package metadata.'
+            : 'Release metadata is bound to the deployed build identity.',
+        },
+        {
+          id: 'request-correlation',
+          status: 'ok',
+          detail: `Dynamic responses echo ${REQUEST_ID_HEADER} for request correlation.`,
+        },
+        {
+          id: 'monitoring-contract',
+          status: 'ok',
+          detail: 'Daily smoke and error-path expectations are published at /monitoring.json.',
+        },
+        {
+          id: 'contribution-write-gate',
+          status: writesEnabled ? 'warn' : 'ok',
+          detail: writesEnabled
+            ? 'Contribution-intent writes are enabled for this runtime.'
+            : 'Contribution-intent writes remain disabled by default.',
+        },
+      ],
+    },
+    observability: {
+      requestIdHeader: REQUEST_ID_HEADER,
+      telemetryFields: [...LAUNCH_FRESHNESS_MONITORING.observability.telemetryFields],
+    },
+    rollback: {
+      smokeContract: '/monitoring.json',
+      verificationCommand:
+        'npm run rollout:check -- --base-url=<candidate-url> --rollback-url=<ready-production-url>',
+    },
+    reviewGate: {
+      contributionWrites: writesEnabled ? 'enabled-for-nonproduction-review' : 'disabled-by-default',
+      workflowWrites: 'review-gated queue only',
+      publicAuthority: 'health status does not grant authority or approval',
+    },
+  };
+}
+
 const JSON_ROUTES = [
   {
     path: '/agents.json',
@@ -3670,6 +3739,21 @@ const JSON_ROUTES = [
       releaseSnapshot: IDACC_RELEASE_SNAPSHOT,
       releases: [IDACC_RELEASE_SNAPSHOT.latest],
     }),
+  },
+  {
+    path: HEALTH_CHECK_PATH,
+    label: 'Runtime health',
+    description: 'Dynamic health route for release identity, request correlation, smoke readiness, and rollback verification.',
+    status: 'ok',
+    staticAsset: false,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org runtime health response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'service', 'route', 'deployment', 'releaseMetadata', 'health', 'observability', 'rollback'],
+    },
+    data: ({ releaseMetadata = DEPLOYED_RELEASE_METADATA } = {}) => buildHealthRouteResponse({ releaseMetadata }),
   },
   {
     path: '/monitoring.json',
@@ -4288,6 +4372,32 @@ function renderContributionIntentFormStyles() {
         color: var(--muted);
       }
 
+      .signing-server-fallback {
+        display: grid;
+        gap: 7px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        background: #fff;
+      }
+
+      .signing-server-fallback h3,
+      .signing-server-fallback p {
+        margin: 0;
+      }
+
+      .signing-server-fallback h3 {
+        color: var(--ink);
+        font-size: 0.95rem;
+        letter-spacing: 0;
+      }
+
+      .signing-server-fallback p,
+      .signing-server-fallback noscript {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
       .signing-island .caveat[role="alert"] {
         border-left: 3px solid var(--gold);
         padding-left: 10px;
@@ -4634,8 +4744,43 @@ function shouldRenderVisibleRouteListItem(definition) {
   return definition.path !== '/' && !isCanonicalAliasRoute(definition);
 }
 
-function renderRouteCards() {
-  return ROUTE_DEFINITIONS.filter(shouldRenderVisibleRouteListItem)
+const ROUTE_DIRECTORY_GROUPS = Object.freeze([
+  {
+    id: 'portal-pages',
+    label: 'Portal pages',
+    description: 'Human-readable pages for onboarding, status, reputation, legal gates, and documentation.',
+    includes: (definition) => definition.kind === 'html' && definition.path !== MCP_GATEWAY.path,
+  },
+  {
+    id: 'agent-contracts',
+    label: 'Agent-readable contracts',
+    description: 'Text and JSON contracts for crawlers, agent clients, release checks, and source verification.',
+    includes: (definition) => (
+      (definition.kind === 'json' || definition.kind === 'text')
+      && !definition.path.startsWith(WORKFLOW_API_BASE_PATH)
+      && !definition.path.startsWith('/v1/registry/')
+      && !CONTRIBUTION_INTENT_POST_PATHS.has(definition.path)
+    ),
+  },
+  {
+    id: 'workflow-apis',
+    label: 'Workflow APIs',
+    description: 'Review-gated HTTP and MCP routes for contribution discovery, submission, and status lookup.',
+    includes: (definition) => (
+      definition.path === MCP_GATEWAY.path
+      || definition.path.startsWith(WORKFLOW_API_BASE_PATH)
+      || definition.path.startsWith('/v1/registry/')
+      || CONTRIBUTION_INTENT_POST_PATHS.has(definition.path)
+    ),
+  },
+]);
+
+function visibleRouteDefinitions() {
+  return ROUTE_DEFINITIONS.filter(shouldRenderVisibleRouteListItem);
+}
+
+function renderRouteCards(definitions = visibleRouteDefinitions()) {
+  return definitions
     .map(
       (definition) => `
         <article class="route-card">
@@ -4648,6 +4793,24 @@ function renderRouteCards() {
       `,
     )
     .join('');
+}
+
+function renderRouteDirectory() {
+  return ROUTE_DIRECTORY_GROUPS.map((group) => {
+    const definitions = visibleRouteDefinitions().filter(group.includes);
+    if (definitions.length === 0) return '';
+
+    const titleId = `route-group-${group.id}`;
+    return `<section class="route-directory-group" aria-labelledby="${escapeHtml(titleId)}">
+            <div class="route-directory-heading">
+              <h2 id="${escapeHtml(titleId)}">${escapeHtml(group.label)}</h2>
+              <p>${escapeHtml(group.description)}</p>
+            </div>
+            <div class="route-card-stack">
+              ${renderRouteCards(definitions)}
+            </div>
+          </section>`;
+  }).join('');
 }
 
 function renderWorkflowItems() {
@@ -5294,6 +5457,11 @@ function renderContributionSigningIsland(values, laneOptions) {
       </dl>
       <p class="form-notice">${escapeHtml(CONTRIBUTION_SIGNING_DISTINCTION)}</p>
     </details>
+    <div class="signing-server-fallback" role="note" aria-labelledby="intent-server-fallback-title">
+      <h3 id="intent-server-fallback-title">Offline packet path</h3>
+      <p>If wallet signing is unavailable, submitting this form returns a server-rendered offline contribution packet. That fallback does not create an assignment, approval, public attestation, onchain action, or wallet grant.</p>
+      <noscript>Client scripting is unavailable, so this form will use the offline packet path.</noscript>
+    </div>
     <p class="caveat" id="intent-chain-warning" role="alert" hidden></p>
     <p class="caveat" id="intent-signing-failure" role="alert" hidden></p>
     <div class="signing-success" id="intent-signing-success" hidden>
@@ -6870,6 +7038,34 @@ export function renderLandingPage() {
 
       .action-grid {
         display: grid;
+        gap: 18px;
+      }
+
+      .route-directory-group {
+        display: grid;
+        gap: 10px;
+      }
+
+      .route-directory-heading {
+        display: grid;
+        gap: 4px;
+      }
+
+      .route-directory-heading h2 {
+        margin: 0;
+        font-size: 0.95rem;
+        letter-spacing: 0;
+      }
+
+      .route-directory-heading p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .route-card-stack {
+        display: grid;
         gap: 10px;
       }
 
@@ -7138,8 +7334,8 @@ export function renderLandingPage() {
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
         </div>
-        <nav class="action-grid" aria-label="Machine-readable routes">
-          ${renderRouteCards()}
+        <nav class="action-grid" aria-label="Portal route directory">
+          ${renderRouteDirectory()}
         </nav>
       </section>
 
@@ -7944,7 +8140,10 @@ export function renderOnboardingPage() {
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
       <p class="brand"><a href="/">agent.bittrees.org</a></p>
-      <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/onboarding')}
+        <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
+      </div>
     </header>
     <main>
 
@@ -9531,6 +9730,13 @@ export function createRequestHandler({
 
     if (pathname === '/llms.txt') {
       return sendBody(res, 200, buildLlmsTxt(), 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === HEALTH_CHECK_PATH) {
+      return sendJson(res, 200, buildHealthRouteResponse({ releaseMetadata }), includeBody, {
         ...telemetry,
         status: 200,
       });

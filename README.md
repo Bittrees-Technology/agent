@@ -198,6 +198,41 @@ Form fields use the v1 schema field names, including `contributor.*`, `targetLan
 npm run smoke -- --base-url=https://agent.bittrees.org
 ```
 
+The dynamic rollout-health contract lives at `/api/health`. Use it when you need
+release identity, request-correlation, and rollback-readiness evidence:
+
+```bash
+npm run health -- --base-url=https://agent.bittrees.org
+```
+
+To verify a candidate deployment together with a known-good rollback target:
+
+```bash
+npm run rollout:check -- \
+  --base-url=https://<candidate-url> \
+  --rollback-url=https://<ready-rollback-url>
+```
+
+To select the most recent Ready production deployment that is not the one
+currently serving the custom domain:
+
+```bash
+npm run rollout:rollback-target -- \
+  --project=agent \
+  --scope=bittrees-tech \
+  --exclude-url=https://agent.bittrees.org
+```
+
+For CI or a fresh automation environment, write the linked Vercel project file
+from environment variables instead of committing `.vercel/project.json`:
+
+```bash
+VERCEL_ORG_ID=team_... \
+VERCEL_PROJECT_ID=prj_... \
+VERCEL_PROJECT=agent \
+npm run vercel:link
+```
+
 ## Local setup
 
 ```bash

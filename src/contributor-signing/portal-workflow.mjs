@@ -13,6 +13,11 @@ import {
 export const PORTAL_WORKFLOW_SCHEMA = 'agent.bittrees.contributor-portal-workflow.v1';
 export const PORTAL_WORKFLOW_STATUS_SCHEMA = 'agent.bittrees.contributor-portal-status.v1';
 export const PORTAL_WORKFLOW_REVIEW_SCHEMA = 'agent.bittrees.contributor-review.v1';
+export const CONTRIBUTION_INTAKE_RECEIPT_SCHEMA = 'agent.bittrees.contribution-intake-receipt.v1';
+export const CONTRIBUTION_INTAKE_CORRELATION_SCHEMA = 'agent.bittrees.contribution-intake-correlation.v1';
+export const CONTRIBUTION_INTAKE_SIGNING_POSTURE_SCHEMA = 'agent.bittrees.contribution-intake-signing-posture.v1';
+
+const CONTRIBUTION_INTAKE_REQUEST_SCHEMA = 'agent.bittrees.contribution-intent.v1';
 
 export const WORKFLOW_SCOPES = Object.freeze({
   register: 'contributor:register',
@@ -44,7 +49,7 @@ const REVIEWER_ROLES = new Set([
   'ops-lead',
   'lead',
 ]);
-const SENSITIVE_KEY = /private|secret|mnemonic|seed|bearer|oauth|token|cookie|password|credential|wallet|signer|transaction|authority|execution/i;
+const SENSITIVE_KEY = /private|secret|mnemonic|seed|bearer|oauth|token|cookie|password|credential|wallet|signer|signature|signing|transaction|authority|execution/i;
 const SENSITIVE_TEXT = /\b(?:private\s+key|seed\s+phrase|mnemonic|bearer\s+token|oauth\s+token|api\s+key|session\s+cookie|raw\s+signature|signed\s+transaction|broadcast\s+(?:a\s+)?transaction|spend\s+(?:funds|tokens|assets)|grant\s+(?:authority|execution|spending|signing))\b/i;
 
 function clone(value) {
@@ -129,6 +134,84 @@ function reviewGate() {
   };
 }
 
+function contributionIntakeSigningPosture() {
+  return {
+    schema: CONTRIBUTION_INTAKE_SIGNING_POSTURE_SCHEMA,
+    version: 1,
+    status: 'review_intake_only',
+    signatureMaterialAccepted: false,
+    signatureMaterialStored: false,
+    signatureUsedForAuthority: false,
+    walletAuthorityGranted: false,
+    transactionSubmissionAllowed: false,
+    publicAttestationAllowed: false,
+  };
+}
+
+function normalizeContributionIntakeDescriptor(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    workflowError('intake metadata must be an object', 'invalid_intake_metadata', 422);
+  }
+  assertSafePayload(value, 'intake');
+  const schema = bounded(value.schema, 180, CONTRIBUTION_INTAKE_REQUEST_SCHEMA);
+  if (schema !== CONTRIBUTION_INTAKE_REQUEST_SCHEMA) {
+    workflowError('unsupported contribution intake schema', 'unsupported_intake_schema', 422);
+  }
+  const intentId = value.intentId === undefined || value.intentId === null
+    ? null
+    : assertId(value.intentId, 'intake.intentId');
+  const submittedAt = value.submittedAt === undefined || value.submittedAt === null
+    ? null
+    : bounded(value.submittedAt, 120);
+
+  return {
+    schema,
+    version: 1,
+    ...(intentId ? { intentId } : {}),
+    ...(submittedAt ? { submittedAt } : {}),
+  };
+}
+
+function contributionIntakeCorrelation({ receiptId, submissionId, opportunityId, agentId, payloadDigest }) {
+  const correlationId = digest({
+    schema: CONTRIBUTION_INTAKE_CORRELATION_SCHEMA,
+    receiptId,
+    submissionId,
+    opportunityId,
+    agentId,
+    payloadDigest,
+  });
+  return {
+    schema: CONTRIBUTION_INTAKE_CORRELATION_SCHEMA,
+    algorithm: 'sha256',
+    payloadDigest,
+    correlationId,
+    containsSecrets: false,
+    scope: 'intake_receipt_correlation_only',
+  };
+}
+
+function publicContributionIntakeReceipt(receipt) {
+  if (!receipt) return undefined;
+  return {
+    schema: CONTRIBUTION_INTAKE_RECEIPT_SCHEMA,
+    receiptId: receipt.receiptId,
+    submissionId: receipt.submissionId,
+    status: 'queued_for_review',
+    lifecycleStatus: 'review_pending',
+    createdAt: receipt.createdAt,
+    updatedAt: receipt.updatedAt,
+    intake: clone(receipt.intake),
+    signingPosture: clone(receipt.signingPosture),
+    correlation: clone(receipt.correlation),
+    reviewGate: reviewGate(),
+    privacy: {
+      redacted: true,
+      omittedFields: ['actor', 'idempotencyKey', 'payload', 'signature', 'signingMaterial'],
+    },
+  };
+}
+
 function defaultState(opportunities) {
   return {
     schema: PORTAL_WORKFLOW_SCHEMA,
@@ -140,6 +223,7 @@ function defaultState(opportunities) {
     feedback: {},
     reviews: {},
     attestations: {},
+    intakeReceipts: {},
     idempotency: {},
   };
 }
@@ -160,6 +244,7 @@ function normalizeState(value, opportunities) {
     feedback: state.feedback && typeof state.feedback === 'object' ? state.feedback : {},
     reviews: state.reviews && typeof state.reviews === 'object' ? state.reviews : {},
     attestations: state.attestations && typeof state.attestations === 'object' ? state.attestations : {},
+    intakeReceipts: state.intakeReceipts && typeof state.intakeReceipts === 'object' ? state.intakeReceipts : {},
     idempotency: state.idempotency && typeof state.idempotency === 'object' ? state.idempotency : {},
   };
 }
@@ -287,9 +372,10 @@ function publicRecord(record, { kind, includeFeedback = false } = {}) {
   return projection;
 }
 
-function publicAttestation(record) {
+function publicAttestation(record, { intakeReceipt } = {}) {
   const contributionId = record.submissionId ?? record.id;
-  return buildContributionAttestation({
+  return {
+    ...buildContributionAttestation({
     contributionId,
     submissionId: contributionId,
     agentId: record.agentId,
@@ -297,7 +383,9 @@ function publicAttestation(record) {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     status: record.attestationStatus ?? contributionAttestationStatusForReviewStatus(record.status),
-  });
+    }),
+    ...(intakeReceipt ? { intakeReceipt: publicContributionIntakeReceipt(intakeReceipt) } : {}),
+  };
 }
 
 function recordEnvelope(status, record, extra = {}) {
@@ -391,6 +479,10 @@ export class ContributorPortalWorkflow {
       .find((record) => record.submissionId === submissionId);
   }
 
+  #findIntakeReceiptBySubmissionId(submissionId) {
+    return this.#state.intakeReceipts[submissionId];
+  }
+
   #ensurePendingAttestation({ submissionId, opportunityId, agentId, timestamp }) {
     const existing = this.#findAttestationBySubmissionId(submissionId);
     const canonicalId = contributionAttestationId(submissionId);
@@ -417,19 +509,101 @@ export class ContributorPortalWorkflow {
     return record;
   }
 
-  recordPendingAttestation({ actor, submissionId, opportunityId, agentId } = {}) {
+  queueContributionIntake({ actor, submissionId, opportunityId, agentId, intake = {}, idempotencyKey } = {}) {
     const safeSubmissionId = assertId(submissionId, 'submissionId');
     const safeOpportunityId = assertId(opportunityId, 'opportunityId');
     const safeAgentId = assertId(agentId, 'agentId');
-    this.#authorize(actor, WORKFLOW_SCOPES.submit, safeAgentId);
+    const auth = this.#authorize(actor, WORKFLOW_SCOPES.submit, safeAgentId);
+    const normalizedIntake = normalizeContributionIntakeDescriptor(intake);
+    const requestDigest = digest({
+      receiptId: safeSubmissionId,
+      submissionId: safeSubmissionId,
+      opportunityId: safeOpportunityId,
+      agentId: safeAgentId,
+      intake: normalizedIntake,
+    });
+    const key = assertSafeKey(idempotencyKey ?? `intake-${safeSubmissionId}`);
+    const idem = this.#idempotent('intake-receipt', auth.subject, key, requestDigest);
+    if (idem.prior) {
+      const receipt = this.#state.intakeReceipts[idem.prior.recordId];
+      if (!receipt) {
+        throw new ContributorPortalConflictError('idempotency receipt is unavailable', {
+          code: 'idempotency_receipt_missing',
+        });
+      }
+      const attestation = this.#ensurePendingAttestation({
+        submissionId: safeSubmissionId,
+        opportunityId: safeOpportunityId,
+        agentId: safeAgentId,
+        timestamp: receipt.createdAt,
+      });
+      this.#save();
+      return {
+        created: false,
+        replayed: true,
+        receipt: publicContributionIntakeReceipt(receipt),
+        attestation: publicAttestation(attestation, { intakeReceipt: receipt }),
+        reviewGate: reviewGate(),
+      };
+    }
+
+    const existingReceipt = this.#findIntakeReceiptBySubmissionId(safeSubmissionId);
+    if (existingReceipt) {
+      throw new ContributorPortalConflictError('submission already has a contribution-intake receipt', {
+        code: 'intake_receipt_conflict',
+        details: { receiptId: safeSubmissionId },
+      });
+    }
+    const timestamp = nowIso(this.#clock);
+    const receipt = {
+      schema: CONTRIBUTION_INTAKE_RECEIPT_SCHEMA,
+      receiptId: safeSubmissionId,
+      submissionId: safeSubmissionId,
+      opportunityId: safeOpportunityId,
+      agentId: safeAgentId,
+      status: 'queued_for_review',
+      lifecycleStatus: 'review_pending',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      intake: normalizedIntake,
+      signingPosture: contributionIntakeSigningPosture(),
+      correlation: contributionIntakeCorrelation({
+        receiptId: safeSubmissionId,
+        submissionId: safeSubmissionId,
+        opportunityId: safeOpportunityId,
+        agentId: safeAgentId,
+        payloadDigest: requestDigest,
+      }),
+      idempotencyKey: key,
+      authenticatedSubject: auth.subject,
+    };
+    this.#state.intakeReceipts[receipt.receiptId] = receipt;
+    this.#rememberIdempotency(idem.key, requestDigest, receipt.receiptId);
     const record = this.#ensurePendingAttestation({
       submissionId: safeSubmissionId,
       opportunityId: safeOpportunityId,
       agentId: safeAgentId,
-      timestamp: nowIso(this.#clock),
+      timestamp,
     });
     this.#save();
-    return publicAttestation(record);
+    return {
+      created: true,
+      replayed: false,
+      receipt: publicContributionIntakeReceipt(receipt),
+      attestation: publicAttestation(record, { intakeReceipt: receipt }),
+      reviewGate: reviewGate(),
+    };
+  }
+
+  recordPendingAttestation({ actor, submissionId, opportunityId, agentId, intake, idempotencyKey } = {}) {
+    return this.queueContributionIntake({
+      actor,
+      submissionId,
+      opportunityId,
+      agentId,
+      intake,
+      idempotencyKey,
+    }).attestation;
   }
 
   listOpportunities({ lane = '', priority = '', status = '' } = {}) {
@@ -812,7 +986,11 @@ export class ContributorPortalWorkflow {
       return {
         status: 'status_found',
         query: { id: queryId, kind: queryKind },
-        result: publicAttestation(attestationRecord ?? attestationSubmission),
+        result: publicAttestation(attestationRecord ?? attestationSubmission, {
+          intakeReceipt: this.#findIntakeReceiptBySubmissionId(
+            attestationRecord?.submissionId ?? attestationSubmission?.id,
+          ),
+        }),
         reviewGate: reviewGate(),
       };
     }
@@ -856,7 +1034,9 @@ export class ContributorPortalWorkflow {
         status: 'status_found',
         query: { id: queryId, kind: queryKind },
         result: recordKind === 'attestation'
-          ? publicAttestation(record)
+          ? publicAttestation(record, {
+              intakeReceipt: this.#findIntakeReceiptBySubmissionId(record.submissionId ?? record.id),
+            })
           : publicRecord(record, { kind: recordKind, includeFeedback: true }),
         reviewGate: reviewGate(),
       };
@@ -887,7 +1067,9 @@ export class ContributorPortalWorkflow {
   getContributionAttestation(id) {
     const submissionId = contributionIdFromAttestationId(id);
     const record = this.#findAttestationBySubmissionId(submissionId) ?? this.#findSubmission(submissionId);
-    return record ? publicAttestation(record) : undefined;
+    return record
+      ? publicAttestation(record, { intakeReceipt: this.#findIntakeReceiptBySubmissionId(submissionId) })
+      : undefined;
   }
 
   reviewQueue({ actor } = {}) {
@@ -899,7 +1081,9 @@ export class ContributorPortalWorkflow {
       claims: Object.values(this.#state.claims).map((row) => publicRecord(row, { kind: 'claim' })),
       submissions: Object.values(this.#state.submissions).map((row) => publicRecord(row, { kind: 'submission', includeFeedback: true })),
       feedback: Object.values(this.#state.feedback).map((row) => publicRecord(row, { kind: 'feedback' })),
-      attestations: Object.values(this.#state.attestations).map(publicAttestation),
+      attestations: Object.values(this.#state.attestations).map((record) => publicAttestation(record, {
+        intakeReceipt: this.#findIntakeReceiptBySubmissionId(record.submissionId ?? record.id),
+      })),
     };
   }
 

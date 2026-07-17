@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,6 +43,8 @@ const SAMPLE_CONTRIBUTION_INTENT = {
   },
 };
 
+const VERIFY_SUBMIT_TOKEN = 'verify-api-handler-submit-token';
+const VERIFY_SUBMIT_AGENT_ID = SAMPLE_CONTRIBUTION_INTENT.contributor.agentId;
 const WRITE_FLAG_NAMES = [
   'CONTRIBUTION_INTENTS_WRITE_ENABLED',
   'CONTRIBUTION_INTENTS_ENABLED',
@@ -127,6 +129,7 @@ const CHECKS = [
   { method: 'GET', path: '/v1/contributions/status?id=source-registry-hardening&kind=malformed', expectedStatus: 400 },
   { method: 'GET', path: '/v1/registry/agents' },
   { method: 'GET', path: '/idacc/releases.json' },
+  { method: 'GET', path: '/api/health' },
   { method: 'GET', path: '/contribution-intents' },
   { method: 'GET', path: '/gateway/contribution-intents' },
   { method: 'GET', path: '/mcp' },
@@ -160,11 +163,20 @@ function checkTelemetryLine(telemetryLines, label, expectedStatus) {
 
   try {
     const telemetry = JSON.parse(telemetryLines[0]);
-    const keys = Object.keys(telemetry).sort().join(',');
+    const keys = Object.keys(telemetry).sort();
+    const allowedKeys = new Set(['error', 'jsonRpcCode', 'method', 'outcome', 'path', 'requestId', 'status', 'timestamp']);
+    const unexpectedKeys = keys.filter((key) => !allowedKeys.has(key));
 
-    if (keys !== 'method,path,status,timestamp') {
+    if (unexpectedKeys.length > 0) {
       failed += 1;
-      console.error(`  FAIL: unexpected telemetry keys for ${label}: ${keys}`);
+      console.error(`  FAIL: unexpected telemetry keys for ${label}: ${unexpectedKeys.join(',')}`);
+    }
+
+    for (const requiredKey of ['timestamp', 'method', 'path', 'status']) {
+      if (!Object.hasOwn(telemetry, requiredKey)) {
+        failed += 1;
+        console.error(`  FAIL: telemetry for ${label} missing ${requiredKey}`);
+      }
     }
 
     if (expectedStatus !== undefined && telemetry.status !== expectedStatus) {
@@ -239,13 +251,7 @@ for (const check of CHECKS) {
       console.error('  FAIL: /identity-keys did not render the identity and keys page.');
     }
 
-    if (!res.body.includes('blocked-without-explicit-controller-or-safe-approval')) {
-      failed += 1;
-      console.error('  FAIL: /identity-keys did not render the execution gate policy.');
-    }
-
     for (const expectedText of [
-      'blocked-not-completed',
       '0/68 executed',
       '0 transaction hashes',
       '67 names uncreated',
@@ -254,12 +260,16 @@ for (const check of CHECKS) {
       'isolated-custody-attestations',
       'numeric-spend-cap',
       'broadcaster-authority',
-      'future-agent-provisioning-required',
     ]) {
       if (!res.body.includes(expectedText)) {
         failed += 1;
         console.error(`  FAIL: /identity-keys missing ENS rollout status text: ${expectedText}`);
       }
+    }
+
+    if (res.body.includes('future-agent-provisioning-required')) {
+      failed += 1;
+      console.error('  FAIL: /identity-keys leaked the internal future-agent-provisioning-required status slug.');
     }
 
     if (/live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i.test(res.body)) {
@@ -415,6 +425,25 @@ for (const check of CHECKS) {
     if (RAW_BRAIN_MEMORY_ID_PATTERN.test(res.body)) {
       failed += 1;
       console.error(`  FAIL: ${check.path} leaked a raw Brain memory id.`);
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/api/health') {
+    try {
+      const parsedBody = JSON.parse(res.body);
+      if (
+        parsedBody.route !== '/api/health'
+        || parsedBody.status !== 'ok'
+        || parsedBody.health?.overall !== 'ok'
+        || parsedBody.observability?.requestIdHeader !== 'X-Request-Id'
+        || parsedBody.releaseMetadata?.schemaVersion !== 'agent.bittrees.release-metadata.v1'
+      ) {
+        failed += 1;
+        console.error('  FAIL: /api/health did not expose the rollout health and observability contract.');
+      }
+    } catch (error) {
+      failed += 1;
+      console.error(`  FAIL: /api/health response was not valid JSON: ${error.message}`);
     }
   }
 
@@ -695,16 +724,26 @@ try {
 
 const savedWriteFlag = process.env.CONTRIBUTION_INTENTS_WRITE_ENABLED;
 const savedDataDir = process.env.CONTRIBUTION_INTENTS_DATA_DIR;
+const savedMcpWriteTokens = process.env.MCP_WRITE_TOKENS;
 const tempDir = await mkdtemp(join(tmpdir(), 'agent-bittrees-intents-'));
 
 try {
   process.env.CONTRIBUTION_INTENTS_WRITE_ENABLED = '1';
   process.env.CONTRIBUTION_INTENTS_DATA_DIR = tempDir;
+  process.env.MCP_WRITE_TOKENS = JSON.stringify({
+    [VERIFY_SUBMIT_TOKEN]: {
+      subject: VERIFY_SUBMIT_AGENT_ID,
+      scopes: ['contributor:submit'],
+    },
+  });
 
   const req = mockRequest({
     method: 'POST',
     path: '/contribution-intents',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      authorization: `Bearer ${VERIFY_SUBMIT_TOKEN}`,
+      'content-type': 'application/json',
+    },
     body: JSON.stringify(SAMPLE_CONTRIBUTION_INTENT),
   });
   const res = mockResponse();
@@ -742,27 +781,9 @@ try {
     console.error('  FAIL: enabled POST response did not include an accepted receipt.');
   }
 
-  const submissionsLogPath = join(tempDir, 'submissions.jsonl');
-  const notificationsLogPath = join(tempDir, 'fleet-notifications.jsonl');
-
-  try {
-    const submissionsLog = await readFile(submissionsLogPath, 'utf8');
-    const notificationsLog = await readFile(notificationsLogPath, 'utf8');
-    const submissionRecord = JSON.parse(submissionsLog.trim().split('\n').filter(Boolean).at(-1));
-    const notificationRecord = JSON.parse(notificationsLog.trim().split('\n').filter(Boolean).at(-1));
-
-    if (submissionRecord.request?.intentId !== SAMPLE_CONTRIBUTION_INTENT.intentId) {
-      failed += 1;
-      console.error('  FAIL: submission record did not preserve the request intentId.');
-    }
-
-    if (notificationRecord.receiptId !== parsedBody?.receiptId) {
-      failed += 1;
-      console.error('  FAIL: notification record receiptId did not match the API response.');
-    }
-  } catch (error) {
+  if (parsedBody?.submission?.attestation?.agentId !== SAMPLE_CONTRIBUTION_INTENT.contributor.agentId) {
     failed += 1;
-    console.error(`  FAIL: enabled POST did not persist readable logs: ${error.message}`);
+    console.error('  FAIL: enabled POST response did not expose the authenticated agent attestation projection.');
   }
 
   checkTelemetryLine(telemetryLines, 'enabled JSON POST /contribution-intents', 202);
@@ -816,6 +837,7 @@ try {
     path: '/gateway/contribution-intents',
     headers: {
       accept: 'text/html',
+      authorization: `Bearer ${VERIFY_SUBMIT_TOKEN}`,
       'content-type': 'application/x-www-form-urlencoded',
     },
     body: buildContributionIntentFormBody(),
@@ -841,29 +863,9 @@ try {
   }
   checkHardeningHeaders(formRes.headers, 'enabled gateway form POST /gateway/contribution-intents');
 
-  try {
-    const submissionsLog = await readFile(join(tempDir, 'submissions.jsonl'), 'utf8');
-    const notificationsLog = await readFile(join(tempDir, 'fleet-notifications.jsonl'), 'utf8');
-    const submissionRecord = JSON.parse(submissionsLog.trim().split('\n').filter(Boolean).at(-1));
-    const notificationRecord = JSON.parse(notificationsLog.trim().split('\n').filter(Boolean).at(-1));
-
-    if (!submissionRecord.request?.intentId?.startsWith('intent-')) {
-      failed += 1;
-      console.error('  FAIL: gateway form submission did not receive a generated intentId.');
-    }
-
-    if (submissionRecord.request?.summary !== 'Submit a gateway form contribution intent through the urlencoded visitor workflow.') {
-      failed += 1;
-      console.error('  FAIL: gateway form submission did not preserve the urlencoded summary.');
-    }
-
-    if (!formRes.body.includes(notificationRecord.receiptId)) {
-      failed += 1;
-      console.error('  FAIL: gateway form receipt did not match the persisted fleet notification receipt ID.');
-    }
-  } catch (error) {
+  if (!formRes.body.includes('queued for owner review')) {
     failed += 1;
-    console.error(`  FAIL: enabled gateway form POST did not persist readable logs: ${error.message}`);
+    console.error('  FAIL: enabled gateway form POST did not render the queued review state.');
   }
 } finally {
   if (savedWriteFlag === undefined) delete process.env.CONTRIBUTION_INTENTS_WRITE_ENABLED;
@@ -871,6 +873,9 @@ try {
 
   if (savedDataDir === undefined) delete process.env.CONTRIBUTION_INTENTS_DATA_DIR;
   else process.env.CONTRIBUTION_INTENTS_DATA_DIR = savedDataDir;
+
+  if (savedMcpWriteTokens === undefined) delete process.env.MCP_WRITE_TOKENS;
+  else process.env.MCP_WRITE_TOKENS = savedMcpWriteTokens;
 
   await rm(tempDir, { recursive: true, force: true });
 }
