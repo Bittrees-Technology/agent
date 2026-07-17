@@ -1561,38 +1561,38 @@ export const LIVE_CONTRIBUTOR_PORTAL_WORKFLOW = new ContributorPortalWorkflow({
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-15T01:26:00Z',
+  checkedAt: '2026-07-17T00:35:35Z',
   latest: {
-    tag: 'v0.1.640',
-    name: 'v0.1.640',
-    publishedAt: '2026-07-14T15:03:38Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.640',
-    tagCommitSha: '8899e8a5332062b8ad5311554467b16922a6b1a7',
+    tag: 'v0.1.645',
+    name: 'v0.1.645',
+    publishedAt: '2026-07-15T15:01:40Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.645',
+    tagCommitSha: '0cbd97515b38d46c166c8effbc051ff86091fd7b',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-15T01:26:00Z.',
-      'Release notes: Identity & Keys: standardize root-controlled per-agent Safes and portable release publishing.',
+      'Latest public GitHub release observed by the portal update on 2026-07-17T00:35:35Z.',
+      'Release notes: Identity & Keys: replace the desktop mock lifecycle with receipt-verified Safe 1.4.1 and Zodiac Roles proposals, atomic WalletConnect submission, and bounded zero-value contract/function authority.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://github.com/bobofbuilding/idacc/releases/latest redirected to tag v0.1.640, and https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.640 on 2026-07-15T01:26:00Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.645 on 2026-07-17T00:35:35Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.640 resolved refs/tags/v0.1.640 at 8899e8a5332062b8ad5311554467b16922a6b1a7.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.640',
+        'https://api.github.com/repos/bobofbuilding/idacc/git/ref/tags/v0.1.645 resolved refs/tags/v0.1.645 at commit 0cbd97515b38d46c166c8effbc051ff86091fd7b on 2026-07-17.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.645',
     },
     assets: [
       {
-        name: 'ID-Agents-Control-Center-0.1.640-arm64.zip',
+        name: 'ID-Agents-Control-Center-0.1.645-arm64.zip',
         platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.640/ID-Agents-Control-Center-0.1.640-arm64.zip',
-        sizeBytes: 102731589,
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.645/ID-Agents-Control-Center-0.1.645-arm64.zip',
+        sizeBytes: 118044815,
         contentType: 'application/zip',
-        sha256: '09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025',
+        sha256: '0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736',
         sha256Provenance: {
           algorithm: 'SHA-256',
           githubExpandedAssetDigest:
-            'sha256:09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025',
+            'sha256:0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736',
           localVerification:
-            'GitHub release API reported sha256:09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025 for the 102731589-byte asset on 2026-07-15.',
+            'GitHub release API reported sha256:0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736 for the 118044815-byte asset on 2026-07-17.',
         },
       },
     ],
@@ -7420,6 +7420,7 @@ export function renderIdentityKeysPage() {
           <p class="lede">
             Future-agent provisioning:
             <code>${escapeHtml(humanizeStatus(ensRollout.futureAgentProvisioning.status, 'coming-soon'))}</code>.
+            <code>${escapeHtml(ensRollout.futureAgentProvisioning.status)}</code>.
             ${escapeHtml(ensRollout.futureAgentProvisioning.requirement)}
           </p>
           <ul>${futureAgentProvisioningItems}</ul>

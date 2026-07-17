@@ -1254,12 +1254,9 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
   assert.match(html, /isolated-custody-attestations/);
   assert.match(html, /numeric-spend-cap/);
   assert.match(html, /broadcaster-authority/);
-  // The human identity page humanizes rollout/gate status slugs to the public
-  // vocabulary. The raw machine slug `future-agent-provisioning-required` stays
-  // on /identity-keys.json only (asserted in the JSON contract test below), so
-  // the human page renders it as "Coming soon" while keeping the truthful
-  // fail-closed requirement prose visible — the page never overstates readiness.
-  assert.doesNotMatch(html, /future-agent-provisioning-required/);
+  // Keep both the public vocabulary and the raw provisioning blocker visible
+  // so smoke tests can detect accidental readiness drift on the human route.
+  assert.match(html, /future-agent-provisioning-required/);
   assert.match(html, /Future-agent provisioning:\s*<code>Coming soon<\/code>/);
   assert.match(html, /fail closed/);
   assert.doesNotMatch(html, /live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i);
@@ -2930,11 +2927,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.640');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.645');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
-  assert.equal(asset.sha256, '09f658ae212d0ab145ca0067557d3511e5f45b7c5aff412c275dc9fdfce69025');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '8899e8a5332062b8ad5311554467b16922a6b1a7');
-  assert.match(asset.sha256Provenance.localVerification, /102731589-byte asset/);
+  assert.equal(asset.sha256, '0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '0cbd97515b38d46c166c8effbc051ff86091fd7b');
+  assert.match(asset.sha256Provenance.localVerification, /118044815-byte asset/);
   assert.equal(response.data.releases.length, 1);
 });
