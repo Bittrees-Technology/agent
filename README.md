@@ -236,6 +236,8 @@ The build writes:
 
 - `dist/index.html`
 - `dist/robots.txt`
+- `dist/sitemap.xml`
+- `dist/social-preview.png`
 - `dist/identity-keys/index.html`
 - `dist/submission-status/index.html`
 - `dist/reputation/index.html`
