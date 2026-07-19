@@ -1882,9 +1882,52 @@ test('portal telemetry logs request ids and stable error metadata for not found 
   assert.equal(res.statusCode, 404);
   assert.equal(res.headers['X-Request-Id'], 'portal-telemetry-test-01');
   assert.equal(entries.length, 1);
+  assert.deepEqual(Object.keys(entries[0]).sort(), ['error', 'method', 'path', 'requestId', 'status', 'timestamp']);
   assert.equal(entries[0].requestId, 'portal-telemetry-test-01');
   assert.equal(entries[0].status, 404);
   assert.equal(entries[0].error, 'not_found');
+});
+
+test('portal telemetry logs request ids and stable outcome metadata for JSON routes', async () => {
+  const handler = createRequestHandler();
+  const req = new EventEmitter();
+  req.method = 'GET';
+  req.url = '/identity-keys.json';
+  req.headers = {
+    host: 'agent.bittrees.org',
+    'x-request-id': 'portal-telemetry-outcome-01',
+  };
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  const entries = [];
+  const originalConsoleLog = console.log;
+  console.log = (line) => entries.push(JSON.parse(line));
+  try {
+    await handler(req, res);
+  } finally {
+    console.log = originalConsoleLog;
+  }
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['X-Request-Id'], 'portal-telemetry-outcome-01');
+  assert.equal(entries.length, 1);
+  assert.deepEqual(Object.keys(entries[0]).sort(), ['method', 'outcome', 'path', 'requestId', 'status', 'timestamp']);
+  assert.equal(entries[0].requestId, 'portal-telemetry-outcome-01');
+  assert.equal(entries[0].status, 200);
+  assert.equal(entries[0].outcome, IDENTITY_KEYS_PUBLIC_CONTRACT.status);
 });
 
 test('workflow registration route requires authorized bearer token and queues review records', async () => {

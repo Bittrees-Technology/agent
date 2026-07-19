@@ -49,6 +49,19 @@ const WRITE_FLAG_NAMES = [
   'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
 ];
 const RAW_BRAIN_MEMORY_ID_PATTERN = /\bmemory:\d+\b/;
+const TELEMETRY_REQUIRED_KEYS = new Set(['method', 'path', 'requestId', 'status', 'timestamp']);
+const TELEMETRY_ALLOWED_KEYS = new Set([
+  ...TELEMETRY_REQUIRED_KEYS,
+  'error',
+  'jsonRpcCode',
+  'outcome',
+]);
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const TELEMETRY_BOUNDED_STRING_FIELDS = new Map([
+  ['error', 120],
+  ['outcome', 120],
+  ['path', 512],
+]);
 
 function buildContributionIntentFormBody({ summary, includeSafety = true } = {}) {
   const params = new URLSearchParams();
@@ -163,16 +176,40 @@ function checkTelemetryLine(telemetryLines, label, expectedStatus) {
 
   try {
     const telemetry = JSON.parse(telemetryLines[0]);
-    const keys = Object.keys(telemetry).sort().join(',');
+    const keys = Object.keys(telemetry).sort();
+    const missingKeys = [...TELEMETRY_REQUIRED_KEYS].filter((key) => !Object.hasOwn(telemetry, key));
+    const unexpectedKeys = keys.filter((key) => !TELEMETRY_ALLOWED_KEYS.has(key));
 
-    if (keys !== 'method,path,status,timestamp') {
+    if (missingKeys.length > 0) {
       failed += 1;
-      console.error(`  FAIL: unexpected telemetry keys for ${label}: ${keys}`);
+      console.error(`  FAIL: telemetry missing required keys for ${label}: ${missingKeys.sort().join(',')}`);
+    }
+
+    if (unexpectedKeys.length > 0) {
+      failed += 1;
+      console.error(`  FAIL: unexpected telemetry keys for ${label}: ${unexpectedKeys.sort().join(',')}`);
     }
 
     if (expectedStatus !== undefined && telemetry.status !== expectedStatus) {
       failed += 1;
       console.error(`  FAIL: expected telemetry status ${expectedStatus} for ${label}, received ${telemetry.status}`);
+    }
+
+    if (!REQUEST_ID_PATTERN.test(String(telemetry.requestId ?? ''))) {
+      failed += 1;
+      console.error(`  FAIL: telemetry requestId was missing or invalid for ${label}`);
+    }
+
+    for (const [field, maxLength] of TELEMETRY_BOUNDED_STRING_FIELDS) {
+      if (telemetry[field] !== undefined && (typeof telemetry[field] !== 'string' || telemetry[field].length > maxLength)) {
+        failed += 1;
+        console.error(`  FAIL: telemetry ${field} was not a bounded string for ${label}`);
+      }
+    }
+
+    if (telemetry.jsonRpcCode !== undefined && !Number.isInteger(telemetry.jsonRpcCode)) {
+      failed += 1;
+      console.error(`  FAIL: telemetry jsonRpcCode was not an integer for ${label}`);
     }
 
     return telemetry;
@@ -242,13 +279,13 @@ for (const check of CHECKS) {
       console.error('  FAIL: /identity-keys did not render the identity and keys page.');
     }
 
-    if (!res.body.includes('blocked-without-explicit-controller-or-safe-approval')) {
+    if (!/Onchain execution[\s\S]*execute[\s\S]*Coming soon[\s\S]*Submit transactions only through separately authorized signer\/Safe policy/.test(res.body)) {
       failed += 1;
       console.error('  FAIL: /identity-keys did not render the execution gate policy.');
     }
 
     for (const expectedText of [
-      'blocked-not-completed',
+      'Coming soon',
       '0/68 executed',
       '0 transaction hashes',
       '67 names uncreated',
@@ -257,7 +294,8 @@ for (const check of CHECKS) {
       'isolated-custody-attestations',
       'numeric-spend-cap',
       'broadcaster-authority',
-      'future-agent-provisioning-required',
+      'Future-agent provisioning:',
+      'fail closed',
     ]) {
       if (!res.body.includes(expectedText)) {
         failed += 1;
