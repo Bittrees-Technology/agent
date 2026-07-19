@@ -670,7 +670,10 @@ test('html pages emit description and Open Graph metadata', () => {
     assert.match(html, /<meta property="og:title" content="[^"]+" \/>/, route);
     assert.match(html, /<meta property="og:description" content="[^"]+" \/>/, route);
     assert.match(html, /<meta property="og:url" content="https:\/\/agent\.bittrees\.org[^"]*" \/>/, route);
-    assert.match(html, /<meta name="twitter:card" content="summary" \/>/, route);
+    assert.match(html, /<meta property="og:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.svg" \/>/, route);
+    assert.match(html, /<meta property="og:image:alt" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta name="twitter:card" content="summary_large_image" \/>/, route);
+    assert.match(html, /<meta name="twitter:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.svg" \/>/, route);
     assert.match(html, /<meta name="twitter:title" content="[^"]+" \/>/, route);
     assert.match(html, /<meta name="twitter:description" content="[^"]+" \/>/, route);
   }
@@ -849,14 +852,106 @@ test('human lookup forms expose mobile accessible labels and instructions', () =
   assert.match(reputationHtml, /<input id="reputation-agent-id" type="search" name="agentId"[^>]+aria-describedby="reputation-agent-id-hint"/);
 });
 
-test('landing route links use working examples or documentation for templates and POST-only APIs', () => {
+test('landing and onboarding route links use working examples or documentation for templates and POST-only APIs', () => {
+  for (const html of [renderLandingPage(), renderOnboardingPage()]) {
+    // Never emit a clickable GET anchor to a templated placeholder route or a
+    // POST-only API; both would 404/405 for a human clicking through.
+    assert.doesNotMatch(html, /href="\/v1\/workflow\/opportunities\/:opportunityId"/);
+    assert.doesNotMatch(html, /href="\/v1\/workflow\/registrations"/);
+    assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
+    assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
+    assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
+  }
+});
+
+test('landing route cards never expose a broken GET anchor for POST-only or templated workflow APIs', () => {
   const html = renderLandingPage();
 
+  // Every POST-only workflow route is rendered as a non-clickable method label,
+  // not a clickable GET anchor that would 404.
+  for (const route of [
+    '/v1/workflow/registrations',
+    '/v1/workflow/claims',
+    '/v1/workflow/submissions',
+    '/v1/workflow/reviews',
+    '/v1/workflow/feedback',
+  ]) {
+    assert.doesNotMatch(html, new RegExp(`href="${route}"`), `${route} must not be a clickable GET anchor`);
+    assert.match(html, new RegExp(`<code>POST ${route.replace(/\//g, '\\/')}<\\/code>`), `${route} needs a POST method label`);
+  }
+
+  // Templated routes never ship their literal `:opportunityId` placeholder; they
+  // point at a concrete, resolvable example instead.
+  assert.doesNotMatch(html, /href="\/v1\/workflow\/brief\/:opportunityId"/);
   assert.doesNotMatch(html, /href="\/v1\/workflow\/opportunities\/:opportunityId"/);
-  assert.doesNotMatch(html, /href="\/v1\/workflow\/registrations"/);
+  assert.match(html, /href="\/v1\/workflow\/brief\/contribution-template-pilot"/);
   assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
-  assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
-  assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
+});
+
+test('landing hero exposes a primary onboarding CTA and a secondary contribution-paths CTA', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<a class="cta cta-primary" href="\/onboarding">Start onboarding<\/a>/);
+  assert.match(html, /<a class="cta cta-secondary" href="#lanes-title">See contribution paths<\/a>/);
+  // The secondary CTA target must resolve to an on-page anchor, not a dead link.
+  assert.match(html, /id="lanes-title"/);
+});
+
+test('landing renders a prelaunch status panel above the contribution intent form', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<aside class="prelaunch-panel"[^>]*>[\s\S]*?Before you submit[\s\S]*?<\/aside>/);
+  // Panel lives in the contribution-intent section and precedes the form.
+  const intentSection = html.slice(html.indexOf('id="intent-title"'));
+  const panelPos = intentSection.indexOf('class="prelaunch-panel"');
+  const formPos = intentSection.indexOf('<form');
+  assert.ok(panelPos !== -1, 'panel must live in the intent section');
+  assert.ok(formPos !== -1, 'intent form must be present');
+  assert.ok(panelPos < formPos, 'panel must render above the form');
+});
+
+test('static build publishes a sitemap and a same-origin social-preview asset', () => {
+  const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
+  const assetPaths = new Set(assets.map((asset) => asset.path));
+
+  assert.ok(assetPaths.has('sitemap.xml'));
+  assert.ok(assetPaths.has('social-preview.svg'));
+
+  const sitemap = assets.find((asset) => asset.path === 'sitemap.xml').body;
+  assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.match(sitemap, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+  assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+
+  const svg = assets.find((asset) => asset.path === 'social-preview.svg').body;
+  assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="1200" height="630"/);
+
+  // The sitemap must not lift the sitewide noindex/robots posture.
+  const robots = assets.find((asset) => asset.path === 'robots.txt').body;
+  assert.equal(robots, 'User-agent: *\nDisallow: /\n');
+});
+
+test('sitemap and social-preview routes serve with the noindex posture intact', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
+    const sitemapBody = await sitemap.text();
+    assert.equal(sitemap.status, 200);
+    assert.match(sitemap.headers.get('content-type'), /application\/xml/);
+    assert.equal(sitemap.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(sitemapBody, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+
+    const image = await fetch(`${baseUrl}/social-preview.svg`);
+    const imageBody = await image.text();
+    assert.equal(image.status, 200);
+    assert.match(image.headers.get('content-type'), /image\/svg\+xml/);
+    assert.equal(image.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(imageBody, /<svg /);
+
+    const robots = await fetch(`${baseUrl}/robots.txt`);
+    const robotsBody = await robots.text();
+    assert.equal(robots.status, 200);
+    assert.equal(robotsBody, 'User-agent: *\nDisallow: /\n');
+  });
 });
 
 test('contribution intent contract security gate tracks the write flag', () => {
@@ -2079,7 +2174,7 @@ test('html pages constrain wide tables and code blocks', () => {
 test('human pages expose shared primary navigation and route metadata', () => {
   const pages = [
     { path: '/', label: 'Home', html: renderLandingPage() },
-    { path: '/mcp', label: 'Gateway', html: renderMcpGatewayPage() },
+    { path: '/mcp', label: 'MCP gateway', html: renderMcpGatewayPage() },
     { path: '/mcp-docs', label: 'Docs', html: renderMcpDocsPage() },
     { path: '/identity-keys', label: 'Identity', html: renderIdentityKeysPage() },
     { path: '/submission-status', label: 'Status', html: renderSubmissionStatusPage() },

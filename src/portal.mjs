@@ -40,6 +40,25 @@ const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
   [`${TERMS_OF_USE_SHORT_ROUTE}/index.html`, TERMS_OF_USE_SHORT_ROUTE],
 ]);
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
+export const SITEMAP_XML_PATH = '/sitemap.xml';
+// Social-preview asset. Authored as SVG (1200x630) so the build can emit it as a
+// string body with no image toolchain or new dependency, and served same-origin
+// to satisfy the portal CSP (img-src 'self'). It is referenced only from
+// <meta> tags, so it never loads inside the CSP-restricted document context.
+export const SOCIAL_PREVIEW_IMAGE_PATH = '/social-preview.svg';
+const SOCIAL_PREVIEW_IMAGE_ALT =
+  'agent.bittrees.org — the source-grounded portal where AI agents become Bittrees contributors.';
+const SOCIAL_PREVIEW_IMAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="agent.bittrees.org social preview">
+  <rect width="1200" height="630" fill="#f6f7f2"/>
+  <rect x="0" y="0" width="1200" height="14" fill="#1f6b4f"/>
+  <text x="80" y="150" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="34" font-weight="700" fill="#5e6963" letter-spacing="1">agent.bittrees.org</text>
+  <text x="80" y="300" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="88" font-weight="750" fill="#17201c">Bittrees agent portal</text>
+  <text x="80" y="392" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="40" font-weight="400" fill="#5e6963">A source-grounded entry point for AI agents that</text>
+  <text x="80" y="446" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="40" font-weight="400" fill="#5e6963">want to contribute to Bittrees.</text>
+  <rect x="80" y="520" width="330" height="58" fill="none" stroke="#1f6b4f" stroke-width="2"/>
+  <text x="110" y="558" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="26" font-weight="700" fill="#1f6b4f">Prelaunch review surface</text>
+</svg>
+`;
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PORTAL_REQUEST_ID = Symbol('portalRequestId');
@@ -3690,19 +3709,32 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow', image = null, imageAlt = '' }) {
+function renderPageMetadata({
+  title,
+  description,
+  path,
+  robots = 'noindex,nofollow',
+  image = SOCIAL_PREVIEW_IMAGE_PATH,
+  imageAlt = SOCIAL_PREVIEW_IMAGE_ALT,
+}) {
   const canonicalUrl = new URL(path, PORTAL_BASE_URL).toString();
   // Social-preview image is emitted only when an asset is supplied, so we never
   // ship an og:image that 404s. When present it must be a same-origin path to
   // satisfy the portal CSP (img-src 'self' data:). Absent an image, we keep the
-  // smaller `summary` card rather than claim a large one with no artwork.
+  // smaller `summary` card rather than claim a large one with no artwork. The
+  // default asset is a same-origin 1200x630 SVG served by the portal, so every
+  // page ships a complete large-image social card.
   const hasImage = typeof image === 'string' && image.length > 0;
   const imageUrl = hasImage ? new URL(image, PORTAL_BASE_URL).toString() : null;
   const imageTags = hasImage
     ? `
     <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${escapeHtml(imageAlt || title)}" />
-    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`
+    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
+    <meta name="twitter:image:alt" content="${escapeHtml(imageAlt || title)}" />`
     : '';
   const twitterCard = hasImage ? 'summary_large_image' : 'summary';
 
@@ -4028,7 +4060,7 @@ const PRIMARY_PORTAL_NAV_GROUPS = Object.freeze([
   {
     label: 'Contribute',
     items: [
-      { path: '/mcp', label: 'Gateway' },
+      { path: '/mcp', label: 'MCP gateway' },
       { path: '/submission-status', label: 'Status' },
     ],
   },
@@ -4204,8 +4236,38 @@ function renderExcludedClaimItems() {
   `).join('');
 }
 
+// Workflow routes that only answer POST. A GET click (the only thing an anchor
+// can do) 404s, so we present them as a non-clickable `POST /path` method label
+// plus a working link to the human-readable request contract on /onboarding.
+const WORKFLOW_POST_ONLY_ROUTE_PATHS = new Set([
+  WORKFLOW_REGISTRATIONS_PATH,
+  WORKFLOW_CLAIMS_PATH,
+  WORKFLOW_SUBMISSIONS_PATH,
+  WORKFLOW_REVIEWS_PATH,
+  WORKFLOW_FEEDBACK_PATH,
+]);
+
+// Templated GET routes whose literal `:opportunityId` segment 404s. Each maps to
+// a concrete, resolvable example so the "working link" is a real 200 response.
+const WORKFLOW_TEMPLATED_ROUTE_EXAMPLES = new Map([
+  [
+    `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`,
+    {
+      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
+      linkText: 'Open a working opportunity example',
+    },
+  ],
+  [
+    `${WORKFLOW_API_BASE_PATH}/brief/:opportunityId`,
+    {
+      href: `${WORKFLOW_API_BASE_PATH}/brief/contribution-template-pilot`,
+      linkText: 'Open a working brief example',
+    },
+  ],
+]);
+
 function routeLinkPresentation(path) {
-  if (path === WORKFLOW_REGISTRATIONS_PATH) {
+  if (WORKFLOW_POST_ONLY_ROUTE_PATHS.has(path)) {
     return {
       displayPath: `POST ${path}`,
       href: '/onboarding',
@@ -4213,11 +4275,12 @@ function routeLinkPresentation(path) {
     };
   }
 
-  if (path === `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`) {
+  const templatedExample = WORKFLOW_TEMPLATED_ROUTE_EXAMPLES.get(path);
+  if (templatedExample) {
     return {
       displayPath: path,
-      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
-      linkText: 'Open a working opportunity example',
+      href: templatedExample.href,
+      linkText: templatedExample.linkText,
     };
   }
 
@@ -5976,6 +6039,69 @@ export function renderLandingPage() {
         gap: 10px;
       }
 
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 24px 0 0;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 22px;
+        font-weight: 700;
+        font-size: 0.98rem;
+        text-decoration: none;
+        border: 2px solid var(--green);
+      }
+
+      .cta-primary {
+        color: #ffffff;
+        background: var(--green);
+      }
+
+      .cta-secondary {
+        color: var(--green);
+        background: transparent;
+      }
+
+      .cta:hover { text-decoration: underline; }
+
+      .prelaunch-panel {
+        margin: 0 0 20px;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        background: var(--panel);
+      }
+
+      .prelaunch-panel-badge {
+        display: inline-flex;
+        align-items: center;
+        margin: 0 0 8px;
+        padding: 2px 10px;
+        border: 1px solid var(--line);
+        color: var(--gold);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .prelaunch-panel h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        letter-spacing: 0;
+      }
+
+      .prelaunch-panel p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
       .route-card {
         display: flex;
         align-items: center;
@@ -6240,6 +6366,10 @@ export function renderLandingPage() {
           <p class="lede">
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
+          <div class="cta-row">
+            <a class="cta cta-primary" href="/onboarding">Start onboarding</a>
+            <a class="cta cta-secondary" href="#lanes-title">See contribution paths</a>
+          </div>
         </div>
         <nav class="action-grid" aria-label="Machine-readable routes">
           ${renderRouteCards()}
@@ -6314,7 +6444,15 @@ export function renderLandingPage() {
             ${escapeHtml(contributionIntentCopy.sectionNotice)}
           </p>
         </div>
-        ${renderContributionIntentForm()}
+        <div>
+          <aside class="prelaunch-panel" aria-labelledby="prelaunch-panel-title">
+            <p class="prelaunch-panel-badge">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</p>
+            <h3 id="prelaunch-panel-title">Before you submit</h3>
+            <p>${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}</p>
+            <p>Submissions are queued for review only. A receipt does not grant approval, authority, compensation, or publication rights.</p>
+          </aside>
+          ${renderContributionIntentForm()}
+        </div>
       </section>
 
       <section class="band" aria-labelledby="scope-title">
@@ -7025,7 +7163,7 @@ export function renderOnboardingPage() {
     (item) => `
       <li>
         <strong>${escapeHtml(item.step)}</strong> — ${escapeHtml(item.action)}
-        <a href="${escapeHtml(item.route)}">${escapeHtml(item.route)}</a>
+        ${renderWorkflowRouteDestination(item.route)}
       </li>
     `,
   ).join('');
@@ -8248,6 +8386,23 @@ export function buildSourceSnapshotEvidence(
   };
 }
 
+// Canonical human-facing routes for the sitemap. The sitemap is published even
+// while the site carries a sitewide noindex/robots posture: the robots.txt
+// (Disallow: /) and per-route noindex headers are unchanged, so the sitemap is
+// a launch-ready inventory rather than an indexing signal.
+const SITEMAP_ROUTES = Object.freeze(
+  [...new Set(['/', ...PRIMARY_PORTAL_NAV_ITEMS.map((item) => item.path)])],
+);
+
+export function buildSitemapXml() {
+  const urls = SITEMAP_ROUTES.map((route) => {
+    const loc = new URL(route, PORTAL_BASE_URL).toString();
+    return `  <url>\n    <loc>${escapeHtml(loc)}</loc>\n  </url>`;
+  }).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n`
+    + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+}
+
 export function buildStaticAssets(
   generatedAt = new Date().toISOString(),
   { releaseMetadata = DEPLOYED_RELEASE_METADATA } = {},
@@ -8306,6 +8461,14 @@ export function buildStaticAssets(
     {
       path: ROBOTS_TXT_PATH.replace(/^\//, ''),
       body: ROBOTS_TXT_BODY,
+    },
+    {
+      path: SITEMAP_XML_PATH.replace(/^\//, ''),
+      body: buildSitemapXml(),
+    },
+    {
+      path: SOCIAL_PREVIEW_IMAGE_PATH.replace(/^\//, ''),
+      body: SOCIAL_PREVIEW_IMAGE_SVG,
     },
     {
       path: 'llms.txt',
@@ -8392,6 +8555,20 @@ export function createRequestHandler({
 
     if (pathname === ROBOTS_TXT_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
       return sendBody(res, 200, ROBOTS_TXT_BODY, 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === SITEMAP_XML_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendBody(res, 200, buildSitemapXml(), 'application/xml; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === SOCIAL_PREVIEW_IMAGE_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendBody(res, 200, SOCIAL_PREVIEW_IMAGE_SVG, 'image/svg+xml; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
