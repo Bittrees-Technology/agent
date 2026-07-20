@@ -44,6 +44,7 @@ import {
   callMcpTool,
   createRequestHandler,
   getMcpAuditEvents,
+  getSecurityAuditEvents,
   handleRegistryRequest,
   PUBLIC_STATUS_VOCABULARY,
   renderIdentityKeysPage,
@@ -56,7 +57,9 @@ import {
   renderReputationPage,
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
+  verifySecurityAuditChain,
 } from '../src/portal.mjs';
+import { createContributionService } from '../src/contributions/service.mjs';
 import { ONBOARDING_FLOW_CONTRACTS } from '../src/onboarding-contracts.mjs';
 
 const EXPECTED_ENV_EXAMPLE_NAMES = Object.freeze([
@@ -103,15 +106,22 @@ const EXPECTED_ENV_EXAMPLE_NAMES = Object.freeze([
   'PORTAL_WORKFLOW_STATE_PATH',
   'RELEASE_TAG',
   'REGISTRY_STATE_PATH',
+  'ROLLBACK_BASE_URL',
   'SOURCE_VERSION',
   'VERCEL',
   'VERCEL_DEPLOYMENT_ID',
+  'VERCEL_ENV',
   'VERCEL_GIT_COMMIT_REF',
   'VERCEL_GIT_COMMIT_SHA',
+  'VERCEL_ORG_ID',
+  'VERCEL_PROJECT',
+  'VERCEL_PROJECT_ID',
+  'VERCEL_SCOPE',
+  'VERCEL_TOKEN',
 ]);
 
-async function withPortalServer(callback) {
-  const server = createServer(createRequestHandler());
+async function withPortalServer(callback, handlerOptions = {}) {
+  const server = createServer(createRequestHandler(handlerOptions));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
@@ -141,6 +151,60 @@ async function mcpPost(baseUrl, body, headers = {}) {
     response,
     json: await response.json(),
   };
+}
+
+const CANONICAL_CONTENT_PATHS_FOR_TEST = new Map(
+  TERMS_OF_USE_LEGAL_STATUS.aliasRoutes.map((aliasRoute) => [aliasRoute, TERMS_OF_USE_LEGAL_STATUS.pageRoute]),
+);
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function canonicalPortalDestination(destination) {
+  const methodMatch = destination.match(/^([A-Z]+)\s+(.+)$/);
+  if (methodMatch) {
+    return `${methodMatch[1]} ${canonicalPortalDestination(methodMatch[2])}`;
+  }
+
+  const [path] = destination.split(/[?#]/);
+  return CANONICAL_CONTENT_PATHS_FOR_TEST.get(path) ?? path;
+}
+
+function assertNoDuplicateCanonicalDestinations(scope, destinations) {
+  const seen = new Map();
+
+  for (const destination of destinations) {
+    const canonicalDestination = canonicalPortalDestination(destination);
+    assert.equal(
+      seen.has(canonicalDestination),
+      false,
+      `${scope} links ${seen.get(canonicalDestination)} and ${destination} to ${canonicalDestination}`,
+    );
+    seen.set(canonicalDestination, destination);
+  }
+}
+
+function extractNavByAriaLabel(html, ariaLabel) {
+  const navMatch = html.match(new RegExp(`<nav\\b(?=[^>]*aria-label="${escapeRegExp(ariaLabel)}")[^>]*>([\\s\\S]*?)<\\/nav>`));
+  assert.ok(navMatch, `expected nav landmark "${ariaLabel}"`);
+  return navMatch[1];
+}
+
+function extractHrefValues(html) {
+  return [...html.matchAll(/\bhref="([^"]+)"/g)].map((match) => match[1]);
+}
+
+function extractRouteCardDestinations(html) {
+  return [...html.matchAll(/<article class="route-card">([\s\S]*?)<\/article>/g)].map((match) => {
+    const [, cardHtml] = match;
+    const linkedHeading = cardHtml.match(/<h2><a href="([^"]+)">/);
+    if (linkedHeading) return linkedHeading[1];
+
+    const codedHeading = cardHtml.match(/<h2><code>([^<]+)<\/code><\/h2>/);
+    assert.ok(codedHeading, `expected route-card destination heading in ${cardHtml}`);
+    return codedHeading[1];
+  });
 }
 
 const CONTRIBUTION_INTENT_WRITE_FLAG_NAMES_FOR_TEST = [
@@ -607,11 +671,14 @@ test('static build includes all advertised routes', () => {
   const manifest = buildPortalManifest('2026-07-06T00:00:00.000Z');
   const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
   const assetPaths = new Set(assets.map((asset) => asset.path));
+  const termsAliasRoute = ROUTE_DEFINITIONS.find((route) => route.path === '/terms');
 
   assert.deepEqual(
     manifest.routes.map((route) => route.path),
     ROUTE_DEFINITIONS.map((route) => route.path),
   );
+  assert.ok(termsAliasRoute);
+  assert.equal(termsAliasRoute.canonicalPath, '/terms-of-use');
   assert.equal(manifest.sourceSnapshotEvidence.label, 'SOURCE SNAPSHOT evidence');
   assert.equal(manifest.sourceSnapshotEvidence.sourceSnapshot.termsRoute, '/terms');
   assert.ok(manifest.sourceSnapshotEvidence.sourceSnapshot.evidenceRoutes.includes('/terms'));
@@ -625,7 +692,9 @@ test('static build includes all advertised routes', () => {
 
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('identity-keys/index.html'));
-  assert.ok(assetPaths.has('submission-status/index.html'));
+  // This query-driven page must remain dynamic. A generated index.html shadows
+  // the Vercel function route and can self-refresh instead of loading status.
+  assert.equal(assetPaths.has('submission-status/index.html'), false);
   assert.ok(assetPaths.has('reputation/index.html'));
   assert.ok(assetPaths.has('terms/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
@@ -803,25 +872,34 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
     assert.equal(publicRouteResponse.status, 200);
     assert.match(publicRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(publicRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await publicRouteResponse.text(), /Terms of Use are pending legal approval/);
+    const publicRouteBody = await publicRouteResponse.text();
+    assert.match(publicRouteBody, /Terms of Use are pending legal approval/);
 
     assert.equal(publicRouteSlashResponse.status, 200);
     assert.equal(publicRouteSlashResponse.url, `${baseUrl}/terms`);
-    assert.match(await publicRouteSlashResponse.text(), /Terms of Use are pending legal approval/);
+    const publicRouteSlashBody = await publicRouteSlashResponse.text();
+    assert.match(publicRouteSlashBody, /Terms of Use are pending legal approval/);
 
     assert.equal(publicRouteAssetResponse.status, 200);
     assert.equal(publicRouteAssetResponse.url, `${baseUrl}/terms`);
-    assert.match(await publicRouteAssetResponse.text(), /Terms of Use are pending legal approval/);
+    const publicRouteAssetBody = await publicRouteAssetResponse.text();
+    assert.match(publicRouteAssetBody, /Terms of Use are pending legal approval/);
 
     assert.equal(pageResponse.status, 200);
     assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await pageResponse.text(), /pending legal approval/);
+    const pageBody = await pageResponse.text();
+    assert.match(pageBody, /pending legal approval/);
 
     assert.equal(shortRouteResponse.status, 200);
     assert.match(shortRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(shortRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await shortRouteResponse.text(), /Terms of Use are pending legal approval/);
+    const shortRouteBody = await shortRouteResponse.text();
+    assert.match(shortRouteBody, /Terms of Use are pending legal approval/);
+    assert.equal(publicRouteBody, pageBody);
+    assert.equal(publicRouteSlashBody, pageBody);
+    assert.equal(publicRouteAssetBody, pageBody);
+    assert.equal(shortRouteBody, pageBody);
 
     assert.equal(contractResponse.status, 200);
     assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
@@ -930,6 +1008,92 @@ test('contribution intent form exposes accessible labels instructions and mobile
   }
 });
 
+test('contribution intent form ships a transparent-signing island inside the form', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<form class="intent-form" id="intent-form"[^>]*>[\s\S]*<section class="signing-island" id="intent-signing-island"[\s\S]*<\/section>\s*<button type="submit">/);
+});
+
+test('contribution intent form exposes a server-rendered no-JS fallback path', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<div class="signing-server-fallback" role="note" aria-labelledby="intent-server-fallback-title">/);
+  assert.match(html, /<h3 id="intent-server-fallback-title">Offline packet path<\/h3>/);
+  assert.match(html, /submitting this form returns a server-rendered offline contribution packet/);
+  assert.match(html, /does not create an assignment, approval, public attestation, onchain action, or wallet grant/);
+  assert.match(html, /<noscript>Client scripting is unavailable, so this form will use the offline packet path\.<\/noscript>/);
+});
+
+test('signing island shows the exact wallet message preview before any wallet prompt', () => {
+  const html = renderLandingPage();
+
+  assert.match(
+    html,
+    /<code id="intent-signing-message">Bittrees — application encryption key \(v1\)\n\nSign to derive your private decryption key for contributor applications\. No gas; this only proves wallet ownership\.<\/code>/,
+  );
+  assert.match(
+    html,
+    /This wallet signature derives a local encryption key\. It is not a transaction, does not spend funds, and does not grant Bittrees, IDACC, or this portal authority over your wallet\./,
+  );
+  assert.match(
+    html,
+    /The wallet prompt signs only the key-derivation message above\. Your form contents are shown here for review and are handled by the portal write gate separately\./,
+  );
+});
+
+test('signing island shows the review package preview, chain/domain/context row, and wallet account display', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<p class="signing-context-row" id="intent-context-row">Base \(8453\) - agent\.bittrees\.org - contributor review intake<\/p>/);
+  assert.match(html, /<button type="button" class="signing-connect-button" id="intent-connect-wallet">Connect wallet<\/button>/);
+  assert.match(html, /<p class="signing-account" id="intent-connected-account" hidden><\/p>/);
+  assert.match(html, /<summary>Review package preview<\/summary>/);
+  assert.match(html, /<dt>Purpose<\/dt><dd>Contributor application \/ contribution review intake<\/dd>/);
+  assert.match(html, /<dt>Portal<\/dt><dd>agent\.bittrees\.org<\/dd>/);
+  assert.match(html, /<dt>Network<\/dt><dd>Base \(8453\)<\/dd>/);
+  assert.match(html, /<dt>Account<\/dt><dd id="intent-payload-account">Not connected<\/dd>/);
+  assert.match(html, /<dt>Review gate<\/dt><dd>review_required_before_publication_or_assignment<\/dd>/);
+  assert.match(html, /<dd id="intent-payload-form-summary">Lane: [^<]+ \| Name: \(not set\) \| Summary length: 0 chars \| Source IDs: 0<\/dd>/);
+});
+
+test('signing island write posture reflects the fail-closed gate by default and the enabled flag when set', () => {
+  withContributionIntentWriteFlags({}, () => {
+    const html = renderLandingPage();
+    assert.match(html, /<dd id="intent-payload-write-posture">read-only public launch default<\/dd>/);
+  });
+
+  withContributionIntentWriteFlags({ CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true' }, () => {
+    const html = renderLandingPage();
+    assert.match(html, /<dd id="intent-payload-write-posture">non-production write-enabled<\/dd>/);
+  });
+});
+
+test('signing island exposes the four accessible state regions and gate-closed retry copy', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<section class="signing-island" id="intent-signing-island" data-signing-state="pending" aria-live="polite">/);
+  assert.match(html, /<p class="caveat" id="intent-chain-warning" role="alert" hidden><\/p>/);
+  assert.match(html, /<p class="caveat" id="intent-signing-failure" role="alert" hidden><\/p>/);
+  assert.match(html, /<div class="signing-success" id="intent-signing-success" hidden>/);
+  assert.match(html, /Contribution package received for review\./);
+  assert.match(html, /Reviewer acceptance is required before publication, assignment, reputation credit, authority, or any public attestation\./);
+  assert.match(html, /<div class="signing-retry" id="intent-signing-retry" hidden>/);
+  assert.match(html, /<button type="button" id="intent-retry-button">Try again<\/button>/);
+  assert.match(html, /<button type="button" id="intent-edit-button">Edit application<\/button>/);
+
+  const script = html.match(/<script>\n\(function \(\) \{[\s\S]*?\}\)\(\);\n<\/script>/)?.[0];
+  assert.ok(script, 'signing island inline script is present');
+  assert.match(
+    script,
+    /var GATE_CLOSED_RETRY_COPY = "Live contribution writes are not enabled on this portal yet\. Nothing was submitted on-chain or accepted as a public attestation\. You can review the packet and try again after intake is enabled\.";/,
+  );
+  assert.match(script, /var BASE_CHAIN_HEX = "0x2105";/);
+  assert.match(script, /response\.status === 501 \|\| \(body && body\.error === 'write_disabled'\)/);
+  assert.match(script, /provider\.request\(\{\s*method: 'personal_sign',\s*params: \[SIGNING_MESSAGE, account\],/);
+  assert.doesNotMatch(script, /writeContract/);
+  assert.doesNotMatch(script, /rawSignature/i);
+});
+
 test('human lookup forms expose mobile accessible labels and instructions', () => {
   const statusHtml = renderSubmissionStatusPage();
   const reputationHtml = renderReputationPage();
@@ -956,6 +1120,63 @@ test('landing route links use working examples or documentation for templates an
   assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
   assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
   assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
+});
+
+test('visible route lists collapse canonical alias destinations', () => {
+  const html = renderLandingPage();
+  const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
+  const routeCardDestinations = extractRouteCardDestinations(actionGrid);
+  const primaryNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Primary portal routes'));
+  const footerNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Footer routes'));
+  const notFoundHtml = renderNotFoundPage();
+  const notFoundRoutesMatch = notFoundHtml.match(
+    /<h2 id="notfound-routes-title">Portal pages<\/h2>\s*<ul>([\s\S]*?)<\/ul>/,
+  );
+
+  assert.ok(notFoundRoutesMatch, 'expected not-found portal route list');
+  const notFoundRouteHrefs = extractHrefValues(notFoundRoutesMatch[1]);
+
+  assert.equal(routeCardDestinations.includes('/terms'), false);
+  assert.equal(routeCardDestinations.includes('/tou'), false);
+  assert.ok(routeCardDestinations.includes('/terms-of-use'));
+  assert.doesNotMatch(actionGrid, /Terms status page alias/);
+  assert.equal(notFoundRouteHrefs.includes('/terms'), false);
+  assert.equal(notFoundRouteHrefs.includes('/tou'), false);
+  assert.ok(notFoundRouteHrefs.includes('/terms-of-use'));
+  assertNoDuplicateCanonicalDestinations('landing route cards', routeCardDestinations);
+  assertNoDuplicateCanonicalDestinations('primary portal nav', primaryNavHrefs);
+  assertNoDuplicateCanonicalDestinations('footer nav', footerNavHrefs);
+  assertNoDuplicateCanonicalDestinations('not-found portal route list', notFoundRouteHrefs);
+  assertNoDuplicateCanonicalDestinations('JSON routes', [...JSON_ROUTE_MAP.keys()]);
+});
+
+test('landing route directory groups human pages contracts and workflow APIs', () => {
+  const html = renderLandingPage();
+  const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
+
+  assert.match(actionGrid, /<h2 id="route-group-portal-pages">Portal pages<\/h2>/);
+  assert.match(actionGrid, /Human-readable pages for onboarding, status, reputation, legal gates, and documentation\./);
+  assert.match(actionGrid, /<h2 id="route-group-agent-contracts">Agent-readable contracts<\/h2>/);
+  assert.match(actionGrid, /Text and JSON contracts for crawlers, agent clients, release checks, and source verification\./);
+  assert.match(actionGrid, /<h2 id="route-group-workflow-apis">Workflow APIs<\/h2>/);
+  assert.match(actionGrid, /Review-gated HTTP and MCP routes for contribution discovery, submission, and status lookup\./);
+
+  const portalGroup = actionGrid.match(/id="route-group-portal-pages"[\s\S]*?<\/section>/)?.[0] ?? '';
+  const contractsGroup = actionGrid.match(/id="route-group-agent-contracts"[\s\S]*?<\/section>/)?.[0] ?? '';
+  const workflowGroup = actionGrid.match(/id="route-group-workflow-apis"[\s\S]*?<\/section>/)?.[0] ?? '';
+
+  assert.match(portalGroup, /href="\/onboarding"/);
+  assert.match(portalGroup, /href="\/submission-status"/);
+  assert.doesNotMatch(portalGroup, /href="\/agents\.json"/);
+
+  assert.match(contractsGroup, /href="\/agents\.json"/);
+  assert.match(contractsGroup, /href="\/llms\.txt"/);
+  assert.match(contractsGroup, /href="\/api\/health"/);
+  assert.doesNotMatch(contractsGroup, /href="\/v1\/workflow\/opportunities"/);
+
+  assert.match(workflowGroup, /href="\/mcp"/);
+  assert.match(workflowGroup, /href="\/v1\/workflow\/opportunities"/);
+  assert.match(workflowGroup, /href="\/gateway\/contribution-intents"/);
 });
 
 test('contribution intent contract security gate tracks the write flag', () => {
@@ -1117,6 +1338,190 @@ test('post-capable routes stay dynamic and return disabled responses for POST', 
   });
 });
 
+test('disabled contribution intent gate exposes discovery but never reaches the domain service', async () => {
+  let submitCalls = 0;
+  const contributionService = {
+    submit() {
+      submitCalls += 1;
+      throw new Error('disabled gate must not reach contributionService.submit');
+    },
+  };
+
+  await withContributionIntentWriteFlags({}, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const discovery = await fetch(`${baseUrl}/contribution-intents`);
+      const discoveryBody = await discovery.json();
+      assert.equal(discovery.status, 200);
+      assert.equal(discoveryBody.data.contract.securityGate.accepted, false);
+
+      const response = await fetch(`${baseUrl}/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer disabled-gate-token',
+        },
+        body: JSON.stringify(buildValidContributionIntentPayload()),
+      });
+      const body = await response.json();
+
+      assert.equal(response.status, 501);
+      assert.equal(body.error, 'write_disabled');
+      assert.equal(body.accepted, false);
+      assert.equal(body.liveWrite, false);
+      assert.equal(body.reviewGate.productionMutationAllowed, false);
+      assert.equal(body.reviewGate.walletAuthorityGranted, false);
+      assert.equal(body.reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(body.reviewGate.registryMutationAllowed, false);
+      assert.equal(submitCalls, 0);
+    }, { contributionService });
+  });
+});
+
+test('enabled contribution intent routes expose idempotent receipt, private status, and recoverable retry matrix', async () => {
+  const agentId = 'intent-route-matrix-agent';
+  const token = 'intent-route-matrix-token';
+  const contributionService = createContributionService();
+
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_POST_RATE_LIMIT_MAX: '20',
+    MCP_WRITE_TOKENS: JSON.stringify({
+      [token]: { subject: agentId, scopes: ['contributor:submit'] },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const discovery = await fetch(`${baseUrl}/gateway/contribution-intents`);
+      const discoveryBody = await discovery.json();
+      assert.equal(discovery.status, 200);
+      assert.equal(discoveryBody.data.contract.securityGate.accepted, true);
+
+      const payload = buildValidContributionIntentPayload({
+        intentId: `intent-route-${Date.now()}`,
+        contributor: {
+          kind: 'agent',
+          name: 'Intent Route Matrix Agent',
+          agentId,
+          contactRoute: 'https://example.invalid/intent-route-agent',
+        },
+        handoff: {
+          requestedOwnerRoute: 'engineering review owner',
+          goalId: 'goal_plan_1fgpnd5',
+          expectedOutput: 'Review-queued contribution receipt with private status lookup.',
+          acceptanceCriteria: ['Receipt replay returns the original submission id'],
+          outOfScope: ['Wallet authority or transaction broadcast'],
+          backlogPolicy: 'Park optional work until the owning reviewer accepts the packet.',
+          sourceIds: ['memory:7517'],
+        },
+      });
+      const idempotencyKey = `route-retry-${Date.now()}`;
+      const headers = {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+        'X-Forwarded-For': `198.51.100.${Math.floor(Math.random() * 200) + 1}`,
+      };
+
+      const unauthorizedResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': headers['X-Forwarded-For'],
+        },
+        body: JSON.stringify(payload),
+      });
+      const unauthorized = await unauthorizedResponse.json();
+      assert.equal(unauthorizedResponse.status, 401);
+      assert.equal(unauthorized.error, 'unauthorized');
+      assert.equal(unauthorized.code, 'unauthorized');
+      assert.equal(unauthorized.accepted, false);
+      assert.equal(unauthorized.receiptId, undefined);
+      assert.equal(unauthorized.reviewGate.walletAuthorityGranted, false);
+      assert.equal(unauthorized.reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(unauthorized.reviewGate.registryMutationAllowed, false);
+
+      const firstResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const first = await firstResponse.json();
+
+      assert.equal(firstResponse.status, 202);
+      assert.equal(first.accepted, true);
+      assert.equal(first.submission.status, 'queued_for_review');
+      assert.equal(first.submission.created, true);
+      assert.equal(first.submission.replayed, false);
+      assert.equal(first.receiptId, first.submission.receiptId);
+      assert.match(first.receiptId, /^sub_/);
+      assert.equal(first.statusLookup, `/v1/workflow/status?id=${encodeURIComponent(first.receiptId)}&kind=submission`);
+
+      for (const gate of [first.reviewGate, first.submission.projection.reviewGate]) {
+        assert.equal(gate.productionMutationAllowed, false);
+        assert.equal(gate.walletAuthorityGranted, false);
+        assert.equal(gate.transactionSubmissionAllowed, false);
+        assert.equal(gate.registryMutationAllowed, false);
+      }
+
+      const replayResponse = await fetch(`${baseUrl}/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const replay = await replayResponse.json();
+      assert.equal(replayResponse.status, 202);
+      assert.equal(replay.submission.created, false);
+      assert.equal(replay.submission.replayed, true);
+      assert.equal(replay.receiptId, first.receiptId);
+      assert.match(replay.message, /no duplicate/i);
+
+      const anonymousStatusResponse = await fetch(`${baseUrl}${first.statusLookup}`);
+      const anonymousStatus = await anonymousStatusResponse.json();
+      assert.equal(anonymousStatusResponse.status, 200);
+      assert.equal(anonymousStatus.lookup.status, 'not_found');
+      assert.equal(anonymousStatus.lookup.result, null);
+
+      const ownerStatusResponse = await fetch(`${baseUrl}${first.statusLookup}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const ownerStatus = await ownerStatusResponse.json();
+      assert.equal(ownerStatusResponse.status, 200);
+      assert.equal(ownerStatus.lookup.status, 'status_found');
+      assert.equal(ownerStatus.lookup.result.submissionId, first.receiptId);
+      assert.equal(ownerStatus.lookup.result.status, 'queued_for_review');
+      assert.equal(ownerStatus.lookup.result.reviewGate.walletAuthorityGranted, false);
+      assert.equal(ownerStatus.lookup.result.reviewGate.transactionSubmissionAllowed, false);
+      assert.equal(ownerStatus.lookup.result.reviewGate.registryMutationAllowed, false);
+
+      const conflictResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...payload, summary: `${payload.summary} Changed after the first receipt.` }),
+      });
+      const conflict = await conflictResponse.json();
+      assert.equal(conflictResponse.status, 409);
+      assert.equal(conflict.error, 'conflict');
+      assert.equal(conflict.code, 'idempotency_conflict');
+      assert.equal(conflict.accepted, false);
+      assert.equal(conflict.reviewGate.walletAuthorityGranted, false);
+
+      const recoveredResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+        method: 'POST',
+        headers: { ...headers, 'Idempotency-Key': `${idempotencyKey}-recovered` },
+        body: JSON.stringify({ ...payload, summary: `${payload.summary} Changed after the first receipt.` }),
+      });
+      const recovered = await recoveredResponse.json();
+      assert.equal(recoveredResponse.status, 202);
+      assert.equal(recovered.submission.created, true);
+      assert.equal(recovered.submission.replayed, false);
+      assert.notEqual(recovered.receiptId, first.receiptId);
+      assert.equal(recovered.reviewGate.transactionSubmissionAllowed, false);
+    }, { contributionService });
+  });
+});
+
 test('contribution intent POST rejects unsupported media types when writes are enabled', async () => {
   await withContributionIntentWriteFlags({
     CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
@@ -1178,10 +1583,14 @@ test('contribution intent POST rate limits repeated write attempts', async () =>
     CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-rate-${Date.now()}`, import.meta.url)),
     CONTRIBUTION_POST_RATE_LIMIT_MAX: '2',
     CONTRIBUTION_POST_RATE_LIMIT_WINDOW_MS: '60000',
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'contribution-rate-token': { subject: 'contribution-rate-agent', scopes: ['contributor:submit'] },
+    }),
   }, async () => {
     await withPortalServer(async (baseUrl) => {
       const headers = {
         Accept: 'application/json',
+        Authorization: 'Bearer contribution-rate-token',
         'Content-Type': 'application/json',
         'X-Forwarded-For': `203.0.113.${Math.floor(Math.random() * 200) + 1}`,
       };
@@ -1334,6 +1743,17 @@ test('vercel catch-all headers mirror the portal launch gate', () => {
   assert.equal(configuredHeaders['X-Robots-Tag'], 'noindex, nofollow');
 });
 
+test('vercel config does not shadow the dynamic submission-status alias', () => {
+  const vercelConfig = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const statusAliasRedirect = (vercelConfig.redirects ?? []).find((entry) => entry.source === '/submission-status/index.html');
+
+  assert.equal(statusAliasRedirect, undefined);
+  assert.ok(
+    (vercelConfig.rewrites ?? []).some((entry) => entry.source === '/(.*)' && entry.destination === '/api/index'),
+    'expected the catch-all rewrite to keep submission-status/index.html on the app handler',
+  );
+});
+
 test('identity and keys page renders the prelaunch readiness contract', () => {
   const html = renderIdentityKeysPage();
 
@@ -1353,9 +1773,9 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
   assert.match(html, /isolated-custody-attestations/);
   assert.match(html, /numeric-spend-cap/);
   assert.match(html, /broadcaster-authority/);
-  // Keep both the public vocabulary and the raw provisioning blocker visible
-  // so smoke tests can detect accidental readiness drift on the human route.
-  assert.match(html, /future-agent-provisioning-required/);
+  // Keep the public vocabulary visible on the human route; the raw provisioning
+  // blocker remains asserted on the JSON contract below.
+  assert.doesNotMatch(html, /future-agent-provisioning-required/);
   assert.match(html, /Future-agent provisioning:\s*<code>Coming soon<\/code>/);
   assert.match(html, /fail closed/);
   assert.doesNotMatch(html, /live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i);
@@ -1539,6 +1959,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/privacy'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/tou'));
+  assert.ok(response.data.monitoring.routeStatusChecks.includes('/api/health'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/mcp-docs'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/onboarding.json'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/gateway/contribution-intents'));
@@ -1559,6 +1980,30 @@ test('homepage and monitoring expose contribution workflow', () => {
     && check.expectedStatus === 400
     && check.forbiddenResponseText.includes('/var/task')
   )));
+});
+
+test('runtime health route exposes rollout and observability contracts', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/health`, {
+      headers: { Accept: 'application/json' },
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /^application\/json/);
+    assert.ok(response.headers.get('x-request-id'));
+    assert.equal(body.route, '/api/health');
+    assert.equal(body.status, 'ok');
+    assert.equal(body.health.overall, 'ok');
+    assert.equal(body.observability.requestIdHeader, 'X-Request-Id');
+    assert.ok(body.observability.telemetryFields.includes('requestId'));
+    assert.equal(body.rollback.smokeContract, '/monitoring.json');
+    assert.match(body.rollback.verificationCommand, /npm run rollout:check -- --base-url=<candidate-url> --rollback-url=<ready-production-url>/);
+    assert.equal(body.reviewGate.publicAuthority, 'health status does not grant authority or approval');
+    assert.ok(body.health.checks.some((check) => check.id === 'release-metadata'));
+    assert.ok(body.health.checks.some((check) => check.id === 'request-correlation'));
+    assert.ok(body.health.checks.some((check) => check.id === 'monitoring-contract'));
+  });
 });
 
 test('workflow API supports discovery brief and status journeys', async () => {
@@ -1841,6 +2286,54 @@ test('heartbeats route sanitizes unexpected filesystem failures instead of leaki
   assert.equal(errorLogs[0].message, 'Registry request failed unexpectedly.');
   assert.match(errorLogs[0].errorMessage, /ENOENT/);
   assert.match(errorLogs[0].errorStack, /ENOENT/);
+});
+
+test('unexpected server-error logs redact secret-bearing exception text', async () => {
+  const rawSecret = `Bearer sk-log-redaction-regression-${Math.random().toString(16).slice(2)}abcdef`;
+  const brokenControlPlane = {
+    ingestSignedHeartbeat() {
+      throw new Error(`backend rejected credential ${rawSecret}`);
+    },
+  };
+
+  const req = new EventEmitter();
+  req.method = 'POST';
+  req.url = '/v1/registry/heartbeats';
+  req.headers = {
+    host: 'agent.bittrees.org',
+    'content-type': 'application/json',
+    'x-request-id': 'registry-secret-log-test-01',
+  };
+  req.body = {};
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  const errorLogs = [];
+  const originalConsoleError = console.error;
+  console.error = (line) => errorLogs.push(String(line));
+  try {
+    await handleRegistryRequest(req, res, undefined, brokenControlPlane);
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(res.statusCode, 500);
+  assert.doesNotMatch(res.body, new RegExp(rawSecret));
+  assert.equal(errorLogs.length, 1);
+  assert.doesNotMatch(errorLogs.join('\n'), new RegExp(rawSecret));
+  assert.match(errorLogs[0], /Registry request failed unexpectedly/);
 });
 
 test('portal telemetry logs request ids and stable error metadata for not found responses', async () => {
@@ -2225,6 +2718,7 @@ test('human pages expose shared primary navigation and route metadata', () => {
     { path: '/reputation', label: 'Reputation', html: renderReputationPage() },
     { path: '/terms-of-use', label: 'Terms', html: renderTermsOfUsePage() },
     { path: '/privacy', label: 'Privacy', html: renderPrivacyPage() },
+    { path: '/onboarding', label: 'Onboarding', html: renderOnboardingPage() },
   ];
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -2584,6 +3078,143 @@ test('mcp gateway audit trail structurally redacts bearer and nested secret payl
   for (const secret of [headerSecret, apiKeySecret, nestedSecret, bearerBodySecret]) {
     assert.doesNotMatch(serializedAuditEvent, new RegExp(secret));
   }
+});
+
+test('security audit entries are tamper-evident and include authorization denials', async () => {
+  await withContributionIntentWriteFlags({
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'token-a-submit-only': {
+        subject: 'agent-a',
+        scopes: ['contributor:submit'],
+        expiresAt: '2999-01-01T00:00:00.000Z',
+      },
+    }),
+  }, async () => {
+    await withPortalServer(async (baseUrl) => {
+      const denied = await mcpPost(baseUrl, {
+        jsonrpc: '2.0',
+        id: 'audit-authz-denial',
+        method: 'tools/call',
+        params: {
+          name: 'claim_contribution',
+          arguments: {
+            agentId: 'agent-a',
+            opportunityId: 'source-registry-hardening',
+            contributionSummary: 'Authorization denial audit coverage.',
+            evidencePlan: ['portal-route:/sources.json'],
+          },
+        },
+      }, {
+        Authorization: 'Bearer token-a-submit-only',
+      });
+
+      assert.equal(denied.response.status, 403);
+      assert.equal(denied.json.error.data.requiredScope, 'contributor:claim');
+    });
+  });
+
+  const events = getSecurityAuditEvents();
+  const denial = events.find((event) => (
+    event.event_name === 'authz.check.deny'
+    && event.action === 'claim_contribution'
+    && event.reason.code === 'scope_forbidden'
+  ));
+  assert.ok(denial, 'expected an authz denial audit event');
+  assert.equal(denial.actor.id, 'agent-a');
+  assert.equal(denial.resource.type, 'mcp_tool');
+  assert.equal(denial.decision, 'deny');
+  assert.match(denial.integrity.event_hash, /^[a-f0-9]{64}$/);
+  assert.match(denial.integrity.prev_hash, /^[a-f0-9]{64}$/);
+  assert.match(denial.integrity.signature, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(verifySecurityAuditChain(events).ok, true);
+  assert.equal(verifySecurityAuditChain(events.slice(1)).ok, true);
+
+  const tampered = JSON.parse(JSON.stringify(events));
+  tampered[tampered.length - 1].reason.code = 'tampered';
+  const tamperedResult = verifySecurityAuditChain(tampered);
+  assert.equal(tamperedResult.ok, false);
+  assert.equal(tamperedResult.reason, 'event_hash_mismatch');
+});
+
+test('mcp error responses redact secret-looking request fields before logging', async () => {
+  const rawSecret = `sk-mcp-error-redaction-${Math.random().toString(16).slice(2)}abcdef`;
+
+  await withPortalServer(async (baseUrl) => {
+    const result = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'mcp-error-secret-redaction',
+      method: rawSecret,
+    });
+
+    assert.equal(result.response.status, 200);
+    assert.equal(result.json.error.message, 'MCP request rejected.');
+    assert.doesNotMatch(JSON.stringify(result.json), new RegExp(rawSecret));
+  });
+
+  const serializedMcpAudit = JSON.stringify(getMcpAuditEvents().filter(
+    (event) => event.request?.jsonRpc?.id === 'mcp-error-secret-redaction',
+  ));
+  const serializedSecurityAudit = JSON.stringify(getSecurityAuditEvents().filter(
+    (event) => event.request?.jsonRpc?.id === 'mcp-error-secret-redaction',
+  ));
+  assert.doesNotMatch(serializedMcpAudit, new RegExp(rawSecret));
+  assert.doesNotMatch(serializedSecurityAudit, new RegExp(rawSecret));
+});
+
+test('contribution intent rejects value-level secrets without log or audit leakage', async () => {
+  const rawSecret = `sk-secret-redaction-regression-${Math.random().toString(16).slice(2)}abcdef`;
+  const logLines = [];
+  const originalConsoleLog = console.log;
+
+  await withContributionIntentWriteFlags({
+    CONTRIBUTION_INTENTS_WRITE_ENABLED: 'true',
+    CONTRIBUTION_INTENTS_DATA_DIR: fileURLToPath(new URL(`../test-results/contribution-secret-${Date.now()}`, import.meta.url)),
+    MCP_WRITE_TOKENS: JSON.stringify({
+      'secret-reject-token': { subject: 'secret-reject-agent', scopes: ['contributor:submit'] },
+    }),
+  }, async () => {
+    console.log = (line) => logLines.push(String(line));
+    try {
+      await withPortalServer(async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: 'Bearer secret-reject-token',
+            'Content-Type': 'application/json',
+            'X-Request-Id': 'secret-redaction-regression-01',
+          },
+          body: JSON.stringify(buildValidContributionIntentPayload({
+            contributor: {
+              kind: 'agent',
+              name: 'Secret Rejection Agent',
+              agentId: 'secret-reject-agent',
+              contactRoute: 'https://example.invalid/contact',
+            },
+            summary: `Prepare a review packet. Internal credential ${rawSecret} must be blocked.`,
+          })),
+        });
+        const body = await response.json();
+
+        assert.equal(response.status, 400);
+        assert.equal(body.accepted, false);
+        assert.equal(body.status, 'rejected');
+        assert.equal(body.error, 'invalid_request');
+        assert.match(body.errors.join('\n'), /API key|credential/i);
+        assert.doesNotMatch(JSON.stringify(body), new RegExp(rawSecret));
+      });
+    } finally {
+      console.log = originalConsoleLog;
+    }
+  });
+
+  assert.doesNotMatch(logLines.join('\n'), new RegExp(rawSecret));
+  const serializedAudit = JSON.stringify(getSecurityAuditEvents());
+  assert.doesNotMatch(serializedAudit, new RegExp(rawSecret));
+  assert.ok(getSecurityAuditEvents().some((event) => (
+    event.event_name === 'admin.secret_access.blocked'
+    && event.request_id === 'secret-redaction-regression-01'
+  )));
 });
 
 test('mcp HTTP write-like tools require active scoped bearer tokens bound to agentId', async () => {

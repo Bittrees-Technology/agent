@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -37,6 +37,7 @@ const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
 const TERMS_PAGE_ROUTE = '/terms';
 const TERMS_OF_USE_SHORT_ROUTE = '/tou';
 const PRIVACY_PAGE_ROUTE = '/privacy';
+const HEALTH_CHECK_PATH = '/api/health';
 const SUBMISSION_STATUS_STATIC_ASSET_ROUTE = '/submission-status/index.html';
 const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
   [`${TERMS_PAGE_ROUTE}/index.html`, TERMS_PAGE_ROUTE],
@@ -82,6 +83,24 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
   CONTRIBUTION_INTENT_CONTRACT_PATH,
   GATEWAY_CONTRIBUTION_INTENT_PATH,
 ]);
+// Transparent-signing UX contract for the contribution-intent form, per
+// design-contributor-form-ux-contract (#7aabee04). The static message text is
+// pinned to workspace/projects/bittrees-research/src/lib/appcrypto.ts KEY_MESSAGE
+// so the compatible research/gov signature-derived key remains re-derivable.
+const CONTRIBUTION_SIGNING_MESSAGE =
+  'Bittrees — application encryption key (v1)\n\nSign to derive your private decryption key for contributor applications. No gas; this only proves wallet ownership.';
+const CONTRIBUTION_SIGNING_EXPLAINER =
+  'This wallet signature derives a local encryption key. It is not a transaction, does not spend funds, and does not grant Bittrees, IDACC, or this portal authority over your wallet.';
+const CONTRIBUTION_SIGNING_DISTINCTION =
+  'The wallet prompt signs only the key-derivation message above. Your form contents are shown here for review and are handled by the portal write gate separately.';
+const CONTRIBUTION_CONTEXT_ROW = 'Base (8453) - agent.bittrees.org - contributor review intake';
+const CONTRIBUTION_BASE_CHAIN_ID_HEX = '0x2105';
+const CONTRIBUTION_SUCCESS_COPY_LINES = [
+  'Contribution package received for review.',
+  'Reviewer acceptance is required before publication, assignment, reputation credit, authority, or any public attestation.',
+];
+const CONTRIBUTION_RETRY_GATE_CLOSED_COPY =
+  'Live contribution writes are not enabled on this portal yet. Nothing was submitted on-chain or accepted as a public attestation. You can review the packet and try again after intake is enabled.';
 const WORKFLOW_API_BASE_PATH = '/v1/workflow';
 // Backward-compatible alias for the originally declared contract path; the
 // implementation lives under WORKFLOW_API_BASE_PATH (see the reconciliation
@@ -1337,7 +1356,24 @@ const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
     message: { type: 'string' },
     requestId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' },
     error: { type: 'string' },
+    code: { type: 'string' },
+    details: { type: 'object', additionalProperties: true },
     receiptId: { type: 'string' },
+    statusLookup: { type: 'string' },
+    submission: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['receiptId', 'status', 'created', 'replayed', 'projection', 'attestation'],
+      properties: {
+        receiptId: { type: 'string' },
+        status: { const: 'queued_for_review' },
+        created: { type: 'boolean' },
+        replayed: { type: 'boolean' },
+        projection: { type: 'object', additionalProperties: true },
+        attestation: { type: 'object', additionalProperties: true },
+      },
+    },
+    reviewGate: { type: 'object', additionalProperties: true },
     nextStep: { type: 'string' },
     errors: { type: 'array', items: { type: 'string' } },
   },
@@ -1618,7 +1654,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.638-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.645-arm64.zip',
   },
 };
 
@@ -1644,6 +1680,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/sources.json',
     '/opportunities.json',
     '/onboarding.json',
+    HEALTH_CHECK_PATH,
     WORKFLOW_OPPORTUNITIES_PATH,
     `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
     `${WORKFLOW_STATUS_PATH}?id=source-registry-hardening&kind=opportunity`,
@@ -1676,6 +1713,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/sources.json',
       '/opportunities.json',
       '/onboarding.json',
+      HEALTH_CHECK_PATH,
       WORKFLOW_OPPORTUNITIES_PATH,
       `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
       `${WORKFLOW_STATUS_PATH}?id=source-registry-hardening&kind=opportunity`,
@@ -1913,6 +1951,7 @@ const MCP_SAFEGUARD_ENFORCEMENT = Object.freeze([
     enforcementStatus: 'enforced',
     controls: [
       'structural secret redaction before append',
+      'tamper-evident hash-chain entries before append',
       'bounded process-local audit retention',
       'no raw authorization, cookie, API-key, token, or nested secret fields retained',
     ],
@@ -1967,6 +2006,11 @@ const AUTHORITY_FIELD_PATTERN =
   /(?:authority|authorization|execution|execute|spend|signer|signature|wallet|transaction|controller|delegation|credential)/i;
 const MCP_AUDIT_EVENT_LIMIT = 256;
 const MCP_AUDIT_EVENTS = [];
+const SECURITY_AUDIT_EVENT_LIMIT = 512;
+const SECURITY_AUDIT_EVENTS = [];
+const SECURITY_AUDIT_STREAM_ID = 'agent-bittrees-portal-security';
+const SECURITY_AUDIT_ZERO_HASH = '0'.repeat(64);
+const REDACTED_VALUE = '[REDACTED]';
 const SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS = [
   ['private key material', /\b(?:private key|secret key|seed phrase|mnemonic|recovery phrase)\b/i],
   ['credential material', /\b(?:bearer token|oauth token|api key|session cookie)\b/i],
@@ -1976,27 +2020,216 @@ const SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS = [
   ['spending request', /\b(?:spend|transfer|approve|move)\s+(?:funds|tokens|assets|treasury|wallet)\b/i],
   ['authority escalation request', /\b(?:grant|delegate|approve|authorize)\s+(?:authority|execution|spending|signing|wallet|safe|controller)\b/i],
 ];
+const SECRET_VALUE_PATTERNS = [
+  ['private key material', /-----BEGIN [A-Z ]*PRIVATE KEY-----/i],
+  ['bearer token', /\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*\b/i],
+  ['API key', /\b(?:sk|pk|rk|ak|ghp|github_pat|xox[baprs])[-_A-Za-z0-9]{12,}\b/i],
+  ['cloud access key', /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
+  ['JWT credential', /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/],
+  ['hex private key', /\b0x[a-fA-F0-9]{64}\b/],
+  [
+    'credential assignment',
+    /\b(?:api[_-]?key|access[_-]?token|auth(?:orization)?|bearer|client[_-]?secret|private[_-]?key|refresh[_-]?token|secret|session[_-]?cookie|password)\s*[:=]\s*["']?[^"'\s,;}]+/i,
+  ],
+];
 
 // Keep this recursive shape aligned with the registry control-plane's
 // redaction control: redact by structural field name first, then catch common
 // credential-bearing string forms. Audit records must never retain secrets.
 function isSecretishKey(key) {
-  return /(?:api[_-]?key|access[_-]?key|authorization|bearer|cookie|credential|oauth|password|private|secret|mnemonic|seed|token|recovery|signature|signer|wallet)/i.test(String(key));
+  return /(?:api[_-]?key|access[_-]?key|authorization|bearer|client[_-]?secret|cookie|credential|oauth|password|private|refresh[_-]?token|secret|mnemonic|seed|session[_-]?cookie|token|recovery|signature|signer|wallet)/i.test(String(key));
+}
+
+function secretValueMatch(value) {
+  if (typeof value !== 'string') return null;
+  return SECRET_VALUE_PATTERNS.find(([, pattern]) => pattern.test(value)) ?? null;
 }
 
 function redactSecrets(value, key = '') {
-  if (isSecretishKey(key)) return '[REDACTED]';
+  if (isSecretishKey(key)) return REDACTED_VALUE;
   if (Array.isArray(value)) return value.map((item) => redactSecrets(item, key));
   if (isPlainObject(value)) {
     return Object.fromEntries(
       Object.entries(value).map(([childKey, childValue]) => [childKey, redactSecrets(childValue, childKey)]),
     );
   }
-  if (typeof value === 'string'
-    && /(?:bearer\s+|sk[-_]|-----begin|private[_ -]?key|(?:api|access)[_-]?key\s*[:=]|(?:password|token|secret)\s*[:=])/i.test(value)) {
-    return '[REDACTED]';
+  if (secretValueMatch(value)) {
+    return REDACTED_VALUE;
   }
   return value;
+}
+
+function publicSafeErrorMessage(error, fallback = 'Request rejected by security policy.') {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const message = raw.trim() || fallback;
+  const redacted = redactSecrets(message);
+  if (redacted === REDACTED_VALUE) return fallback;
+  return publicSafeString(String(redacted));
+}
+
+function publicSafeErrorData(value) {
+  return publicSafeContent(redactSecrets(value));
+}
+
+function canonicalizeAuditValue(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalizeAuditValue).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalizeAuditValue(value[key])}`)
+      .join(',')}}`;
+  }
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value);
+  if (value === null) return 'null';
+  return JSON.stringify(String(value));
+}
+
+function sha256Hex(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function hashAuditEvent(event) {
+  const clone = JSON.parse(JSON.stringify(event));
+  if (clone.integrity) {
+    delete clone.integrity.event_hash;
+    delete clone.integrity.signature;
+  }
+  return sha256Hex(canonicalizeAuditValue(clone));
+}
+
+function auditActor(actor = {}) {
+  const type = actor.type ?? (actor.agentId || actor.agentName ? 'autonomous_agent' : 'unknown');
+  const id = actor.id ?? actor.subject ?? actor.agentId ?? actor.agentName ?? 'anonymous';
+  return {
+    type,
+    id,
+    ...(actor.authnSubject ? { authn_subject: actor.authnSubject } : {}),
+    ...(actor.display ? { display: actor.display } : {}),
+  };
+}
+
+function appendSecurityAuditEvent({
+  req,
+  eventName,
+  eventCategory,
+  action = 'request',
+  resource = {},
+  actor = {},
+  agent = {},
+  decision = 'record_only',
+  reasonCode = 'recorded',
+  reasonMessage = 'Security event recorded.',
+  severity = 'info',
+  outcomeStatus = 'succeeded',
+  outcomeErrorCode = null,
+  httpStatus,
+  request,
+  details,
+} = {}) {
+  const previous = SECURITY_AUDIT_EVENTS.at(-1);
+  const sequence = (previous?.integrity?.sequence ?? 0) + 1;
+  const requestId = req ? resolvePortalRequestId(req) : undefined;
+  const timestamp = new Date().toISOString();
+  const baseEvent = redactSecrets({
+    schema: 'agent.bittrees.security-audit-event.v1',
+    event_id: `security-audit-${randomUUID()}`,
+    event_name: eventName ?? 'security.event',
+    event_version: '1.0',
+    event_category: eventCategory ?? 'audit_integrity',
+    timestamp,
+    correlation_id: requestId ?? `security-audit-${sequence}`,
+    request_id: requestId ?? null,
+    workflow_id: 'goal_plan_1fgpnd5',
+    actor: auditActor(actor),
+    agent: {
+      id: agent.id ?? null,
+      name: agent.name ?? null,
+      team: agent.team ?? null,
+      owner_actor_id: agent.ownerActorId ?? null,
+      attestation_id: agent.attestationId ?? null,
+      attestation_state: agent.attestationState ?? 'not_applicable',
+    },
+    action,
+    resource: {
+      type: resource.type ?? 'portal_route',
+      id: resource.id ?? req?.url ?? 'unknown',
+      owner_scope: resource.ownerScope ?? 'bittrees-contribution-workflow',
+    },
+    decision,
+    reason: {
+      code: reasonCode,
+      message: publicSafeString(reasonMessage),
+    },
+    severity,
+    outcome: {
+      status: outcomeStatus,
+      error_code: outcomeErrorCode,
+    },
+    ...(Number.isInteger(httpStatus) ? { http_status: httpStatus } : {}),
+    ...(request ? { request } : {}),
+    ...(details ? { details } : {}),
+    privacy: {
+      redaction_applied: true,
+      secret_scan_version: 'portal-secret-redaction-v2',
+    },
+    integrity: {
+      stream_id: SECURITY_AUDIT_STREAM_ID,
+      sequence,
+      prev_hash: previous?.integrity?.event_hash ?? SECURITY_AUDIT_ZERO_HASH,
+      algorithm: 'sha256',
+      key_id: 'process-local-hash-chain-v1',
+    },
+  });
+  const eventHash = hashAuditEvent(baseEvent);
+  const signature = sha256Hex(canonicalizeAuditValue({
+    event_hash: eventHash,
+    prev_hash: baseEvent.integrity.prev_hash,
+    sequence,
+    stream_id: SECURITY_AUDIT_STREAM_ID,
+  }));
+  const event = {
+    ...baseEvent,
+    integrity: {
+      ...baseEvent.integrity,
+      event_hash: eventHash,
+      signature: `sha256:${signature}`,
+    },
+  };
+
+  SECURITY_AUDIT_EVENTS.push(event);
+  if (SECURITY_AUDIT_EVENTS.length > SECURITY_AUDIT_EVENT_LIMIT) SECURITY_AUDIT_EVENTS.shift();
+  return event;
+}
+
+export function getSecurityAuditEvents() {
+  return JSON.parse(JSON.stringify(SECURITY_AUDIT_EVENTS));
+}
+
+export function verifySecurityAuditChain(events = SECURITY_AUDIT_EVENTS) {
+  let previousHash = events[0]?.integrity?.prev_hash ?? SECURITY_AUDIT_ZERO_HASH;
+  let previousSequence = Number.isInteger(events[0]?.integrity?.sequence)
+    ? events[0].integrity.sequence - 1
+    : 0;
+  for (const event of events) {
+    const sequence = event?.integrity?.sequence;
+    const eventHash = event?.integrity?.event_hash;
+    const expectedHash = hashAuditEvent(event);
+    const expectedSignature = `sha256:${sha256Hex(canonicalizeAuditValue({
+      event_hash: expectedHash,
+      prev_hash: event?.integrity?.prev_hash,
+      sequence,
+      stream_id: event?.integrity?.stream_id,
+    }))}`;
+    if (sequence !== previousSequence + 1) return { ok: false, reason: 'sequence_gap', sequence };
+    if (event?.integrity?.prev_hash !== previousHash) return { ok: false, reason: 'prev_hash_mismatch', sequence };
+    if (eventHash !== expectedHash) return { ok: false, reason: 'event_hash_mismatch', sequence };
+    if (event?.integrity?.signature !== expectedSignature) return { ok: false, reason: 'signature_mismatch', sequence };
+    previousSequence = sequence;
+    previousHash = eventHash;
+  }
+  return { ok: true, eventCount: events.length };
 }
 
 function mcpAuditRequestProjection(req, message) {
@@ -2021,7 +2254,43 @@ function mcpAuditRequestProjection(req, message) {
   };
 }
 
+function securityEventNameForGatewayOutcome(outcome, httpStatus) {
+  if (outcome === 'rate_limited') return 'abuse.rate_limit.tripped';
+  if (outcome === 'origin_rejected') return 'authz.cross_scope.deny';
+  if (['accept_rejected', 'content_type_rejected', 'parse_rejected', 'method_rejected', 'sse_rejected'].includes(outcome)) {
+    return 'abuse.input.rejected';
+  }
+  if (httpStatus === 401) return 'authn.credential.invalid';
+  if (httpStatus === 403) return 'authz.check.deny';
+  if (httpStatus && httpStatus >= 400) return 'failure.fail_closed';
+  return 'audit.gateway.request';
+}
+
+function securityEventCategoryForGatewayOutcome(outcome, httpStatus) {
+  const name = securityEventNameForGatewayOutcome(outcome, httpStatus);
+  return name.split('.', 1)[0] === 'audit' ? 'audit_integrity' : name.split('.', 1)[0];
+}
+
+function securityDecisionForGatewayOutcome(outcome, httpStatus) {
+  if (outcome === 'rate_limited') return 'deny';
+  if (outcome === 'origin_rejected') return 'deny';
+  if (['accept_rejected', 'content_type_rejected', 'parse_rejected', 'method_rejected', 'sse_rejected'].includes(outcome)) return 'deny';
+  if (httpStatus === 401 || httpStatus === 403) return 'deny';
+  if (httpStatus && httpStatus >= 500) return 'fail_closed';
+  if (httpStatus && httpStatus >= 400) return 'deny';
+  return 'record_only';
+}
+
+function securitySeverityForGatewayOutcome(outcome, httpStatus) {
+  if (outcome === 'origin_rejected' || httpStatus === 403) return 'high';
+  if (outcome === 'rate_limited' || httpStatus === 401) return 'medium';
+  if (httpStatus && httpStatus >= 500) return 'high';
+  if (httpStatus && httpStatus >= 400) return 'low';
+  return 'info';
+}
+
 function appendMcpAuditEvent(req, { outcome, httpStatus, message } = {}) {
+  const request = mcpAuditRequestProjection(req, message);
   const event = redactSecrets({
     $schema: 'agent.mcp.audit-event.v1',
     eventId: `mcp-audit-${randomUUID()}`,
@@ -2029,11 +2298,26 @@ function appendMcpAuditEvent(req, { outcome, httpStatus, message } = {}) {
     occurredAt: new Date().toISOString(),
     outcome,
     httpStatus,
-    request: mcpAuditRequestProjection(req, message),
+    request,
   });
 
   MCP_AUDIT_EVENTS.push(event);
   if (MCP_AUDIT_EVENTS.length > MCP_AUDIT_EVENT_LIMIT) MCP_AUDIT_EVENTS.shift();
+  appendSecurityAuditEvent({
+    req,
+    eventName: securityEventNameForGatewayOutcome(outcome, httpStatus),
+    eventCategory: securityEventCategoryForGatewayOutcome(outcome, httpStatus),
+    action: 'mcp_gateway_request',
+    resource: { type: 'mcp_gateway', id: MCP_GATEWAY.path },
+    decision: securityDecisionForGatewayOutcome(outcome, httpStatus),
+    reasonCode: outcome ?? 'mcp.gateway.request',
+    reasonMessage: 'MCP gateway request processed.',
+    severity: securitySeverityForGatewayOutcome(outcome, httpStatus),
+    outcomeStatus: httpStatus && httpStatus >= 400 ? 'blocked' : 'succeeded',
+    outcomeErrorCode: httpStatus && httpStatus >= 400 ? outcome : null,
+    httpStatus,
+    request,
+  });
   return event;
 }
 
@@ -2339,6 +2623,10 @@ function assertNoSecretFields(value, path = 'arguments') {
 function assertBoundedAuthorityPayload(value, path = 'arguments') {
   if (value === null || value === undefined) return;
   if (typeof value === 'string') {
+    const secretMatch = secretValueMatch(value);
+    if (secretMatch) {
+      throw invalidToolInput(`${path} contains ${secretMatch[0]}; submit a review-only packet without secrets, wallet data, live transaction requests, or authority changes.`);
+    }
     for (const [label, pattern] of SENSITIVE_OR_AUTHORITY_TEXT_PATTERNS) {
       if (pattern.test(value)) {
         throw invalidToolInput(`${path} contains ${label}; submit a review-only packet without secrets, wallet data, live transaction requests, or authority changes.`);
@@ -2964,7 +3252,7 @@ async function handleWorkflowRegistrationPost(req, res, includeBody, telemetry, 
     return sendJson(res, status, {
       $schema: SCHEMA_URL,
       error: 'invalid_json',
-      message: error.message,
+      message: publicSafeErrorMessage(error, 'Workflow request body could not be parsed.'),
     }, includeBody, { ...telemetry, status });
   }
 
@@ -2982,8 +3270,8 @@ async function handleWorkflowRegistrationPost(req, res, includeBody, telemetry, 
     return sendJson(res, status, {
       $schema: SCHEMA_URL,
       error: status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : 'registration_rejected',
-      message: error.message,
-      data: error.jsonRpcData ?? error.details,
+      message: publicSafeErrorMessage(error, 'Workflow registration was rejected.'),
+      data: publicSafeErrorData(error.jsonRpcData ?? error.details),
       requiredScope: MCP_WRITE_TOOL_SCOPES.register_external_agent,
     }, includeBody, { ...telemetry, status });
   }
@@ -3004,7 +3292,7 @@ async function handleWorkflowMutationPost(req, res, includeBody, telemetry, {
     return sendJson(res, status, {
       $schema: SCHEMA_URL,
       error: 'invalid_json',
-      message: error.message,
+      message: publicSafeErrorMessage(error, 'Workflow request body could not be parsed.'),
       requiredScope: MCP_WRITE_TOOL_SCOPES[toolName],
     }, includeBody, { ...telemetry, status });
   }
@@ -3023,9 +3311,9 @@ async function handleWorkflowMutationPost(req, res, includeBody, telemetry, {
     return sendJson(res, status, {
       $schema: SCHEMA_URL,
       error: error.jsonRpcCode ? workflowErrorName(status) : workflowErrorName(status),
-      message: error.message,
+      message: publicSafeErrorMessage(error, 'Workflow request was rejected.'),
       code: error.code,
-      data: error.jsonRpcData ?? error.details,
+      data: publicSafeErrorData(error.jsonRpcData ?? error.details),
       requiredScope: MCP_WRITE_TOOL_SCOPES[toolName],
     }, includeBody, { ...telemetry, status });
   }
@@ -3062,6 +3350,72 @@ function buildPrivacyStatus() {
     currentIntakeNotice: CONTRIBUTION_PRIVACY_NOTICE,
     caveat:
       'This is a prelaunch implementation-status route and contribution-intake notice, not a final privacy policy.',
+  };
+}
+
+function deploymentEnvironment() {
+  const vercelEnv = String(process.env.VERCEL_ENV ?? '').trim();
+  if (vercelEnv) return vercelEnv;
+  return process.env.VERCEL === '1' ? 'vercel-runtime' : 'local';
+}
+
+function buildHealthRouteResponse({ releaseMetadata = DEPLOYED_RELEASE_METADATA } = {}) {
+  const writesEnabled = isContributionIntentsWriteEnabled();
+
+  return {
+    status: 'ok',
+    service: 'agent.bittrees.org',
+    route: HEALTH_CHECK_PATH,
+    launchStatus: LAUNCH_STATUS,
+    deployment: {
+      environment: deploymentEnvironment(),
+      platform: process.env.VERCEL === '1' ? 'vercel' : 'local',
+      releaseSource: releaseMetadata.source,
+    },
+    releaseMetadata,
+    health: {
+      overall: 'ok',
+      checks: [
+        {
+          id: 'release-metadata',
+          status: releaseMetadata.source === 'package-fallback' ? 'warn' : 'ok',
+          detail: releaseMetadata.source === 'package-fallback'
+            ? 'Release identity fell back to package metadata.'
+            : 'Release metadata is bound to the deployed build identity.',
+        },
+        {
+          id: 'request-correlation',
+          status: 'ok',
+          detail: `Dynamic responses echo ${REQUEST_ID_HEADER} for request correlation.`,
+        },
+        {
+          id: 'monitoring-contract',
+          status: 'ok',
+          detail: 'Daily smoke and error-path expectations are published at /monitoring.json.',
+        },
+        {
+          id: 'contribution-write-gate',
+          status: writesEnabled ? 'warn' : 'ok',
+          detail: writesEnabled
+            ? 'Contribution-intent writes are enabled for this runtime.'
+            : 'Contribution-intent writes remain disabled by default.',
+        },
+      ],
+    },
+    observability: {
+      requestIdHeader: REQUEST_ID_HEADER,
+      telemetryFields: [...LAUNCH_FRESHNESS_MONITORING.observability.telemetryFields],
+    },
+    rollback: {
+      smokeContract: '/monitoring.json',
+      verificationCommand:
+        'npm run rollout:check -- --base-url=<candidate-url> --rollback-url=<ready-production-url>',
+    },
+    reviewGate: {
+      contributionWrites: writesEnabled ? 'enabled-for-nonproduction-review' : 'disabled-by-default',
+      workflowWrites: 'review-gated queue only',
+      publicAuthority: 'health status does not grant authority or approval',
+    },
   };
 }
 
@@ -3398,6 +3752,21 @@ const JSON_ROUTES = [
     }),
   },
   {
+    path: HEALTH_CHECK_PATH,
+    label: 'Runtime health',
+    description: 'Dynamic health route for release identity, request correlation, smoke readiness, and rollback verification.',
+    status: 'ok',
+    staticAsset: false,
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org runtime health response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'service', 'route', 'deployment', 'releaseMetadata', 'health', 'observability', 'rollback'],
+    },
+    data: ({ releaseMetadata = DEPLOYED_RELEASE_METADATA } = {}) => buildHealthRouteResponse({ releaseMetadata }),
+  },
+  {
     path: '/monitoring.json',
     label: 'Launch and freshness monitoring',
     description: 'Daily smoke-check contract for route status, release freshness, schema validity, robots policy, and claim drift.',
@@ -3449,11 +3818,12 @@ export const ROUTE_DEFINITIONS = [
   },
   {
     path: TERMS_PAGE_ROUTE,
-    label: 'Terms status page',
+    label: 'Terms status page alias',
     description:
-      'Public terms route for the prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
+      'Compatibility alias for the prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
     kind: 'html',
     status: TERMS_OF_USE_LEGAL_STATUS.status,
+    canonicalPath: TERMS_OF_USE_PAGE_ROUTE,
   },
   {
     path: '/terms-of-use',
@@ -3984,6 +4354,126 @@ function renderContributionIntentFormStyles() {
           width: 100%;
         }
       }
+
+      .signing-island {
+        display: grid;
+        gap: 10px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .signing-island > summary,
+      .signing-island summary {
+        cursor: pointer;
+        font-weight: 750;
+      }
+
+      .signing-context-row {
+        font-weight: 750;
+        color: var(--ink);
+      }
+
+      .signing-wallet-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .signing-connect-button {
+        min-height: 44px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 750;
+        padding: 0 14px;
+        touch-action: manipulation;
+      }
+
+      .signing-account {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .signing-preview pre {
+        max-height: none;
+      }
+
+      .signing-preview dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 14px;
+        margin: 0;
+      }
+
+      .signing-preview dt {
+        color: var(--ink);
+        font-weight: 750;
+      }
+
+      .signing-preview dd {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .signing-server-fallback {
+        display: grid;
+        gap: 7px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        background: #fff;
+      }
+
+      .signing-server-fallback h3,
+      .signing-server-fallback p {
+        margin: 0;
+      }
+
+      .signing-server-fallback h3 {
+        color: var(--ink);
+        font-size: 0.95rem;
+        letter-spacing: 0;
+      }
+
+      .signing-server-fallback p,
+      .signing-server-fallback noscript {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .signing-island .caveat[role="alert"] {
+        border-left: 3px solid var(--gold);
+        padding-left: 10px;
+      }
+
+      .signing-retry {
+        display: grid;
+        gap: 8px;
+      }
+
+      .signing-retry-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .signing-retry-actions button {
+        min-height: 44px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        font-weight: 750;
+        padding: 0 14px;
+        touch-action: manipulation;
+      }
+
+      [data-signing-state] [hidden] {
+        display: none;
+      }
   `;
 }
 
@@ -4323,8 +4813,53 @@ function renderWorkflowRouteDestination(path) {
           <p><a href="${escapeHtml(presentation.href)}">${escapeHtml(presentation.linkText)}</a></p>`;
 }
 
-function renderRouteCards() {
-  return ROUTE_DEFINITIONS.filter((definition) => definition.path !== '/')
+// Keep alias routes served and advertised in machine contracts, but avoid
+// duplicate links for the same human page in visible route lists.
+function isCanonicalAliasRoute(definition) {
+  return typeof definition.canonicalPath === 'string';
+}
+
+function shouldRenderVisibleRouteListItem(definition) {
+  return definition.path !== '/' && !isCanonicalAliasRoute(definition);
+}
+
+const ROUTE_DIRECTORY_GROUPS = Object.freeze([
+  {
+    id: 'portal-pages',
+    label: 'Portal pages',
+    description: 'Human-readable pages for onboarding, status, reputation, legal gates, and documentation.',
+    includes: (definition) => definition.kind === 'html' && definition.path !== MCP_GATEWAY.path,
+  },
+  {
+    id: 'agent-contracts',
+    label: 'Agent-readable contracts',
+    description: 'Text and JSON contracts for crawlers, agent clients, release checks, and source verification.',
+    includes: (definition) => (
+      (definition.kind === 'json' || definition.kind === 'text')
+      && !definition.path.startsWith(WORKFLOW_API_BASE_PATH)
+      && !definition.path.startsWith('/v1/registry/')
+      && !CONTRIBUTION_INTENT_POST_PATHS.has(definition.path)
+    ),
+  },
+  {
+    id: 'workflow-apis',
+    label: 'Workflow APIs',
+    description: 'Review-gated HTTP and MCP routes for contribution discovery, submission, and status lookup.',
+    includes: (definition) => (
+      definition.path === MCP_GATEWAY.path
+      || definition.path.startsWith(WORKFLOW_API_BASE_PATH)
+      || definition.path.startsWith('/v1/registry/')
+      || CONTRIBUTION_INTENT_POST_PATHS.has(definition.path)
+    ),
+  },
+]);
+
+function visibleRouteDefinitions() {
+  return ROUTE_DEFINITIONS.filter(shouldRenderVisibleRouteListItem);
+}
+
+function renderRouteCards(definitions = visibleRouteDefinitions()) {
+  return definitions
     .map(
       (definition) => `
         <article class="route-card">
@@ -4337,6 +4872,24 @@ function renderRouteCards() {
       `,
     )
     .join('');
+}
+
+function renderRouteDirectory() {
+  return ROUTE_DIRECTORY_GROUPS.map((group) => {
+    const definitions = visibleRouteDefinitions().filter(group.includes);
+    if (definitions.length === 0) return '';
+
+    const titleId = `route-group-${group.id}`;
+    return `<section class="route-directory-group" aria-labelledby="${escapeHtml(titleId)}">
+            <div class="route-directory-heading">
+              <h2 id="${escapeHtml(titleId)}">${escapeHtml(group.label)}</h2>
+              <p>${escapeHtml(group.description)}</p>
+            </div>
+            <div class="route-card-stack">
+              ${renderRouteCards(definitions)}
+            </div>
+          </section>`;
+  }).join('');
 }
 
 function renderWorkflowItems() {
@@ -4688,6 +5241,328 @@ function getContributionIntentCtaCopy() {
   };
 }
 
+function summarizeContributionIntentFormValues(values, laneOptions) {
+  const selectedLane = laneOptions.find((lane) => lane.value === (values.targetLane || 'inc-ops-governance'));
+  const sourceIdCount = String(values['handoff.sourceIds'] || '')
+    .split(/\r?\n|,/)
+    .map((entry) => entry.trim())
+    .filter(Boolean).length;
+  const summaryLength = String(values.summary || '').length;
+  return [
+    `Lane: ${selectedLane ? selectedLane.label : (values.targetLane || 'not set')}`,
+    `Name: ${values['contributor.name'] || '(not set)'}`,
+    `Summary length: ${summaryLength} chars`,
+    `Source IDs: ${sourceIdCount}`,
+  ].join(' | ');
+}
+
+function renderContributionSigningScript() {
+  const messageJson = JSON.stringify(CONTRIBUTION_SIGNING_MESSAGE);
+  const baseChainHexJson = JSON.stringify(CONTRIBUTION_BASE_CHAIN_ID_HEX);
+  const gateClosedCopyJson = JSON.stringify(CONTRIBUTION_RETRY_GATE_CLOSED_COPY);
+  const submitEndpointJson = JSON.stringify(GATEWAY_CONTRIBUTION_INTENT_PATH);
+
+  return `
+(function () {
+  var root = document.getElementById('intent-signing-island');
+  if (!root) return;
+  var form = document.getElementById('intent-form');
+  if (!form) return;
+  var submitButton = form.querySelector('button[type="submit"]');
+  var connectButton = document.getElementById('intent-connect-wallet');
+  var accountLabel = document.getElementById('intent-connected-account');
+  var payloadAccount = document.getElementById('intent-payload-account');
+  var payloadSummary = document.getElementById('intent-payload-form-summary');
+  var chainWarning = document.getElementById('intent-chain-warning');
+  var failureBox = document.getElementById('intent-signing-failure');
+  var successBox = document.getElementById('intent-signing-success');
+  var receiptLine = document.getElementById('intent-signing-receipt');
+  var retryBox = document.getElementById('intent-signing-retry');
+  var retryCopyEl = document.getElementById('intent-signing-retry-copy');
+  var retryButton = document.getElementById('intent-retry-button');
+  var editButton = document.getElementById('intent-edit-button');
+
+  var SIGNING_MESSAGE = ${messageJson};
+  var BASE_CHAIN_HEX = ${baseChainHexJson};
+  var GATE_CLOSED_RETRY_COPY = ${gateClosedCopyJson};
+  var SUBMIT_ENDPOINT = ${submitEndpointJson};
+
+  var account = null;
+  var chainId = null;
+  var defaultButtonLabel = submitButton ? submitButton.textContent : '';
+
+  function setState(next) {
+    root.setAttribute('data-signing-state', next);
+    if (next !== 'retry' && chainWarning) chainWarning.hidden = true;
+    if (failureBox) failureBox.hidden = next !== 'failure';
+    if (successBox) successBox.hidden = next !== 'success';
+    if (retryBox) retryBox.hidden = next !== 'retry';
+  }
+
+  function setBusy(isBusy, label) {
+    if (!submitButton) return;
+    submitButton.disabled = isBusy;
+    submitButton.textContent = isBusy && label ? label : defaultButtonLabel;
+  }
+
+  function summarizeForm() {
+    if (!payloadSummary) return;
+    var lane = form.querySelector('[name="targetLane"]');
+    var name = form.querySelector('[name="contributor.name"]');
+    var summary = form.querySelector('[name="summary"]');
+    var sourceIds = form.querySelector('[name="handoff.sourceIds"]');
+    var sourceCount = sourceIds && sourceIds.value
+      ? sourceIds.value.split(/\\r?\\n|,/).map(function (entry) { return entry.trim(); }).filter(Boolean).length
+      : 0;
+    var laneLabel = lane && lane.selectedIndex >= 0 ? lane.options[lane.selectedIndex].text : '';
+    var parts = [];
+    parts.push('Lane: ' + (laneLabel || 'not set'));
+    parts.push('Name: ' + (name && name.value ? name.value : '(not set)'));
+    parts.push('Summary length: ' + (summary ? summary.value.length : 0) + ' chars');
+    parts.push('Source IDs: ' + sourceCount);
+    payloadSummary.textContent = parts.join(' | ');
+  }
+
+  function updateAccountDisplay() {
+    if (payloadAccount) payloadAccount.textContent = account || 'Not connected';
+    if (accountLabel) {
+      accountLabel.hidden = !account;
+      accountLabel.textContent = account ? ('Connected: ' + account) : '';
+    }
+  }
+
+  form.addEventListener('input', summarizeForm);
+  summarizeForm();
+  updateAccountDisplay();
+
+  var provider = window.ethereum;
+  if (!provider) {
+    setState('retry');
+    if (retryCopyEl) retryCopyEl.textContent = 'No browser wallet detected. Install a wallet extension to review and sign before submitting, or use the offline packet copy above.';
+    if (editButton) editButton.hidden = true;
+    if (retryButton) retryButton.addEventListener('click', function () { window.location.reload(); });
+    return;
+  }
+
+  function invalidateOnChange() {
+    setState('pending');
+    updateAccountDisplay();
+  }
+
+  if (provider.on) {
+    provider.on('accountsChanged', function (accounts) {
+      account = accounts && accounts[0] ? accounts[0] : null;
+      invalidateOnChange();
+    });
+    provider.on('chainChanged', function (nextChainId) {
+      chainId = nextChainId;
+      invalidateOnChange();
+    });
+  }
+
+  function refreshAccounts(requestPermission) {
+    return provider.request({ method: requestPermission ? 'eth_requestAccounts' : 'eth_accounts' }).then(function (accounts) {
+      account = accounts && accounts[0] ? accounts[0] : null;
+      updateAccountDisplay();
+      return account;
+    });
+  }
+
+  function refreshChain() {
+    return provider.request({ method: 'eth_chainId' }).then(function (nextChainId) {
+      chainId = nextChainId;
+      return chainId;
+    });
+  }
+
+  if (connectButton) {
+    connectButton.addEventListener('click', function () {
+      setState('pending');
+      refreshAccounts(true).then(refreshChain).catch(function () {
+        setState('retry');
+        if (retryCopyEl) retryCopyEl.textContent = 'Wallet connection was closed or rejected. You can try again.';
+      });
+    });
+  }
+
+  form.addEventListener('submit', function (event) {
+    if (!form.checkValidity()) return;
+    event.preventDefault();
+    runSigningFlow();
+  });
+
+  function runSigningFlow() {
+    setState('pending');
+    setBusy(true, 'Review and sign');
+    refreshAccounts(true).then(function (connectedAccount) {
+      if (!connectedAccount) {
+        setState('retry');
+        if (retryCopyEl) retryCopyEl.textContent = 'Connect a wallet to continue.';
+        setBusy(false);
+        return null;
+      }
+      setBusy(true, 'Switching to Base...');
+      return refreshChain().then(function () {
+        if (chainId === BASE_CHAIN_HEX) return true;
+        return provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: BASE_CHAIN_HEX }],
+        }).then(refreshChain).then(function () {
+          return chainId === BASE_CHAIN_HEX;
+        }).catch(function () {
+          return false;
+        });
+      }).then(function (onBase) {
+        if (!onBase) {
+          if (chainWarning) {
+            chainWarning.hidden = false;
+            chainWarning.textContent = 'Connected to chain ' + chainId + '. This flow requires Base (8453). Switch to Base before signing.';
+          }
+          setState('retry');
+          if (retryCopyEl) retryCopyEl.textContent = 'Switch your wallet network to Base (8453) and try again.';
+          setBusy(false);
+          return null;
+        }
+        setBusy(true, 'Confirm in wallet...');
+        var preSignAccount = account;
+        var preSignChain = chainId;
+        return provider.request({
+          method: 'personal_sign',
+          params: [SIGNING_MESSAGE, account],
+        }).then(function () {
+          return Promise.all([refreshAccounts(false), refreshChain()]).then(function () {
+            if (account !== preSignAccount || chainId !== preSignChain) {
+              setState('pending');
+              setBusy(false);
+              return null;
+            }
+            setBusy(true, 'Preparing review packet...');
+            var params = new URLSearchParams();
+            new FormData(form).forEach(function (value, key) { params.append(key, String(value)); });
+            return fetch(SUBMIT_ENDPOINT, {
+              method: 'POST',
+              headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: params.toString(),
+            }).then(function (response) {
+              return response.json().catch(function () { return null; }).then(function (body) {
+                return { response: response, body: body };
+              });
+            }).then(function (result) {
+              var response = result.response;
+              var body = result.body;
+              if (response.status === 501 || (body && body.error === 'write_disabled')) {
+                setState('retry');
+                if (retryCopyEl) retryCopyEl.textContent = GATE_CLOSED_RETRY_COPY;
+                setBusy(false);
+                return;
+              }
+              if (response.ok && body && body.accepted) {
+                setState('success');
+                if (receiptLine) {
+                  receiptLine.textContent = body.receiptId
+                    ? ('Receipt: ' + body.receiptId + (body.statusLookup ? ' - ' + body.statusLookup : ''))
+                    : '';
+                }
+                setBusy(false);
+                return;
+              }
+              if (response.status === 429 || response.status >= 500) {
+                setState('retry');
+                if (retryCopyEl) retryCopyEl.textContent = 'The request could not be completed right now. Nothing was submitted. You can try again.';
+                setBusy(false);
+                return;
+              }
+              setState('failure');
+              if (failureBox) {
+                failureBox.textContent = (body && body.message) || 'The submission was rejected. Nothing was submitted or signed on your behalf.';
+              }
+              setBusy(false);
+            });
+          });
+        });
+      });
+    }).catch(function (walletError) {
+      var code = walletError && walletError.code;
+      setState('retry');
+      if (retryCopyEl) {
+        retryCopyEl.textContent = code === 4001
+          ? 'Wallet request was rejected. Nothing was submitted or signed. You can try again.'
+          : 'Wallet or network error. Nothing was submitted or signed. You can try again.';
+      }
+      setBusy(false);
+    });
+  }
+
+  if (retryButton) {
+    retryButton.addEventListener('click', runSigningFlow);
+  }
+  if (editButton) {
+    editButton.addEventListener('click', function () {
+      setState('pending');
+    });
+  }
+
+  setState('pending');
+})();
+`;
+}
+
+function renderContributionSigningIsland(values, laneOptions) {
+  const writePostureLabel = isContributionIntentsWriteEnabled()
+    ? 'non-production write-enabled'
+    : 'read-only public launch default';
+  const initialFormSummary = summarizeContributionIntentFormValues(values, laneOptions);
+
+  return `<section class="signing-island" id="intent-signing-island" data-signing-state="pending" aria-live="polite">
+    <p class="signing-context-row" id="intent-context-row">${escapeHtml(CONTRIBUTION_CONTEXT_ROW)}</p>
+    <div class="signing-wallet-row">
+      <button type="button" class="signing-connect-button" id="intent-connect-wallet">Connect wallet</button>
+      <p class="signing-account" id="intent-connected-account" hidden></p>
+    </div>
+    <details class="signing-preview" id="intent-message-preview" open>
+      <summary>Wallet signature preview</summary>
+      <pre><code id="intent-signing-message">${escapeHtml(CONTRIBUTION_SIGNING_MESSAGE)}</code></pre>
+      <p class="form-notice">${escapeHtml(CONTRIBUTION_SIGNING_EXPLAINER)}</p>
+    </details>
+    <details class="signing-preview" id="intent-payload-preview" open>
+      <summary>Review package preview</summary>
+      <dl>
+        <dt>Purpose</dt><dd>Contributor application / contribution review intake</dd>
+        <dt>Portal</dt><dd>agent.bittrees.org</dd>
+        <dt>Network</dt><dd>Base (8453)</dd>
+        <dt>Account</dt><dd id="intent-payload-account">Not connected</dd>
+        <dt>Review gate</dt><dd>review_required_before_publication_or_assignment</dd>
+        <dt>Write posture</dt><dd id="intent-payload-write-posture">${escapeHtml(writePostureLabel)}</dd>
+        <dt>Form summary</dt><dd id="intent-payload-form-summary">${escapeHtml(initialFormSummary)}</dd>
+      </dl>
+      <p class="form-notice">${escapeHtml(CONTRIBUTION_SIGNING_DISTINCTION)}</p>
+    </details>
+    <div class="signing-server-fallback" role="note" aria-labelledby="intent-server-fallback-title">
+      <h3 id="intent-server-fallback-title">Offline packet path</h3>
+      <p>If wallet signing is unavailable, submitting this form returns a server-rendered offline contribution packet. That fallback does not create an assignment, approval, public attestation, onchain action, or wallet grant.</p>
+      <noscript>Client scripting is unavailable, so this form will use the offline packet path.</noscript>
+    </div>
+    <p class="caveat" id="intent-chain-warning" role="alert" hidden></p>
+    <p class="caveat" id="intent-signing-failure" role="alert" hidden></p>
+    <div class="signing-success" id="intent-signing-success" hidden>
+      <p>${escapeHtml(CONTRIBUTION_SUCCESS_COPY_LINES[0])}</p>
+      <p>${escapeHtml(CONTRIBUTION_SUCCESS_COPY_LINES[1])}</p>
+      <p id="intent-signing-receipt"></p>
+    </div>
+    <div class="signing-retry" id="intent-signing-retry" hidden>
+      <p id="intent-signing-retry-copy"></p>
+      <div class="signing-retry-actions">
+        <button type="button" id="intent-retry-button">Try again</button>
+        <button type="button" id="intent-edit-button">Edit application</button>
+      </div>
+    </div>
+    <script>${renderContributionSigningScript()}</script>
+  </section>`;
+}
+
 function renderContributionIntentForm(payload = {}, options = {}) {
   const values = buildContributionIntentFormValues(payload);
   const ctaCopy = getContributionIntentCtaCopy();
@@ -4716,7 +5591,7 @@ function renderContributionIntentForm(payload = {}, options = {}) {
     <p class="form-notice" id="intent-rights-notice">${escapeHtml(NO_RIGHTS_CREATED_DISCLAIMER)}</p>
     <p class="form-notice" id="intent-privacy-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
     <p class="form-notice" id="intent-write-notice">${escapeHtml(ctaCopy.formNotice)}</p>
-    <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post" aria-describedby="${escapeHtml(formDescriptionIds.join(' '))}"${errorAttributes}>
+    <form class="intent-form" id="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post" aria-describedby="${escapeHtml(formDescriptionIds.join(' '))}"${errorAttributes}>
     <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
     <div class="form-grid">
       <label for="${contributionIntentFieldId('contributor.kind')}">
@@ -4807,6 +5682,7 @@ function renderContributionIntentForm(payload = {}, options = {}) {
       <label class="checkbox-label" for="${contributionIntentFieldId('safety.noLiveWriteAcknowledged')}"><input id="${contributionIntentFieldId('safety.noLiveWriteAcknowledged')}" type="checkbox" name="safety.noLiveWriteAcknowledged" value="true" required${values['safety.noLiveWriteAcknowledged'] ? ' checked' : ''} /> <span class="checkbox-copy">I understand live production writes remain disabled without approval.</span></label>
       <label class="checkbox-label" for="${contributionIntentFieldId('safety.noOnchainActionRequested')}"><input id="${contributionIntentFieldId('safety.noOnchainActionRequested')}" type="checkbox" name="safety.noOnchainActionRequested" value="true" required${values['safety.noOnchainActionRequested'] ? ' checked' : ''} /> <span class="checkbox-copy">This is not a request for onchain execution or asset movement.</span></label>
     </fieldset>
+    ${renderContributionSigningIsland(values, laneOptions)}
     <button type="submit">${escapeHtml(ctaCopy.buttonLabel)}</button>
   </form>
   </div>`;
@@ -5306,7 +6182,12 @@ function buildContributionIntentResponse({
   message,
   requestId,
   error,
+  code,
+  details,
   receiptId,
+  statusLookup,
+  submission,
+  reviewGate,
   nextStep,
   errors,
   generatedAt = new Date().toISOString(),
@@ -5323,12 +6204,19 @@ function buildContributionIntentResponse({
     status,
     accepted,
     liveWrite,
-    message,
+    message: publicSafeString(String(message ?? '')),
     ...(requestId ? { requestId } : {}),
     ...(error ? { error } : {}),
+    ...(code ? { code } : {}),
+    ...(details && isPlainObject(details) ? { details: publicSafeErrorData(details) } : {}),
     ...(receiptId ? { receiptId } : {}),
+    ...(statusLookup ? { statusLookup } : {}),
+    ...(submission ? { submission: publicSafeContent(submission) } : {}),
+    reviewGate: publicSafeContent(reviewGate ?? reviewGateRecord()),
     ...(nextStep ? { nextStep } : {}),
-    ...(Array.isArray(errors) && errors.length ? { errors } : {}),
+    ...(Array.isArray(errors) && errors.length ? {
+      errors: errors.map((item) => publicSafeErrorMessage(item, 'Request rejected by security policy.')),
+    } : {}),
   };
 }
 
@@ -5345,7 +6233,13 @@ function buildContributionIntentDisabledResponse(route = CONTRIBUTION_INTENT_CON
   });
 }
 
-function buildContributionIntentAcceptedResponse(receiptId, nextStep, route = CONTRIBUTION_INTENT_CONTRACT_PATH, { requestId } = {}) {
+function buildContributionIntentAcceptedResponse(
+  serviceResult,
+  nextStep,
+  route = CONTRIBUTION_INTENT_CONTRACT_PATH,
+  { requestId } = {},
+) {
+  const receiptId = serviceResult.receiptId;
   return buildContributionIntentResponse({
     route,
     status: 'accepted',
@@ -5353,8 +6247,20 @@ function buildContributionIntentAcceptedResponse(receiptId, nextStep, route = CO
     liveWrite: true,
     requestId,
     receiptId,
+    statusLookup: `${WORKFLOW_STATUS_PATH}?id=${encodeURIComponent(receiptId)}&kind=submission`,
+    submission: {
+      receiptId,
+      status: serviceResult.status,
+      created: serviceResult.created,
+      replayed: serviceResult.replayed,
+      projection: serviceResult.projection,
+      attestation: serviceResult.attestation,
+    },
+    reviewGate: serviceResult.projection?.reviewGate,
     nextStep,
-    message: 'Contribution intent accepted, persisted, and fleet notification queued.',
+    message: serviceResult.replayed
+      ? 'Contribution intent retry matched the existing review-queued receipt; no duplicate was created.'
+      : 'Contribution intent accepted and queued for owner review.',
   });
 }
 
@@ -5363,7 +6269,7 @@ function buildContributionIntentRejectedResponse(
   nextStep,
   errors = [],
   route = CONTRIBUTION_INTENT_CONTRACT_PATH,
-  { requestId, error = 'invalid_request' } = {},
+  { requestId, error = 'invalid_request', code, details, reviewGate } = {},
 ) {
   return buildContributionIntentResponse({
     route,
@@ -5373,9 +6279,30 @@ function buildContributionIntentRejectedResponse(
     message,
     requestId,
     error,
+    code,
+    details,
+    reviewGate,
     nextStep,
     errors,
   });
+}
+
+function contributionIntentServicePayload(payload, laneDefinition, templateDefinition) {
+  const contributorLabel = payload.contributor.agentId ?? payload.contributor.name;
+  const templateLabel = templateDefinition?.name ?? payload.proposedTemplate;
+  return {
+    title: `${templateLabel}: ${contributorLabel}`.slice(0, 180),
+    summary: payload.summary,
+    opportunityId: payload.targetLane,
+    sourceIds: payload.handoff.sourceIds ?? [],
+    artifacts: [{ kind: 'contribution-intent', value: payload.intentId }],
+    lane: laneDefinition?.id ?? payload.targetLane,
+    claimId: payload.handoff.goalId ?? '',
+  };
+}
+
+function contributionIntentIdempotencyKey(req, payload) {
+  return getRequestHeader(req, 'idempotency-key') || payload.intentId;
 }
 
 function buildOfflineContributionIntentPacket(generatedAt = new Date().toISOString()) {
@@ -5538,8 +6465,14 @@ function buildContributionIntentSubmissionRecord({
 
 async function persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord) {
   await mkdir(storagePaths.storageDir, { recursive: true });
-  await appendFile(storagePaths.submissionsLogPath, `${JSON.stringify(submissionRecord)}\n`);
-  await appendFile(storagePaths.notificationsLogPath, `${JSON.stringify(notificationRecord)}\n`);
+  await appendFile(storagePaths.submissionsLogPath, `${JSON.stringify(redactSecrets(submissionRecord))}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  await appendFile(storagePaths.notificationsLogPath, `${JSON.stringify(redactSecrets(notificationRecord))}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
 }
 
 function assertPreparsedBodyShape(value, maxBytes, path = 'body', depth = 0, state = { properties: 0 }) {
@@ -5634,12 +6567,51 @@ function parseJsonRequestBody(rawBody) {
   return JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : String(rawBody ?? ''));
 }
 
+function appendContributionIntentAuditEvent(req, {
+  eventName,
+  eventCategory,
+  decision,
+  reasonCode,
+  reasonMessage,
+  severity = 'medium',
+  outcomeStatus = 'blocked',
+  outcomeErrorCode = reasonCode,
+  httpStatus,
+  actor,
+} = {}) {
+  appendSecurityAuditEvent({
+    req,
+    eventName,
+    eventCategory,
+    action: 'submit_contribution_intent',
+    actor,
+    resource: { type: 'contribution_intent', id: CONTRIBUTION_INTENT_CONTRACT_PATH },
+    decision,
+    reasonCode,
+    reasonMessage,
+    severity,
+    outcomeStatus,
+    outcomeErrorCode,
+    httpStatus,
+    request: {
+      method: req.method ?? 'POST',
+      path: req.url ?? CONTRIBUTION_INTENT_CONTRACT_PATH,
+      headers: redactSecrets({
+        authorization: getRequestHeader(req, 'authorization'),
+        cookie: getRequestHeader(req, 'cookie'),
+        'x-api-key': getRequestHeader(req, 'x-api-key'),
+      }),
+    },
+  });
+}
+
 async function handleContributionIntentPost(
   req,
   res,
   includeBody,
   telemetry,
   routePath = CONTRIBUTION_INTENT_CONTRACT_PATH,
+  contributionService = LIVE_CONTRIBUTION_SERVICE,
 ) {
   telemetry = withRequestTelemetry(req, telemetry, routePath);
   const requestId = telemetry.requestId;
@@ -5648,6 +6620,15 @@ async function handleContributionIntentPost(
 
   if (!gatewayOriginPolicy(req).allowed) {
     req.resume?.();
+    appendContributionIntentAuditEvent(req, {
+      eventName: 'authz.cross_scope.deny',
+      eventCategory: 'authz',
+      decision: 'deny',
+      reasonCode: 'origin_not_allowed',
+      reasonMessage: 'Contribution-intent Origin is not allowed.',
+      severity: 'high',
+      httpStatus: 403,
+    });
     const responseBody = buildContributionIntentRejectedResponse(
       'Contribution intent rejected because the request Origin is not allowed.',
       'Submit directly to the Bittrees portal origin or use a server-to-server client without browser Origin.',
@@ -5665,6 +6646,16 @@ async function handleContributionIntentPost(
 
   if (!intakeGate.accepted) {
     req.resume?.();
+    appendContributionIntentAuditEvent(req, {
+      eventName: 'failure.fail_closed',
+      eventCategory: 'failure',
+      decision: 'fail_closed',
+      reasonCode: 'write_disabled',
+      reasonMessage: 'Contribution-intent write gate is disabled.',
+      severity: 'info',
+      outcomeErrorCode: 'write_disabled',
+      httpStatus: 501,
+    });
     const responseBody = buildContributionIntentDisabledResponse(routePath, { requestId });
     const responseTelemetry = { ...telemetry, status: 501, error: 'write_disabled', outcome: 'not_implemented' };
     if (renderHtml) {
@@ -5676,6 +6667,15 @@ async function handleContributionIntentPost(
   const rateLimit = checkContributionPostRateLimit(req, routePath);
   if (!rateLimit.allowed) {
     req.resume?.();
+    appendContributionIntentAuditEvent(req, {
+      eventName: 'abuse.rate_limit.tripped',
+      eventCategory: 'abuse',
+      decision: 'deny',
+      reasonCode: 'rate_limited',
+      reasonMessage: 'Contribution-intent client exceeded rate limit.',
+      severity: 'medium',
+      httpStatus: 429,
+    });
     const responseBody = buildContributionIntentRejectedResponse(
       'Contribution intent rejected because this client exceeded the review-intake rate limit.',
       'Wait before retrying. Repeated submissions do not create contributor rights or review priority.',
@@ -5694,6 +6694,15 @@ async function handleContributionIntentPost(
   const mediaType = getRequestMediaType(req);
   if (mediaType !== 'application/json' && mediaType !== 'application/x-www-form-urlencoded') {
     req.resume?.();
+    appendContributionIntentAuditEvent(req, {
+      eventName: 'abuse.input.rejected',
+      eventCategory: 'abuse',
+      decision: 'deny',
+      reasonCode: 'unsupported_media_type',
+      reasonMessage: 'Contribution-intent Content-Type is unsupported.',
+      severity: 'low',
+      httpStatus: 415,
+    });
     const responseBody = buildContributionIntentRejectedResponse(
       'Contribution intent rejected because the request Content-Type is not supported.',
       'Submit application/json or application/x-www-form-urlencoded data that matches the documented request schema.',
@@ -5713,6 +6722,15 @@ async function handleContributionIntentPost(
     rawBody = await readRequestBody(req);
   } catch (error) {
     const statusCode = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
+    appendContributionIntentAuditEvent(req, {
+      eventName: 'abuse.input.rejected',
+      eventCategory: 'abuse',
+      decision: 'deny',
+      reasonCode: statusCode === 413 ? 'request_body_too_large' : 'request_body_unreadable',
+      reasonMessage: statusCode === 413 ? 'Contribution-intent body exceeded the size limit.' : 'Contribution-intent body could not be read.',
+      severity: statusCode === 413 ? 'medium' : 'low',
+      httpStatus: statusCode,
+    });
     const responseBody = buildContributionIntentRejectedResponse(
       statusCode === 413
         ? 'Contribution intent rejected because the request body exceeded the 1 MiB limit.'
@@ -5738,6 +6756,15 @@ async function handleContributionIntentPost(
   try {
     payload = parseContributionIntentRequestPayload(rawBody, req);
   } catch {
+    appendContributionIntentAuditEvent(req, {
+      eventName: 'abuse.input.rejected',
+      eventCategory: 'abuse',
+      decision: 'deny',
+      reasonCode: 'invalid_json',
+      reasonMessage: 'Contribution-intent body was not valid JSON.',
+      severity: 'low',
+      httpStatus: 400,
+    });
     const responseBody = buildContributionIntentRejectedResponse(
       'Contribution intent rejected because the request body was not valid JSON.',
       'Submit a JSON object or application/x-www-form-urlencoded body that matches the documented request schema.',
@@ -5754,6 +6781,16 @@ async function handleContributionIntentPost(
 
   const validation = validateContributionIntentRequest(payload);
   if (!validation.ok) {
+    const secretRejected = validation.errors.some((item) => /secret|credential|private key|bearer token|api key|session cookie|jwt|access key/i.test(item));
+    appendContributionIntentAuditEvent(req, {
+      eventName: secretRejected ? 'admin.secret_access.blocked' : 'abuse.input.rejected',
+      eventCategory: secretRejected ? 'admin' : 'abuse',
+      decision: secretRejected ? 'redact' : 'deny',
+      reasonCode: secretRejected ? 'secret.detected' : 'invalid_request',
+      reasonMessage: secretRejected ? 'Secret-like contribution-intent payload was blocked before persistence.' : 'Contribution-intent validation failed.',
+      severity: secretRejected ? 'critical' : 'medium',
+      httpStatus: 400,
+    });
     const responseBody = buildContributionIntentRejectedResponse(
       'Contribution intent rejected because the request body did not match the documented schema.',
       'Fix the validation errors and resubmit the contribution intent.',
@@ -5768,50 +6805,78 @@ async function handleContributionIntentPost(
     return sendJson(res, 400, responseBody, includeBody, responseTelemetry);
   }
 
-  const receiptId = randomUUID();
-  const receivedAt = new Date().toISOString();
-  const storagePaths = getContributionIntentStoragePaths();
-  const notificationRecord = buildFleetNotificationRecord({
-    receiptId,
-    receivedAt,
-    requestBody: validation.normalized,
-    laneDefinition: validation.laneDefinition,
-    templateDefinition: validation.templateDefinition,
-  });
-  const submissionRecord = buildContributionIntentSubmissionRecord({
-    receiptId,
-    receivedAt,
-    requestBody: validation.normalized,
-    laneDefinition: validation.laneDefinition,
-    templateDefinition: validation.templateDefinition,
-    notificationRecord,
-    storagePaths,
-  });
-
+  let serviceResult;
+  let actorContext;
   try {
-    await persistContributionIntentArtifacts(storagePaths, submissionRecord, notificationRecord);
+    const agentId = validation.normalized.contributor.agentId;
+    actorContext = authorizeMcpWriteTool(req, 'submit_contribution', agentId ? { agentId } : {});
+    serviceResult = contributionService.submit({
+      actor: actorContext,
+      idempotencyKey: contributionIntentIdempotencyKey(req, validation.normalized),
+      payload: contributionIntentServicePayload(
+        validation.normalized,
+        validation.laneDefinition,
+        validation.templateDefinition,
+      ),
+    });
   } catch (error) {
-    logServerError('Contribution intent persistence failed.', error, telemetry);
-    const responseBody = buildContributionIntentRejectedResponse(
-      'Contribution intent could not be persisted for lead review.',
-      'Retry later or contact the owning lead if the error persists.',
-      [],
-      routePath,
-      { requestId, error: 'internal_error' },
-    );
-    const responseTelemetry = { ...telemetry, status: 500, error: 'internal_error', outcome: 'rejected' };
-    if (renderHtml) {
-      return sendBody(res, 500, renderContributionIntentValidationPage(responseBody, payload), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    const statusCode = workflowErrorStatus(error);
+    const code = error.code ?? (statusCode === 401 ? 'unauthorized' : workflowErrorName(statusCode));
+    const publicCode = statusCode === 401 ? 'unauthorized' : code;
+    if (statusCode !== 401 && statusCode !== 403) {
+      appendContributionIntentAuditEvent(req, {
+        eventName: statusCode >= 500 ? 'failure.fail_closed' : 'authz.check.deny',
+        eventCategory: statusCode >= 500 ? 'failure' : 'authz',
+        decision: statusCode >= 500 ? 'fail_closed' : 'deny',
+        reasonCode: code,
+        reasonMessage: error.message || 'Contribution-intent service rejected the request.',
+        severity: statusCode >= 500 ? 'high' : 'medium',
+        httpStatus: statusCode,
+      });
     }
-    return sendJson(res, 500, responseBody, includeBody, responseTelemetry);
+    const responseBody = buildContributionIntentRejectedResponse(
+      publicSafeErrorMessage(error, 'Contribution intent could not be queued for owner review.'),
+      statusCode >= 500
+        ? 'Retry later or contact the owning lead if the error persists.'
+        : 'Correct the authorization, idempotency, or submission error before retrying.',
+      error.message ? [publicSafeErrorMessage(error, 'Contribution intent could not be queued for owner review.')] : [],
+      routePath,
+      {
+        requestId,
+        error: workflowErrorName(statusCode),
+        code: publicCode,
+        details: publicSafeErrorData(error.jsonRpcData ?? error.details),
+      },
+    );
+    const responseTelemetry = { ...telemetry, status: statusCode, error: code, outcome: 'rejected' };
+    if (renderHtml) {
+      return sendBody(res, statusCode, renderContributionIntentValidationPage(responseBody, payload), 'text/html; charset=utf-8', includeBody, responseTelemetry);
+    }
+    return sendJson(res, statusCode, responseBody, includeBody, responseTelemetry);
   }
 
   const responseBody = buildContributionIntentAcceptedResponse(
-    receiptId,
-    buildContributionIntentAcceptanceNextStep(notificationRecord),
+    serviceResult,
+    serviceResult.projection?.nextAction,
     routePath,
     { requestId },
   );
+  appendContributionIntentAuditEvent(req, {
+    eventName: 'authz.check.allow',
+    eventCategory: 'authz',
+    decision: 'allow',
+    reasonCode: 'contribution_intent.accepted',
+    reasonMessage: 'Contribution-intent request was authenticated, authorized, and queued.',
+    severity: 'info',
+    outcomeStatus: 'queued',
+    outcomeErrorCode: null,
+    httpStatus: 202,
+    actor: {
+      type: 'autonomous_agent',
+      id: actorContext?.subject ?? 'authenticated-contributor',
+      authnSubject: actorContext?.subject,
+    },
+  });
   const responseTelemetry = { ...telemetry, status: 202, outcome: 'accepted' };
   if (renderHtml) {
     return sendBody(res, 202, renderContributionIntentReceiptPage(responseBody), 'text/html; charset=utf-8', includeBody, responseTelemetry);
@@ -6094,6 +7159,34 @@ export function renderLandingPage() {
 
       .action-grid {
         display: grid;
+        gap: 18px;
+      }
+
+      .route-directory-group {
+        display: grid;
+        gap: 10px;
+      }
+
+      .route-directory-heading {
+        display: grid;
+        gap: 4px;
+      }
+
+      .route-directory-heading h2 {
+        margin: 0;
+        font-size: 0.95rem;
+        letter-spacing: 0;
+      }
+
+      .route-directory-heading p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .route-card-stack {
+        display: grid;
         gap: 10px;
       }
 
@@ -6366,8 +7459,8 @@ export function renderLandingPage() {
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
         </div>
-        <nav id="contribution-paths" class="action-grid" aria-label="Machine-readable routes">
-          ${renderRouteCards()}
+        <nav id="contribution-paths" class="action-grid" aria-label="Portal route directory">
+          ${renderRouteDirectory()}
         </nav>
       </section>
 
@@ -6838,14 +7931,6 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
 </html>`;
 }
 
-function renderSubmissionStatusStaticDelegate() {
-  const page = renderSubmissionStatusPage();
-  return page.replace(
-    '<head>',
-    '<head>\n    <meta name="status-loader" content="server" />\n    <meta name="status-route" content="/v1/workflow/status" />\n    <meta http-equiv="refresh" content="0; url=/submission-status" />',
-  );
-}
-
 export function renderReputationPage(searchParams = new URLSearchParams()) {
   const agentId = readSearchParam(searchParams, 'agentId').trim();
   const lookup = agentId ? callMcpTool('get_agent_reputation', { agentId }).structuredContent : null;
@@ -6973,7 +8058,7 @@ export function renderNotFoundPage() {
   const pageDescription =
     'The requested page was not found on the agent.bittrees.org contribution portal.';
   const routeItems = ROUTE_DEFINITIONS
-    .filter((definition) => definition.kind === 'html' && definition.path !== '/')
+    .filter((definition) => definition.kind === 'html' && shouldRenderVisibleRouteListItem(definition))
     .map((definition) => `<li><a href="${escapeHtml(definition.path)}">${escapeHtml(definition.label)}</a></li>`)
     .join('');
 
@@ -7181,7 +8266,10 @@ export function renderOnboardingPage() {
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
       <p class="brand"><a href="/">agent.bittrees.org</a></p>
-      <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav('/onboarding')}
+        <span class="status">${escapeHtml(humanizeStatus(contract.status))}</span>
+      </div>
     </header>
     <main>
 
@@ -7546,7 +8634,6 @@ export function renderIdentityKeysPage() {
           <p class="lede">
             Future-agent provisioning:
             <code>${escapeHtml(humanizeStatus(ensRollout.futureAgentProvisioning.status, 'coming-soon'))}</code>.
-            <code>${escapeHtml(ensRollout.futureAgentProvisioning.status)}</code>.
             ${escapeHtml(ensRollout.futureAgentProvisioning.requirement)}
           </p>
           <ul>${futureAgentProvisioningItems}</ul>
@@ -7678,7 +8765,7 @@ function logTelemetryRequest({
   if (error) entry.error = error;
   if (outcome) entry.outcome = outcome;
   if (jsonRpcCode !== undefined) entry.jsonRpcCode = jsonRpcCode;
-  console.log(JSON.stringify(entry));
+  console.log(JSON.stringify(redactSecrets(entry)));
 }
 
 function logServerError(message, error, telemetry = null) {
@@ -7691,12 +8778,12 @@ function logServerError(message, error, telemetry = null) {
   if (telemetry?.method) entry.method = telemetry.method;
   if (telemetry?.path) entry.path = telemetry.path;
   if (error instanceof Error) {
-    entry.errorMessage = error.message;
-    if (error.stack) entry.errorStack = error.stack;
+    entry.errorMessage = publicSafeErrorMessage(error, 'Server error.');
+    if (error.stack) entry.errorStack = redactSecrets(error.stack);
   } else if (error !== undefined) {
-    entry.errorMessage = String(error);
+    entry.errorMessage = publicSafeErrorMessage(error, 'Server error.');
   }
-  console.error(JSON.stringify(entry));
+  console.error(JSON.stringify(redactSecrets(entry)));
 }
 
 function sendBody(res, statusCode, body, contentType, includeBody = true, telemetry = null, extraHeaders = {}) {
@@ -7747,8 +8834,8 @@ function jsonRpcError(id, code, message, data) {
     id,
     error: {
       code,
-      message,
-      ...(data === undefined ? {} : { data }),
+      message: publicSafeErrorMessage(message, 'MCP request rejected.'),
+      ...(data === undefined ? {} : { data: publicSafeErrorData(data) }),
     },
   };
 }
@@ -7861,9 +8948,33 @@ function workflowStatusActor(req) {
   const token = getBearerToken(req);
   if (!token) return undefined;
   const record = parseMcpWriteTokenConfig().get(token);
-  if (!record) throw authError(401, 'MCP bearer token is not recognized.', {}, 'credential_unknown');
+  if (!record) {
+    auditMcpAuthDecision(req, {
+      toolName: 'check_contribution_status',
+      statusCode: 401,
+      code: 'credential_unknown',
+      reasonMessage: 'Bearer token is not recognized.',
+    });
+    throw authError(401, 'MCP bearer token is not recognized.', {}, 'credential_unknown');
+  }
   const lifecycleError = mcpWriteTokenLifecycleError(record);
-  if (lifecycleError) throw lifecycleError;
+  if (lifecycleError) {
+    auditMcpAuthDecision(req, {
+      toolName: 'check_contribution_status',
+      tokenRecord: record,
+      statusCode: lifecycleError.statusCode,
+      code: lifecycleError.code,
+      reasonMessage: lifecycleError.message,
+    });
+    throw lifecycleError;
+  }
+  auditMcpAuthDecision(req, {
+    toolName: 'check_contribution_status',
+    tokenRecord: record,
+    statusCode: 200,
+    decision: 'allow',
+    reasonMessage: 'Bearer token accepted for status lookup.',
+  });
   return record ? { subject: record.subject, scopes: record.scopes, role: record.role } : undefined;
 }
 
@@ -7876,37 +8987,137 @@ function authError(statusCode, message, data = {}, code = undefined) {
   return error;
 }
 
+function auditMcpAuthDecision(req, {
+  toolName,
+  requiredScope,
+  tokenRecord,
+  args = {},
+  statusCode,
+  code,
+  decision,
+  reasonMessage,
+} = {}) {
+  const denied = statusCode === 401 || statusCode === 403;
+  appendSecurityAuditEvent({
+    req,
+    eventName: statusCode === 401 ? 'authn.credential.invalid' : statusCode === 403 ? 'authz.check.deny' : 'authz.check.allow',
+    eventCategory: statusCode === 401 ? 'authn' : 'authz',
+    action: toolName ?? 'mcp_write_tool',
+    actor: {
+      type: tokenRecord?.subject ? 'autonomous_agent' : 'unknown',
+      id: tokenRecord?.subject ?? 'anonymous',
+      authnSubject: tokenRecord?.subject,
+    },
+    agent: {
+      id: tokenRecord?.subject ?? null,
+      attestationState: tokenRecord?.subject ? 'verified' : 'not_applicable',
+    },
+    resource: {
+      type: 'mcp_tool',
+      id: toolName ?? 'unknown',
+      ownerScope: typeof args.agentId === 'string' ? args.agentId : 'bittrees-contribution-workflow',
+    },
+    decision: decision ?? (denied ? 'deny' : 'allow'),
+    reasonCode: code ?? (denied ? 'credential_or_scope_denied' : 'authorized'),
+    reasonMessage: reasonMessage ?? (denied ? 'MCP credential or scope check denied.' : 'MCP credential and scope check allowed.'),
+    severity: denied ? (statusCode === 403 ? 'high' : 'medium') : 'info',
+    outcomeStatus: denied ? 'blocked' : 'succeeded',
+    outcomeErrorCode: denied ? (code ?? 'authorization_denied') : null,
+    httpStatus: statusCode,
+    details: {
+      requiredScope,
+      grantedScopes: tokenRecord?.scopes ?? [],
+      credentialStatus: tokenRecord?.status ?? (tokenRecord ? 'active' : 'unknown'),
+    },
+  });
+}
+
 function authorizeMcpWriteTool(req, toolName, args = {}) {
   const requiredScope = MCP_WRITE_TOOL_SCOPES[toolName];
   if (!requiredScope) return null;
 
   const token = getBearerToken(req);
   if (!token) {
+    auditMcpAuthDecision(req, {
+      toolName,
+      requiredScope,
+      args,
+      statusCode: 401,
+      code: 'credential_missing',
+      reasonMessage: 'Bearer token is required for write-like MCP tools.',
+    });
     throw authError(401, 'MCP write-like contribution tools require a bearer token.', {
       requiredScope,
-    });
+    }, 'credential_missing');
   }
 
   const tokenRecord = parseMcpWriteTokenConfig().get(token);
   if (!tokenRecord) {
+    auditMcpAuthDecision(req, {
+      toolName,
+      requiredScope,
+      args,
+      statusCode: 401,
+      code: 'credential_unknown',
+      reasonMessage: 'Bearer token is not recognized.',
+    });
     throw authError(401, 'MCP bearer token is not recognized.', {
       requiredScope,
     });
   }
   const lifecycleError = mcpWriteTokenLifecycleError(tokenRecord, requiredScope);
-  if (lifecycleError) throw lifecycleError;
+  if (lifecycleError) {
+    auditMcpAuthDecision(req, {
+      toolName,
+      requiredScope,
+      tokenRecord,
+      args,
+      statusCode: lifecycleError.statusCode,
+      code: lifecycleError.code,
+      reasonMessage: lifecycleError.message,
+    });
+    throw lifecycleError;
+  }
   if (!tokenRecord.scopes.includes(requiredScope)) {
+    auditMcpAuthDecision(req, {
+      toolName,
+      requiredScope,
+      tokenRecord,
+      args,
+      statusCode: 403,
+      code: 'scope_forbidden',
+      reasonMessage: 'Bearer token does not include the required contribution scope.',
+    });
     throw authError(403, 'MCP bearer token does not include the required contribution scope.', {
       requiredScope,
       grantedScopes: tokenRecord.scopes,
     }, 'scope_forbidden');
   }
   if (typeof args.agentId === 'string' && args.agentId.trim() !== tokenRecord.subject) {
+    auditMcpAuthDecision(req, {
+      toolName,
+      requiredScope,
+      tokenRecord,
+      args,
+      statusCode: 403,
+      code: 'subject_mismatch',
+      reasonMessage: 'Bearer token subject must match the requested agent id.',
+    });
     throw authError(403, 'MCP bearer token subject must match arguments.agentId for write-like tools.', {
       subject: tokenRecord.subject,
       agentId: args.agentId.trim(),
     }, 'subject_mismatch');
   }
+
+  auditMcpAuthDecision(req, {
+    toolName,
+    requiredScope,
+    tokenRecord,
+    args,
+    statusCode: 200,
+    decision: 'allow',
+    reasonMessage: 'Bearer token authorized for write-like MCP tool.',
+  });
 
   return {
     subject: tokenRecord.subject,
@@ -8162,7 +9373,7 @@ function registryErrorBody(error, requestId) {
   return {
     $schema: 'agent.registry.error.v1',
     error: error.code ?? 'registry_error',
-    message: error.message,
+    message: publicSafeErrorMessage(error, 'Registry request was rejected.'),
     ...(requestId ? { requestId } : {}),
     ...(error.details?.audit_event_id ? { audit_event_id: error.details.audit_event_id } : {}),
     ...(error.details?.quarantine_id ? { quarantine_id: error.details.quarantine_id } : {}),
@@ -8396,13 +9607,6 @@ export function buildStaticAssets(
       body: renderIdentityKeysPage(),
     },
     {
-      path: 'submission-status/index.html',
-      // This asset is only a compatibility shell. start:dist and the Vercel
-      // rewrite route /submission-status to createRequestHandler, where the
-      // query is passed to the service projection loader.
-      body: renderSubmissionStatusStaticDelegate(),
-    },
-    {
       path: 'reputation/index.html',
       body: renderReputationPage(),
     },
@@ -8547,7 +9751,7 @@ export function createRequestHandler({
     }
 
     if (isContributionIntentPost) {
-      return handleContributionIntentPost(req, res, includeBody, telemetry, pathname);
+      return handleContributionIntentPost(req, res, includeBody, telemetry, pathname, contributionService);
     }
 
     if (isWorkflowRegistrationPost) {
@@ -8679,6 +9883,13 @@ export function createRequestHandler({
       });
     }
 
+    if (pathname === HEALTH_CHECK_PATH) {
+      return sendJson(res, 200, buildHealthRouteResponse({ releaseMetadata }), includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
     if (pathname === WORKFLOW_OPPORTUNITIES_PATH) {
       return sendJson(res, 200, buildWorkflowOpportunitiesResponse(requestUrl.searchParams, workflow), includeBody, {
         ...telemetry,
@@ -8711,7 +9922,7 @@ export function createRequestHandler({
         return sendJson(res, status, {
           $schema: SCHEMA_URL,
           error: error.code ?? 'brief_not_found',
-          message: error.message,
+          message: publicSafeErrorMessage(error, 'Workflow brief lookup failed.'),
         }, includeBody, { ...telemetry, status });
       }
     }
@@ -8729,7 +9940,7 @@ export function createRequestHandler({
         return sendJson(res, status, {
           $schema: SCHEMA_URL,
           error: error.code ?? 'context_not_found',
-          message: error.message,
+          message: publicSafeErrorMessage(error, 'Workflow context lookup failed.'),
         }, includeBody, { ...telemetry, status });
       }
     }
@@ -8752,9 +9963,9 @@ export function createRequestHandler({
         return sendJson(res, status, {
           $schema: SCHEMA_URL,
           error: workflowErrorName(status),
-          message: error.message,
+          message: publicSafeErrorMessage(error, 'Workflow status authorization failed.'),
           code: error.code,
-          data: error.jsonRpcData ?? error.details,
+          data: publicSafeErrorData(error.jsonRpcData ?? error.details),
         }, includeBody, { ...telemetry, status });
       }
       return sendJson(res, 200, buildWorkflowStatusResponse(requestUrl.searchParams, contributionService, workflow, actor), includeBody, {

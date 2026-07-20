@@ -49,3 +49,24 @@ test('capability catalog avoids unresolved generated copy defects', () => {
   assert.doesNotMatch(catalogText, /1 demand signals/);
   assert.equal(catalog.capabilities.length, catalog.counts.total);
 });
+
+test('interface contract documents every mounted workflow mutation and bounds registry control-plane routes', () => {
+  const contract = readRepositoryFile('docs/agent-onboarding-interface-contracts.md');
+
+  for (const route of [
+    'POST /v1/workflow/registrations',
+    'POST /v1/workflow/claims',
+    'POST /v1/workflow/submissions',
+    'POST /v1/workflow/reviews',
+    'POST /v1/workflow/feedback',
+    'GET /v1/workflow/status?id=<id>&kind=<kind>',
+  ]) {
+    assert.match(contract, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.match(contract, /Mounted control-plane routes that are deliberately not part of the public\s+onboarding workflow:/);
+  assert.match(contract, /GET `?\/v1\/registry\/agents\/:agentId`? returns only the same public-safe staged/);
+  assert.match(contract, /PUT `?\/v1\/registry\/agents\/:agentId`? accepts a signed, versioned registry/);
+  assert.match(contract, /POST `?\/v1\/registry\/heartbeats`? accepts a signed heartbeat envelope/);
+  assert.doesNotMatch(contract, /registry write APIs still exist only in code/);
+});

@@ -23,6 +23,7 @@ const routeChecks = [
   { path: '/privacy', kind: 'html' },
   { path: '/onboarding', kind: 'html' },
   { path: '/tou', kind: 'html' },
+  { path: '/api/health', kind: 'health-json' },
   { path: '/llms.txt', kind: 'text' },
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },
@@ -116,6 +117,27 @@ async function checkRoute(path, kind) {
     }
   }
 
+  if (kind === 'health-json') {
+    try {
+      const json = JSON.parse(text);
+      jsonResponses.set(path, json);
+      check(json.route === path, `${path} route field mismatch`);
+      check(json.status === 'ok', `${path} missing ok status`);
+      check(json.health?.overall === 'ok', `${path} overall health is not ok`);
+      check(Array.isArray(json.health?.checks) && json.health.checks.length > 0, `${path} missing health checks`);
+      check(
+        json.observability?.requestIdHeader === 'X-Request-Id',
+        `${path} missing X-Request-Id observability contract`,
+      );
+      check(
+        json.releaseMetadata?.schemaVersion === 'agent.bittrees.release-metadata.v1',
+        `${path} missing deployed release metadata`,
+      );
+    } catch (error) {
+      check(false, `${path} did not parse as JSON: ${error.message}`);
+    }
+  }
+
   if (kind === 'api-json') {
     try {
       const json = JSON.parse(text);
@@ -162,10 +184,13 @@ async function checkRoute(path, kind) {
       '0 transaction hashes',
       '67 names uncreated',
       'onchainlead wallet-record mismatch',
-      'future-agent-provisioning-required',
     ]) {
       check(text.includes(expectedText), `/identity-keys missing ENS rollout status text: ${expectedText}`);
     }
+    check(
+      !text.includes('future-agent-provisioning-required'),
+      '/identity-keys leaked the internal future-agent-provisioning-required status slug',
+    );
     check(
       !/live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i.test(text),
       '/identity-keys implies the ENS rollout was complete or executable',
@@ -525,6 +550,13 @@ async function checkReleaseFreshness() {
 for (const route of routeChecks) {
   await checkRoute(route.path, route.kind);
 }
+
+const identityKeysRoute = jsonResponses.get('/identity-keys.json');
+check(
+  identityKeysRoute?.data?.identityKeys?.ensPrimaryNameRollout?.futureAgentProvisioning?.status
+    === 'future-agent-provisioning-required',
+  '/identity-keys.json missing the precise future-agent-provisioning-required machine status',
+);
 
 await checkStaticStatusDelegation();
 checkSources();
