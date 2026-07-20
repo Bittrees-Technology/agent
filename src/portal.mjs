@@ -1608,41 +1608,25 @@ export const LIVE_CONTRIBUTOR_PORTAL_WORKFLOW = new ContributorPortalWorkflow({
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-17T00:35:35Z',
+  checkedAt: '2026-07-20T21:27:36Z',
   latest: {
-    tag: 'v0.1.645',
-    name: 'v0.1.645',
-    publishedAt: '2026-07-15T15:01:40Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.645',
-    tagCommitSha: '0cbd97515b38d46c166c8effbc051ff86091fd7b',
+    tag: 'v0.1.654',
+    name: 'v0.1.654',
+    publishedAt: '2026-07-20T21:27:36Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.654',
+    tagCommitSha: 'c311ccb29b30173bfa3aea9fa48a58b4ba8069ac',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-17T00:35:35Z.',
-      'Release notes: Identity & Keys: replace the desktop mock lifecycle with receipt-verified Safe 1.4.1 and Zodiac Roles proposals, atomic WalletConnect submission, and bounded zero-value contract/function authority.',
+      'Latest public GitHub release observed by the portal update on 2026-07-20T21:27:36Z.',
+      'Release notes: Treat one failed fleet snapshot as a transient reconnect instead of declaring the manager offline, while preserving last-known fleet state and requiring consecutive failures before the offline transition.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.645 on 2026-07-17T00:35:35Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.654 on 2026-07-20T21:27:36Z.',
       tagRef:
-        'https://api.github.com/repos/bobofbuilding/idacc/git/ref/tags/v0.1.645 resolved refs/tags/v0.1.645 at commit 0cbd97515b38d46c166c8effbc051ff86091fd7b on 2026-07-17.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.645',
+        'https://api.github.com/repos/bobofbuilding/idacc/git/ref/tags/v0.1.654 resolved refs/tags/v0.1.654 at commit c311ccb29b30173bfa3aea9fa48a58b4ba8069ac on 2026-07-20.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.654',
     },
-    assets: [
-      {
-        name: 'ID-Agents-Control-Center-0.1.645-arm64.zip',
-        platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.645/ID-Agents-Control-Center-0.1.645-arm64.zip',
-        sizeBytes: 118044815,
-        contentType: 'application/zip',
-        sha256: '0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736',
-        sha256Provenance: {
-          algorithm: 'SHA-256',
-          githubExpandedAssetDigest:
-            'sha256:0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736',
-          localVerification:
-            'GitHub release API reported sha256:0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736 for the 118044815-byte asset on 2026-07-17.',
-        },
-      },
-    ],
+    assets: [],
   },
   freshnessPolicy:
     'Treat this as a dated release snapshot. Re-check GitHub before publishing, mirroring, or recommending a latest-version install.',
@@ -6899,6 +6883,11 @@ export function buildLlmsTxt() {
   const approvedClaims = APPROVED_CLAIMS.map((claim) => `- ${claim.claim} Caveat: ${claim.caveat}`).join('\n');
   const excludedClaims = EXCLUDED_CLAIMS.map((claim) => `- ${claim}`).join('\n');
   const releaseAsset = IDACC_RELEASE_SNAPSHOT.latest.assets[0];
+  const releaseAssetLines = releaseAsset
+    ? `Asset: ${releaseAsset.name}
+Platform: ${releaseAsset.platform}
+SHA-256: ${releaseAsset.sha256}`
+    : 'Assets: none published for this GitHub release.';
   const executionReadiness = IDENTITY_KEYS_PUBLIC_CONTRACT.onchainExecutionReadiness
     .map((level) => `- ${level.level}: ${level.automation}. ${level.description}`)
     .join('\n');
@@ -6966,9 +6955,7 @@ ${excludedClaims}
 
 Latest checked release: ${IDACC_RELEASE_SNAPSHOT.latest.tag}, published ${IDACC_RELEASE_SNAPSHOT.latest.publishedAt}.
 Release page: ${IDACC_RELEASE_SNAPSHOT.latest.releaseUrl}
-Asset: ${releaseAsset.name}
-Platform: ${releaseAsset.platform}
-SHA-256: ${releaseAsset.sha256}
+${releaseAssetLines}
 Freshness: ${IDACC_RELEASE_SNAPSHOT.freshnessPolicy}
 Monitoring: ${LAUNCH_FRESHNESS_MONITORING.smokeCommand}
 

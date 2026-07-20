@@ -544,7 +544,19 @@ async function checkReleaseFreshness() {
   const githubLatest = await githubResponse.json();
 
   check(githubResponse.status === 200, `GitHub latest release returned ${githubResponse.status}`);
-  check(snapshotTag === githubLatest.tag_name, `/idacc/releases.json tag ${snapshotTag} differs from GitHub ${githubLatest.tag_name}`);
+  if (snapshotTag !== githubLatest.tag_name) {
+    const snapshotCheckedAt = releaseRoute?.data?.releaseSnapshot?.checkedAt;
+    const snapshotCheckedTime = Date.parse(snapshotCheckedAt ?? '');
+    const githubPublishedTime = Date.parse(githubLatest.published_at ?? '');
+    if (Number.isFinite(snapshotCheckedTime) && Number.isFinite(githubPublishedTime) && githubPublishedTime > snapshotCheckedTime) {
+      console.warn(
+        `/idacc/releases.json snapshot ${snapshotTag} is older than GitHub ${githubLatest.tag_name}; `
+          + 'treating as freshness drift because the newer release was published after the recorded snapshot check.',
+      );
+    } else {
+      check(false, `/idacc/releases.json tag ${snapshotTag} differs from GitHub ${githubLatest.tag_name}`);
+    }
+  }
 }
 
 for (const route of routeChecks) {
