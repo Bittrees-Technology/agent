@@ -739,10 +739,109 @@ test('html pages emit description and Open Graph metadata', () => {
     assert.match(html, /<meta property="og:title" content="[^"]+" \/>/, route);
     assert.match(html, /<meta property="og:description" content="[^"]+" \/>/, route);
     assert.match(html, /<meta property="og:url" content="https:\/\/agent\.bittrees\.org[^"]*" \/>/, route);
-    assert.match(html, /<meta name="twitter:card" content="summary" \/>/, route);
+    // Every indexable page ships a same-origin social-preview image (closes
+    // the SEO/metadata audit gap in #3a45a78c/#21327bc1: no page previously
+    // shipped an og:image/twitter:image, so link unfurls had no preview).
+    assert.match(
+      html,
+      /<meta property="og:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png" \/>/,
+      route,
+    );
+    assert.match(html, /<meta property="og:image:alt" content="[^"]+" \/>/, route);
+    assert.match(
+      html,
+      /<meta name="twitter:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png" \/>/,
+      route,
+    );
+    assert.match(html, /<meta name="twitter:card" content="summary_large_image" \/>/, route);
     assert.match(html, /<meta name="twitter:title" content="[^"]+" \/>/, route);
     assert.match(html, /<meta name="twitter:description" content="[^"]+" \/>/, route);
   }
+});
+
+test('sitemap.xml lists canonical HTML pages without weakening noindex posture', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/sitemap.xml`);
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /^application\/xml/);
+    // sitemap.xml must carry the same noindex signal as every other route so
+    // its existence cannot be read as a change to the site's crawl posture;
+    // robots.txt keeps disallowing everything until the launch gate lifts.
+    assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(body, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+    assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/<\/loc>/);
+    assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+    assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/terms-of-use<\/loc>/);
+    // Alias routes (/terms, /tou) must not appear as separate sitemap entries
+    // alongside their canonical /terms-of-use URL.
+    assert.doesNotMatch(body, /<loc>https:\/\/agent\.bittrees\.org\/terms<\/loc>/);
+    assert.doesNotMatch(body, /<loc>https:\/\/agent\.bittrees\.org\/tou<\/loc>/);
+
+    const robotsResponse = await fetch(`${baseUrl}/robots.txt`);
+    assert.equal(await robotsResponse.text(), 'User-agent: *\nDisallow: /\n');
+  });
+});
+
+test('social-preview.png is served same-origin as a real PNG image', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/social-preview.png`);
+    const body = Buffer.from(await response.arrayBuffer());
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'image/png');
+    assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.ok(body.length > 0);
+    assert.deepEqual([...body.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  });
+});
+
+test('workflow mutation-queue and placeholder routes are not exposed as broken clickable links', () => {
+  const landingHtml = renderLandingPage();
+  const onboardingHtml = renderOnboardingPage();
+
+  for (const html of [landingHtml, onboardingHtml]) {
+    // These queues only accept POST (a GET 404s); the funnel/CTA audit
+    // (#3a45a78c, #c21eb108) flagged rendering them as plain <a href> as a
+    // true trust/UX defect. They must render as a method-prefixed code label
+    // instead of a bare clickable path.
+    for (const path of ['/v1/workflow/claims', '/v1/workflow/submissions', '/v1/workflow/reviews', '/v1/workflow/feedback', '/v1/workflow/registrations']) {
+      assert.doesNotMatch(html, new RegExp(`<a href="${path.replaceAll('/', '\\/')}"`), path);
+    }
+  }
+  assert.match(landingHtml, /<code>POST \/v1\/workflow\/claims<\/code>/);
+  assert.match(landingHtml, /<code>POST \/v1\/workflow\/submissions<\/code>/);
+  assert.match(landingHtml, /<code>POST \/v1\/workflow\/reviews<\/code>/);
+  assert.match(landingHtml, /<code>POST \/v1\/workflow\/feedback<\/code>/);
+
+  // Placeholder `:opportunityId` paths must resolve to a concrete, working
+  // example rather than being rendered as literal clickable placeholders.
+  assert.doesNotMatch(landingHtml, /<a href="\/v1\/workflow\/brief\/:opportunityId"/);
+  assert.match(landingHtml, /<a href="\/v1\/workflow\/brief\/contribution-template-pilot">Open a working brief example<\/a>/);
+  assert.doesNotMatch(landingHtml, /<a href="\/v1\/workflow\/opportunities\/:opportunityId"/);
+  assert.match(
+    landingHtml,
+    /<a href="\/v1\/workflow\/opportunities\/contribution-template-pilot">Open a working opportunity example<\/a>/,
+  );
+});
+
+test('homepage adds a primary onboarding CTA and a clarified MCP nav label', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<a class="hero-cta hero-cta-primary" href="\/onboarding">Start onboarding<\/a>/);
+  assert.match(
+    html,
+    /<a class="hero-cta hero-cta-secondary" href="#contribution-paths">See available contribution paths<\/a>/,
+  );
+  assert.match(html, /<nav id="contribution-paths" class="action-grid"/);
+  assert.match(html, /<p class="status-panel">[^<]*Prelaunch:[^<]*<\/p>/);
+
+  // "Gateway" was ambiguous next to the separate "Docs" nav item for the same
+  // MCP surface (IA/nav/trust audit, #b9a461ba); both the primary nav and
+  // footer nav use the clarified label.
+  assert.match(html, /<a href="\/mcp"[^>]*>Contribute via MCP<\/a>/);
+  assert.doesNotMatch(html, />Gateway<\//);
 });
 
 test('Terms of Use routes are blocked pending legal-approved content', async () => {
@@ -1674,11 +1773,8 @@ test('identity and keys page renders the prelaunch readiness contract', () => {
   assert.match(html, /isolated-custody-attestations/);
   assert.match(html, /numeric-spend-cap/);
   assert.match(html, /broadcaster-authority/);
-  // The human identity page humanizes rollout/gate status slugs to the public
-  // vocabulary. The raw machine slug `future-agent-provisioning-required` stays
-  // on /identity-keys.json only (asserted in the JSON contract test below), so
-  // the human page renders it as "Coming soon" while keeping the truthful
-  // fail-closed requirement prose visible — the page never overstates readiness.
+  // Keep the public vocabulary visible on the human route; the raw provisioning
+  // blocker remains asserted on the JSON contract below.
   assert.doesNotMatch(html, /future-agent-provisioning-required/);
   assert.match(html, /Future-agent provisioning:\s*<code>Coming soon<\/code>/);
   assert.match(html, /fail closed/);
@@ -2276,9 +2372,52 @@ test('portal telemetry logs request ids and stable error metadata for not found 
   assert.equal(res.statusCode, 404);
   assert.equal(res.headers['X-Request-Id'], 'portal-telemetry-test-01');
   assert.equal(entries.length, 1);
+  assert.deepEqual(Object.keys(entries[0]).sort(), ['error', 'method', 'path', 'requestId', 'status', 'timestamp']);
   assert.equal(entries[0].requestId, 'portal-telemetry-test-01');
   assert.equal(entries[0].status, 404);
   assert.equal(entries[0].error, 'not_found');
+});
+
+test('portal telemetry logs request ids and stable outcome metadata for JSON routes', async () => {
+  const handler = createRequestHandler();
+  const req = new EventEmitter();
+  req.method = 'GET';
+  req.url = '/identity-keys.json';
+  req.headers = {
+    host: 'agent.bittrees.org',
+    'x-request-id': 'portal-telemetry-outcome-01',
+  };
+  req.resume = () => req;
+
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: '',
+    writeHead(statusCode, headers) {
+      res.statusCode = statusCode;
+      Object.assign(res.headers, headers);
+    },
+    end(chunk) {
+      if (chunk) res.body += chunk;
+    },
+  };
+
+  const entries = [];
+  const originalConsoleLog = console.log;
+  console.log = (line) => entries.push(JSON.parse(line));
+  try {
+    await handler(req, res);
+  } finally {
+    console.log = originalConsoleLog;
+  }
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['X-Request-Id'], 'portal-telemetry-outcome-01');
+  assert.equal(entries.length, 1);
+  assert.deepEqual(Object.keys(entries[0]).sort(), ['method', 'outcome', 'path', 'requestId', 'status', 'timestamp']);
+  assert.equal(entries[0].requestId, 'portal-telemetry-outcome-01');
+  assert.equal(entries[0].status, 200);
+  assert.equal(entries[0].outcome, IDENTITY_KEYS_PUBLIC_CONTRACT.status);
 });
 
 test('workflow registration route requires authorized bearer token and queues review records', async () => {
@@ -2572,7 +2711,7 @@ test('html pages constrain wide tables and code blocks', () => {
 test('human pages expose shared primary navigation and route metadata', () => {
   const pages = [
     { path: '/', label: 'Home', html: renderLandingPage() },
-    { path: '/mcp', label: 'Gateway', html: renderMcpGatewayPage() },
+    { path: '/mcp', label: 'Contribute via MCP', html: renderMcpGatewayPage() },
     { path: '/mcp-docs', label: 'Docs', html: renderMcpDocsPage() },
     { path: '/identity-keys', label: 'Identity', html: renderIdentityKeysPage() },
     { path: '/submission-status', label: 'Status', html: renderSubmissionStatusPage() },
