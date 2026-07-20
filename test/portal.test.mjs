@@ -1063,11 +1063,11 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const [asset] = IDACC_RELEASE_SNAPSHOT.latest.assets;
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.638');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.652');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
   assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\//);
   assert.match(asset.sha256, /^[a-f0-9]{64}$/);
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'df41416356d9ab99509c25d91cbc45324695107d');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'a2656462af96466622d7c3284ee264c403a46f53');
   assert.match(asset.sha256Provenance.localVerification, /GitHub Releases API asset digest/);
   assert.equal(response.data.releases.length, 1);
 });

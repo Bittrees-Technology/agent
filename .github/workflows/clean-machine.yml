@@ -1,0 +1,81 @@
+name: Clean-machine preflight
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Validate source syntax
+        run: npm run check
+
+      - name: Validate onboarding guidance and CI contract
+        run: npm run test:onboarding
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Build deployable static assets
+        run: npm run build
+
+  push-main-verify-and-smoke:
+    name: Push main / verify:api + built smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Build deployable static assets
+        run: npm run build
+
+      - name: Start the built site
+        run: |
+          PORT=3000 npm run start:dist > "$RUNNER_TEMP/agent-dist.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Built site did not become ready" >&2
+          cat "$RUNNER_TEMP/agent-dist.log" >&2
+          exit 1
+
+      - name: Verify the API handler contract
+        run: npm run verify:api
+
+      - name: Run the built route smoke suite
+        run: BASE_URL=http://127.0.0.1:3000 npm run smoke
