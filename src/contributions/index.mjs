@@ -1157,13 +1157,16 @@ function normalizeContributionRoute(pathname) {
   return pathname;
 }
 
-function matchContributionRoute(pathname) {
+function matchContributionRoute(pathname, method = 'GET') {
   const normalized = normalizeContributionRoute(pathname);
+  const normalizedMethod = String(method ?? 'GET').toUpperCase();
 
   if (normalized === CONTRIBUTION_SERVICE_ROUTE_PREFIX) return { type: 'contract' };
   if (normalized === CONTRIBUTION_SERVICE_DASHBOARD_ROUTE) return { type: 'dashboard' };
   if (normalized === CONTRIBUTION_SERVICE_STATUS_ROUTE) return { type: 'status-query' };
-  if (normalized === CONTRIBUTION_SUBMISSIONS_ROUTE) return { type: 'list' };
+  if (normalized === CONTRIBUTION_SUBMISSIONS_ROUTE) {
+    return normalizedMethod === 'POST' ? { type: 'submit' } : { type: 'list' };
+  }
   if (normalized === CONTRIBUTION_SERVICE_SUBMISSION_STATUS_ALIAS) return { type: 'submission-status-alias' };
   if (normalized === CONTRIBUTION_SERVICE_SUBMISSION_REVIEW_HISTORY_ROUTE) return { type: 'submission-reviews' };
   if (normalized === CONTRIBUTION_SERVICE_REVIEW_DECISIONS_COLLECTION_ROUTE) return { type: 'submission-reviews' };
@@ -1201,7 +1204,8 @@ export function createContributionRequestHandler(options = {}) {
 
   return async function handleContributionRequest(req, res) {
     const pathname = new URL(req.url ?? '/', `http://${req.headers?.host ?? 'localhost'}`).pathname;
-    const match = matchContributionRoute(pathname);
+    const method = String(req.method ?? 'GET').toUpperCase();
+    const match = matchContributionRoute(pathname, method);
     if (!match) return false;
 
     const includeBody = req.method !== 'HEAD';

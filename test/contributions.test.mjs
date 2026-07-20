@@ -153,7 +153,10 @@ test('IDACC manager client only exposes bounded task creation and lookup', async
 
   assert.equal(typeof client.createBoundedTask, 'function');
   assert.equal(typeof client.getTask, 'function');
-  assert.equal(Object.keys(client).length, 2);
+  assert.equal(typeof client.claimTask, 'function');
+  assert.equal(typeof client.finishTask, 'function');
+  assert.equal(typeof client.preflightDispatchCapability, 'function');
+  assert.equal(Object.keys(client).length, 5);
 
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, 'http://manager.test/tasks');
@@ -168,6 +171,106 @@ test('IDACC manager client only exposes bounded task creation and lookup', async
   assert.equal(calls[1].url, 'http://manager.test/tasks/bittrees-submission-bridge-agent');
   assert.equal(calls[1].init.method, 'GET');
   assert.equal(calls[1].init.headers['X-Id-Team'], 'engineering-team');
+});
+
+test('IDACC manager client supports scoped claim and finish task lifecycle calls', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({
+      url,
+      init: {
+        ...init,
+        body: init.body ?? null,
+      },
+    });
+
+    return jsonFetchResponse(200, {
+      name: 'bittrees-submission-bridge-agent',
+      uuid: 'task-123',
+      status: String(url).includes('/done') ? 'done' : 'doing',
+      updatedAt: '2026-07-13T00:05:00.000Z',
+    });
+  };
+
+  const client = createIdaccManagerClient({
+    baseUrl: 'http://manager.test',
+    team: 'engineering-team',
+    fetchImpl,
+  });
+
+  const claimed = await client.claimTask('bittrees-submission-bridge-agent', {
+    agentId: 'bridge-agent',
+    note: 'claiming assigned task',
+  });
+  const finished = await client.finishTask('bittrees-submission-bridge-agent', {
+    agentId: 'bridge-agent',
+    note: 'completed assigned task',
+  });
+
+  assert.deepEqual(claimed, {
+    name: 'bittrees-submission-bridge-agent',
+    uuid: 'task-123',
+    status: 'doing',
+  });
+  assert.deepEqual(finished, {
+    name: 'bittrees-submission-bridge-agent',
+    uuid: 'task-123',
+    status: 'done',
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'http://manager.test/tasks/bittrees-submission-bridge-agent/claim');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.headers['X-Id-Team'], 'engineering-team');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    agentId: 'bridge-agent',
+    from: 'portal-submission-bridge',
+    note: 'claiming assigned task',
+  });
+  assert.equal(calls[1].url, 'http://manager.test/tasks/bittrees-submission-bridge-agent/done');
+  assert.equal(calls[1].init.method, 'POST');
+  assert.equal(calls[1].init.headers['X-Id-Team'], 'engineering-team');
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    agentId: 'bridge-agent',
+    from: 'portal-submission-bridge',
+    note: 'completed assigned task',
+  });
+});
+
+test('IDACC manager client preflights incompatible dispatches and reroutes when asked', async () => {
+  const client = createIdaccManagerClient({
+    baseUrl: 'http://manager.test',
+    team: 'engineering-team',
+    fetchImpl: async () => jsonFetchResponse(200, {}),
+  });
+
+  assert.throws(
+    () =>
+      client.preflightDispatchCapability({
+        dispatchRoute: 'default/lead',
+        requiredCapabilities: ['shell', 'http'],
+        availableCapabilities: ['http'],
+      }),
+    (error) => {
+      assert.equal(error.code, 'task_dispatch_capability_mismatch');
+      assert.match(error.message, /unsupported capability/);
+      return true;
+    },
+  );
+
+  assert.deepEqual(
+    client.preflightDispatchCapability({
+      dispatchRoute: 'default/lead',
+      requiredCapabilities: ['shell', 'http'],
+      availableCapabilities: ['http'],
+      rerouteTo: 'default/researcher',
+    }),
+    {
+      route: 'default/researcher',
+      rerouted: true,
+      rerouteFrom: 'default/lead',
+      missingCapabilities: ['shell'],
+    },
+  );
 });
 
 test('Brain client stores a redacted contribution terminal summary', async () => {
@@ -368,6 +471,38 @@ test('workflow service records submissions, review history, and outbox-driven te
     assert.equal(finalSubmission.terminalSummary.brainKey, `contribution:${submissionResult.submissionId}`);
     assert.equal(finalSubmission.terminalSummary.brainAgentId, 'brain-agent');
     assert.equal(snapshot.integrationAuditEvents.length >= 3, true);
+  });
+});
+
+test('submission collection route accepts POST submissions', async () => {
+  await withEnv({ CONTRIBUTION_SERVICE_WRITE_ENABLED: '1' }, async () => {
+    const clock = () => '2026-07-13T00:00:00.000Z';
+    const repository = createContributionRepository({ clock });
+    const service = createContributionWorkflowService({ repository, clock });
+    const handler = createContributionRequestHandler({ service });
+    const response = mockResponse();
+
+    await handler(
+      mockRequest({
+        method: 'POST',
+        path: '/v1/contributions/submissions',
+        headers: {
+          authorization: 'Bearer contributor:submit subject=bridge-agent',
+          'content-type': 'application/json',
+          'idempotency-key': 'bridge-agent-001',
+        },
+        body: JSON.stringify(CONTRIBUTION_PAYLOAD),
+      }),
+      response,
+    );
+
+    assert.equal(response.statusCode, 201);
+    const body = JSON.parse(response.body);
+    assert.equal(body.route, '/v1/contributions/submissions');
+    assert.equal(body.data.idempotent, false);
+    assert.equal(body.data.submission.state, 'review_pending');
+    assert.equal(body.data.submission.contributor.agentId, 'bridge-agent');
+    assert.equal(body.data.submission.handoff.sourceCount, 3);
   });
 });
 

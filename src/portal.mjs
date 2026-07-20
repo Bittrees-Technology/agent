@@ -3,11 +3,15 @@ import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { sha256Base16, stableStringify } from './contributions/domain.mjs';
+
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION = 2;
+const CONTRIBUTION_INTENT_REPLAY_CACHE = new Map();
 const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
   'CONTRIBUTION_INTENTS_WRITE_ENABLED',
   'CONTRIBUTION_INTENTS_ENABLED',
@@ -161,20 +165,101 @@ function getContributionIntentStoragePaths() {
 }
 
 function buildContributionIntentSecurityGate() {
-  if (!isContributionIntentsWriteEnabled()) {
-    return CONTRIBUTION_INTENT_LAUNCH_POSTURE;
-  }
+  const writesEnabled = isContributionIntentsWriteEnabled();
 
   return {
     ...CONTRIBUTION_INTENT_LAUNCH_POSTURE,
-    mode: 'feature-flag-non-production-write-enabled',
-    liveWritesEnabled: true,
-    liveWriteReason:
-      'A non-production write flag is enabled. Submissions are validated, persisted locally, and queued for fleet review.',
-    noGoItems: [
-      ...CONTRIBUTION_INTENT_LAUNCH_POSTURE.noGoItems,
-      'Keep the write flag off for public production traffic until explicit approval.',
-    ],
+    schema: 'agent.bittrees.contribution-intent.review-gate.v2',
+    schemaVersion: CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION,
+    status: writesEnabled ? 'review_queued' : 'contract_only_disabled',
+    mode: writesEnabled ? 'feature-flag-non-production-write-enabled' : CONTRIBUTION_INTENT_LAUNCH_POSTURE.mode,
+    liveWritesEnabled: writesEnabled,
+    liveWriteReason: writesEnabled
+      ? 'A non-production write flag is enabled. Submissions are validated, persisted locally, and queued for fleet review.'
+      : CONTRIBUTION_INTENT_LAUNCH_POSTURE.liveWriteReason,
+    walletAuthorityGranted: false,
+    transactionSubmissionAllowed: false,
+    registryMutationAllowed: false,
+    publicAttestationAllowed: false,
+    reviewQueueOnly: true,
+    persistenceMode: writesEnabled ? 'local-jsonl-review-queue' : CONTRIBUTION_INTENT_LAUNCH_POSTURE.mode,
+    noGoItems: writesEnabled
+      ? [
+          ...CONTRIBUTION_INTENT_LAUNCH_POSTURE.noGoItems,
+          'Keep the write flag off for public production traffic until explicit approval.',
+        ]
+      : CONTRIBUTION_INTENT_LAUNCH_POSTURE.noGoItems,
+  };
+}
+
+const buildContributionIntentReviewGate = buildContributionIntentSecurityGate;
+
+function normalizeContributionIntentSchemaVersion(value, fallback = 1) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 1) return fallback;
+  return numeric;
+}
+
+function buildContributionIntentPayloadDigest(payload) {
+  return sha256Base16(
+    stableStringify({
+      schema: payload.schema,
+      schemaVersion: normalizeContributionIntentSchemaVersion(payload.schemaVersion),
+      intentId: payload.intentId,
+      contributor: payload.contributor,
+      targetLane: payload.targetLane,
+      summary: payload.summary,
+      proposedTemplate: payload.proposedTemplate,
+      handoff: payload.handoff,
+      safety: payload.safety,
+    }),
+  );
+}
+
+function buildContributionIntentCorrelationId(requestDigest, intentId = '') {
+  return `corr_${sha256Base16(`${intentId}:${requestDigest}`).slice(0, 24)}`;
+}
+
+function buildContributionIntentReceiptId(requestDigest) {
+  return `receipt_${requestDigest.slice(0, 24)}`;
+}
+
+function buildContributionIntentPublicRecord(request, metadata = {}) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.public-record.v2',
+    schemaVersion: normalizeContributionIntentSchemaVersion(metadata.schemaVersion, CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION),
+    payloadSchemaVersion: normalizeContributionIntentSchemaVersion(request.schemaVersion),
+    requestDigest: metadata.requestDigest ?? null,
+    correlationId: metadata.correlationId ?? null,
+    receiptId: metadata.receiptId ?? null,
+    intentId: request.intentId,
+    submittedAt: request.submittedAt,
+    contributor: isPlainObject(request.contributor) ? { ...request.contributor } : request.contributor,
+    targetLane: request.targetLane,
+    summary: request.summary,
+    proposedTemplate: request.proposedTemplate,
+    handoff: isPlainObject(request.handoff) ? { ...request.handoff } : request.handoff,
+    safety: isPlainObject(request.safety) ? { ...request.safety } : request.safety,
+  };
+}
+
+function buildContributionIntentRecordEnvelope(publicRecord, metadata = {}) {
+  return {
+    schema: 'agent.bittrees.contribution-intent.record-envelope.v2',
+    schemaVersion: normalizeContributionIntentSchemaVersion(metadata.schemaVersion, CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION),
+    status: metadata.status ?? 'review_queued',
+    reviewGate: metadata.reviewGate ?? buildContributionIntentReviewGate(),
+    securityGate: metadata.reviewGate ?? buildContributionIntentReviewGate(),
+    receiptId: metadata.receiptId ?? publicRecord.receiptId ?? null,
+    requestDigest: metadata.requestDigest ?? publicRecord.requestDigest ?? null,
+    correlationId: metadata.correlationId ?? publicRecord.correlationId ?? null,
+    intentId: publicRecord.intentId ?? null,
+    payloadSchemaVersion: publicRecord.payloadSchemaVersion ?? null,
+    publicRecord,
+    createdAt: metadata.createdAt ?? null,
+    updatedAt: metadata.updatedAt ?? metadata.createdAt ?? null,
+    idempotent: metadata.idempotent === true,
+    pendingAttestation: metadata.pendingAttestation ?? null,
   };
 }
 
@@ -1035,6 +1120,11 @@ const CONTRIBUTION_INTENT_REQUEST_SCHEMA = {
   ],
   properties: {
     schema: { const: 'agent.bittrees.contribution-intent.v1' },
+    schemaVersion: {
+      type: 'integer',
+      minimum: 1,
+      description: 'Workflow contract version; omitted payloads are treated as the legacy v1 shape.',
+    },
     intentId: { type: 'string', minLength: 8, maxLength: 120 },
     submittedAt: { type: 'string', format: 'date-time' },
     contributor: {
@@ -1094,11 +1184,20 @@ const CONTRIBUTION_INTENT_RESPONSE_SCHEMA = {
   required: ['schema', 'status', 'accepted', 'liveWrite', 'message'],
   properties: {
     schema: { const: 'agent.bittrees.contribution-intent.response.v1' },
+    schemaVersion: { type: 'integer', minimum: 1 },
     status: { enum: ['not_implemented', 'accepted', 'rejected'] },
     accepted: { type: 'boolean' },
     liveWrite: { type: 'boolean' },
     message: { type: 'string' },
     receiptId: { type: 'string' },
+    requestDigest: { type: 'string' },
+    correlationId: { type: 'string' },
+    idempotent: { type: 'boolean' },
+    reviewGate: { type: 'object' },
+    securityGate: { type: 'object' },
+    publicRecord: { type: 'object' },
+    recordEnvelope: { type: 'object' },
+    attestation: { type: 'object' },
     nextStep: { type: 'string' },
     errors: { type: 'array', items: { type: 'string' } },
   },
@@ -1109,7 +1208,7 @@ const CONTRIBUTION_INTENT_FORM_CONTRACT = {
   method: 'POST',
   enctype: 'application/x-www-form-urlencoded',
   requestSchema: 'agent.bittrees.contribution-intent.v1',
-  generatedDefaults: ['schema', 'intentId', 'submittedAt'],
+  generatedDefaults: ['schemaVersion', 'schema', 'intentId', 'submittedAt'],
   arrayEncoding:
     'Repeat the field name for multiple values, or submit newline-delimited textarea values for array fields.',
   canonicalFields: [
@@ -1136,6 +1235,7 @@ const CONTRIBUTION_INTENT_FORM_CONTRACT = {
 
 const CONTRIBUTION_INTENT_CONTRACT = {
   schema: 'agent.bittrees.contribution-intent.contract.v1',
+  schemaVersion: CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION,
   endpoint: CONTRIBUTION_INTENT_CONTRACT_PATH,
   gatewayFormEndpoint: GATEWAY_CONTRIBUTION_INTENT_PATH,
   methods: ['GET', 'HEAD', 'POST'],
@@ -1164,8 +1264,10 @@ function getContributionIntentContractStatus() {
 
 function buildContributionIntentContractData() {
   const status = getContributionIntentContractStatus();
+  const reviewGate = buildContributionIntentReviewGate({ deploymentWritesEnabled: isContributionIntentsWriteEnabled() });
 
   return {
+    schemaVersion: CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION,
     status,
     launchStatus: LAUNCH_STATUS,
     privacyNotice: CONTRIBUTION_PRIVACY_NOTICE,
@@ -1173,10 +1275,13 @@ function buildContributionIntentContractData() {
     requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
     responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
     formSubmission: CONTRIBUTION_INTENT_FORM_CONTRACT,
+    reviewGate,
+    securityGate: reviewGate,
     contract: {
       ...CONTRIBUTION_INTENT_CONTRACT,
       launchStatus: status,
-      securityGate: buildContributionIntentSecurityGate(),
+      reviewGate,
+      securityGate: reviewGate,
       featureFlag: {
         name: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES[0],
         aliases: CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES.slice(1),
@@ -2951,6 +3056,7 @@ function renderContributionIntentForm(payload = {}) {
     <p class="form-notice">${escapeHtml(CONTRIBUTION_PRIVACY_NOTICE)}</p>
     <p class="form-notice">${escapeHtml(ctaCopy.formNotice)}</p>
     <form class="intent-form" action="${escapeHtml(GATEWAY_CONTRIBUTION_INTENT_PATH)}" method="post">
+    <input type="hidden" name="schemaVersion" value="${escapeHtml(values.schemaVersion)}" />
     <input type="hidden" name="schema" value="agent.bittrees.contribution-intent.v1" />
     <div class="form-grid">
       <label>
@@ -3050,6 +3156,9 @@ function buildContributionIntentFormValues(payload = {}) {
   const safety = isPlainObject(payload.safety) ? payload.safety : {};
 
   return {
+    schemaVersion: String(
+      normalizeContributionIntentSchemaVersion(payload.schemaVersion, CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION),
+    ),
     schema: String(payload.schema ?? 'agent.bittrees.contribution-intent.v1'),
     intentId: String(payload.intentId ?? getGeneratedIntentId(generatedAt)),
     submittedAt: String(payload.submittedAt ?? generatedAt.toISOString()),
@@ -3199,6 +3308,11 @@ function buildContributionIntentPayloadFromForm(rawBody, generatedAt = new Date(
   if (sourceIds.length > 0) handoff.sourceIds = sourceIds;
 
   return {
+    schemaVersion: getContributionIntentFormValue(
+      params,
+      'schemaVersion',
+      String(CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION),
+    ),
     schema: getContributionIntentFormValue(params, 'schema', 'agent.bittrees.contribution-intent.v1'),
     intentId: getContributionIntentFormValue(params, 'intentId', getGeneratedIntentId(generatedAt)),
     submittedAt: getContributionIntentFormValue(params, 'submittedAt', generatedAt.toISOString()),
@@ -3266,12 +3380,29 @@ function validateContributionIntentRequest(payload) {
   pushUnknownKeys(
     errors,
     payload,
-    ['schema', 'intentId', 'submittedAt', 'contributor', 'targetLane', 'summary', 'proposedTemplate', 'handoff', 'safety'],
+    [
+      'schemaVersion',
+      'schema',
+      'intentId',
+      'submittedAt',
+      'contributor',
+      'targetLane',
+      'summary',
+      'proposedTemplate',
+      'handoff',
+      'safety',
+    ],
     'body',
   );
   validateStringField(errors, payload.schema, 'body.schema', {
     allowedValues: ['agent.bittrees.contribution-intent.v1'],
   });
+  if (payload.schemaVersion !== undefined) {
+    const schemaVersion = Number(payload.schemaVersion);
+    if (!Number.isInteger(schemaVersion) || schemaVersion < 1) {
+      errors.push('body.schemaVersion must be a positive integer.');
+    }
+  }
   validateStringField(errors, payload.intentId, 'body.intentId', {
     minLength: 8,
     maxLength: 120,
@@ -3381,6 +3512,10 @@ function validateContributionIntentRequest(payload) {
     laneDefinition: CONTRIBUTION_LANES.find((lane) => lane.id === payload.targetLane),
     templateDefinition: CONTRIBUTION_TEMPLATES.find((template) => template.id === payload.proposedTemplate),
     normalized: {
+      schemaVersion: normalizeContributionIntentSchemaVersion(
+        payload.schemaVersion,
+        CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION,
+      ),
       ...payload,
       contributor: isPlainObject(payload.contributor) ? { ...payload.contributor } : payload.contributor,
       handoff: isPlainObject(payload.handoff) ? { ...payload.handoff } : payload.handoff,
@@ -3396,10 +3531,17 @@ function buildContributionIntentResponse({
   liveWrite,
   message,
   receiptId,
+  requestDigest,
+  correlationId,
+  publicRecord,
+  recordEnvelope,
+  attestation,
+  idempotent = false,
   nextStep,
   errors,
   generatedAt = new Date().toISOString(),
 }) {
+  const reviewGate = buildContributionIntentSecurityGate();
   return {
     $schema: SCHEMA_URL,
     route,
@@ -3407,13 +3549,21 @@ function buildContributionIntentResponse({
     generatedAt,
     requestSchema: CONTRIBUTION_INTENT_REQUEST_SCHEMA,
     responseSchema: CONTRIBUTION_INTENT_RESPONSE_SCHEMA,
-    securityGate: buildContributionIntentSecurityGate(),
+    schemaVersion: CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION,
+    reviewGate,
+    securityGate: reviewGate,
     schema: 'agent.bittrees.contribution-intent.response.v1',
     status,
     accepted,
     liveWrite,
     message,
     ...(receiptId ? { receiptId } : {}),
+    ...(requestDigest ? { requestDigest } : {}),
+    ...(correlationId ? { correlationId } : {}),
+    ...(idempotent ? { idempotent: true } : {}),
+    ...(publicRecord ? { publicRecord } : {}),
+    ...(recordEnvelope ? { recordEnvelope } : {}),
+    ...(attestation ? { attestation } : {}),
     ...(nextStep ? { nextStep } : {}),
     ...(Array.isArray(errors) && errors.length ? { errors } : {}),
   };
@@ -3462,6 +3612,7 @@ function buildContributionIntentRejectedResponse(
 function buildOfflineContributionIntentPacket(generatedAt = new Date().toISOString()) {
   return {
     schema: 'agent.bittrees.contribution-intent.v1',
+    schemaVersion: CONTRIBUTION_INTENT_WORKFLOW_SCHEMA_VERSION,
     intentId: `intent-${generatedAt.slice(0, 10)}-offline`,
     submittedAt: generatedAt,
     contributor: {
@@ -3554,7 +3705,7 @@ function renderContributionIntentValidationPage(response, payload = {}) {
 
 function buildContributionIntentAcceptanceNextStep(notificationRecord) {
   return publicSafeString(
-    `Lead review has been queued for ${notificationRecord.requestedOwnerRoute}. Use the receipt ID to correlate stored submission and fleet-notification records.`,
+    `Lead review has been queued for ${notificationRecord.requestedOwnerRoute}. Use the receipt ID and correlation ID to correlate stored submission and fleet-notification records.`,
   );
 }
 
