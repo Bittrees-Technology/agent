@@ -24,6 +24,7 @@ test('clean-machine workflow validates every supported platform with the documen
   assert.match(workflow, /run: npm test/);
   assert.match(workflow, /run: npm run build/);
   assert.equal(packageJson.engines.node, '>=20.0.0');
+  assert.equal(packageJson.scripts.test, 'node scripts/run-tests.mjs');
   assert.equal(packageJson.scripts['test:onboarding'], 'node --test test/onboarding-ci-docs.test.mjs');
 });
 
