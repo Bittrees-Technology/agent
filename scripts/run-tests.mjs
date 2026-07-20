@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 function collectTestFiles(dir) {
@@ -7,7 +7,7 @@ function collectTestFiles(dir) {
     .flatMap((entry) => {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) return collectTestFiles(path);
-      return entry.isFile() && entry.name.endsWith('.test.mjs') ? [path] : [];
+      return entry.isFile() && entry.name.endsWith('.test.mjs') ? [path.split(sep).join('/')] : [];
     })
     .sort();
 }
