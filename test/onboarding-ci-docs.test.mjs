@@ -16,7 +16,7 @@ test('clean-machine workflow validates every supported platform with the documen
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /macos-latest/);
   assert.match(workflow, /windows-latest/);
-  assert.match(workflow, /push:\n\s+branches: \[main\]/);
+  assert.match(workflow, /push:\r?\n\s+branches: \[main\]/);
   assert.match(workflow, /node:\s*\[20\]/);
   assert.match(workflow, /run: npm ci/);
   assert.match(workflow, /run: npm run check/);
