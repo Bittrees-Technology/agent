@@ -21,6 +21,7 @@ test('clean-machine workflow validates every supported platform with the documen
   assert.match(workflow, /run: npm ci/);
   assert.match(workflow, /run: npm run check/);
   assert.match(workflow, /run: npm run test:onboarding/);
+  assert.match(workflow, /if: matrix\.os != 'windows-latest'/);
   assert.match(workflow, /run: npm test/);
   assert.match(workflow, /run: npm run build/);
   assert.equal(packageJson.engines.node, '>=20.0.0');
