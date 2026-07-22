@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { buildStaticAssets } from '../src/portal.mjs';
-import { resolveReleaseMetadata } from '../src/release-metadata.mjs';
+import { resolveBuildDirtyState, resolveReleaseMetadata } from '../src/release-metadata.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -31,7 +31,7 @@ const releaseMetadata = resolveReleaseMetadata({
   // Never claim a release tag for a local build whose tracked sources differ
   // from that tag. Hosted release builds are expected to be clean.
   gitTag: trackedChanges ? undefined : gitTag,
-  dirty: Boolean(trackedChanges),
+  dirty: resolveBuildDirtyState({ trackedChanges }),
 });
 
 await rm(distDir, { recursive: true, force: true });
