@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import handler from '../api/index.js';
 import { IDENTITY_KEYS_PUBLIC_CONTRACT, PORTAL_SECURITY_HEADERS, buildStaticAssets } from '../src/portal.mjs';
+import { RELEASE_METADATA_SCHEMA } from './smoke-policy.mjs';
 
 const SAMPLE_CONTRIBUTION_INTENT = {
   schema: 'agent.bittrees.contribution-intent.v1',
@@ -436,7 +437,7 @@ for (const check of CHECKS) {
         || parsedBody.status !== 'ok'
         || parsedBody.health?.overall !== 'ok'
         || parsedBody.observability?.requestIdHeader !== 'X-Request-Id'
-        || parsedBody.releaseMetadata?.schemaVersion !== 'agent.bittrees.release-metadata.v1'
+        || parsedBody.releaseMetadata?.schemaVersion !== RELEASE_METADATA_SCHEMA
       ) {
         failed += 1;
         console.error('  FAIL: /api/health did not expose the rollout health and observability contract.');

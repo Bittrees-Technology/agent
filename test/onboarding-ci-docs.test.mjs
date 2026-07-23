@@ -52,6 +52,7 @@ test('capability catalog avoids unresolved generated copy defects', () => {
 
 test('interface contract documents every mounted workflow mutation and bounds registry control-plane routes', () => {
   const contract = readRepositoryFile('docs/agent-onboarding-interface-contracts.md');
+  const readme = readRepositoryFile('README.md');
 
   for (const route of [
     'POST /v1/workflow/registrations',
@@ -69,4 +70,8 @@ test('interface contract documents every mounted workflow mutation and bounds re
   assert.match(contract, /PUT `?\/v1\/registry\/agents\/:agentId`? accepts a signed, versioned registry/);
   assert.match(contract, /POST `?\/v1\/registry\/heartbeats`? accepts a signed heartbeat envelope/);
   assert.doesNotMatch(contract, /registry write APIs still exist only in code/);
+  assert.match(readme, /mounted only as signed control-plane routes/);
+  assert.match(readme, /PUT \/v1\/registry\/agents\/:agentId/);
+  assert.match(readme, /POST \/v1\/registry\/heartbeats/);
+  assert.doesNotMatch(readme, /intentionally not wired to a public route/);
 });

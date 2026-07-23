@@ -540,7 +540,8 @@ paths:
       operationId: reviewWorkflowContribution
       summary: Record an idempotent terminal review outcome
       description: >
-        Requires `contributor:review` or an implemented reviewer role. Approval
+        Requires `contributor:review`. Reviewer role metadata is passed to the
+        workflow service but does not replace the HTTP scope check. Approval
         records a review outcome but does not enable publication, registry,
         wallet, transaction, or contributor authority.
       security:

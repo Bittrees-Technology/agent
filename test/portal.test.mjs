@@ -729,6 +729,7 @@ test('html pages emit description and Open Graph metadata', () => {
     ['/onboarding', renderOnboardingPage()],
     ['/mcp', renderMcpGatewayPage()],
     ['/mcp-docs', renderMcpDocsPage()],
+    ['/404', renderNotFoundPage()],
   ]);
 
   for (const [route, html] of htmlByRoute) {
@@ -742,7 +743,33 @@ test('html pages emit description and Open Graph metadata', () => {
     assert.match(html, /<meta name="twitter:card" content="summary" \/>/, route);
     assert.match(html, /<meta name="twitter:title" content="[^"]+" \/>/, route);
     assert.match(html, /<meta name="twitter:description" content="[^"]+" \/>/, route);
+    assert.match(html, /<footer class="site-footer" aria-label="Site information">/, route);
   }
+});
+
+test('unknown GET routes content-negotiate HTML for browsers and JSON for agent clients', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const browserResponse = await fetch(`${baseUrl}/does-not-exist`, {
+      headers: { Accept: 'text/html,application/xhtml+xml' },
+    });
+    const browserBody = await browserResponse.text();
+
+    assert.equal(browserResponse.status, 404);
+    assert.match(browserResponse.headers.get('content-type') ?? '', /^text\/html/);
+    assert.match(browserBody, /<title>Page not found - agent\.bittrees\.org<\/title>/);
+    assert.match(browserBody, /<footer class="site-footer" aria-label="Site information">/);
+
+    const agentResponse = await fetch(`${baseUrl}/does-not-exist`, {
+      headers: { Accept: 'application/json' },
+    });
+    const agentBody = await agentResponse.json();
+
+    assert.equal(agentResponse.status, 404);
+    assert.match(agentResponse.headers.get('content-type') ?? '', /^application\/json/);
+    assert.equal(agentBody.error, 'not_found');
+    assert.equal(agentBody.message, 'No portal route exists at this path.');
+    assert.deepEqual(agentBody.availableRoutes, ROUTE_DEFINITIONS.map((definition) => definition.path));
+  });
 });
 
 test('Terms of Use routes are blocked pending legal-approved content', async () => {
@@ -938,21 +965,22 @@ test('signing island shows the exact wallet message preview before any wallet pr
   );
   assert.match(
     html,
-    /The wallet prompt signs only the key-derivation message above\. Your form contents are shown here for review and are handled by the portal write gate separately\./,
+    /If wallet signing is enabled in a reviewed enhancement, the wallet prompt signs only the key-derivation message above\. Your form contents are shown here for review and are handled by the portal write gate separately\./,
   );
 });
 
-test('signing island shows the review package preview, chain/domain/context row, and wallet account display', () => {
+test('signing island shows the review package preview without exposing wallet controls under no-script CSP', () => {
   const html = renderLandingPage();
 
   assert.match(html, /<p class="signing-context-row" id="intent-context-row">Base \(8453\) - agent\.bittrees\.org - contributor review intake<\/p>/);
-  assert.match(html, /<button type="button" class="signing-connect-button" id="intent-connect-wallet">Connect wallet<\/button>/);
-  assert.match(html, /<p class="signing-account" id="intent-connected-account" hidden><\/p>/);
+  assert.match(html, /<p class="signing-wallet-state" id="intent-wallet-state">Wallet connection is not exposed while this portal uses a no-script production CSP\.<\/p>/);
+  assert.doesNotMatch(html, /id="intent-connect-wallet"/);
+  assert.doesNotMatch(html, />Connect wallet<\/button>/);
   assert.match(html, /<summary>Review package preview<\/summary>/);
   assert.match(html, /<dt>Purpose<\/dt><dd>Contributor application \/ contribution review intake<\/dd>/);
   assert.match(html, /<dt>Portal<\/dt><dd>agent\.bittrees\.org<\/dd>/);
   assert.match(html, /<dt>Network<\/dt><dd>Base \(8453\)<\/dd>/);
-  assert.match(html, /<dt>Account<\/dt><dd id="intent-payload-account">Not connected<\/dd>/);
+  assert.match(html, /<dt>Account<\/dt><dd id="intent-payload-account">Not requested by this no-script page<\/dd>/);
   assert.match(html, /<dt>Review gate<\/dt><dd>review_required_before_publication_or_assignment<\/dd>/);
   assert.match(html, /<dd id="intent-payload-form-summary">Lane: [^<]+ \| Name: \(not set\) \| Summary length: 0 chars \| Source IDs: 0<\/dd>/);
 });
@@ -969,30 +997,58 @@ test('signing island write posture reflects the fail-closed gate by default and 
   });
 });
 
-test('signing island exposes the four accessible state regions and gate-closed retry copy', () => {
+test('signing island matches the no-script CSP and exposes only the server fallback path', () => {
   const html = renderLandingPage();
 
-  assert.match(html, /<section class="signing-island" id="intent-signing-island" data-signing-state="pending" aria-live="polite">/);
-  assert.match(html, /<p class="caveat" id="intent-chain-warning" role="alert" hidden><\/p>/);
-  assert.match(html, /<p class="caveat" id="intent-signing-failure" role="alert" hidden><\/p>/);
-  assert.match(html, /<div class="signing-success" id="intent-signing-success" hidden>/);
-  assert.match(html, /Contribution package received for review\./);
-  assert.match(html, /Reviewer acceptance is required before publication, assignment, reputation credit, authority, or any public attestation\./);
-  assert.match(html, /<div class="signing-retry" id="intent-signing-retry" hidden>/);
-  assert.match(html, /<button type="button" id="intent-retry-button">Try again<\/button>/);
-  assert.match(html, /<button type="button" id="intent-edit-button">Edit application<\/button>/);
+  assert.match(html, /<section class="signing-island" id="intent-signing-island" data-signing-state="server-fallback" aria-live="polite">/);
+  assert.match(html, /Client scripting is unavailable by policy, so this form uses the offline packet path\./);
+  assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /script-src 'none'/);
+  assert.doesNotMatch(html, /<script\b/i);
+  assert.doesNotMatch(html, /data-signing-state="pending"/);
+  assert.doesNotMatch(html, /personal_sign/);
+  assert.doesNotMatch(html, /wallet_switchEthereumChain/);
+  assert.doesNotMatch(html, /writeContract/);
+  assert.doesNotMatch(html, /rawSignature/i);
+});
 
-  const script = html.match(/<script>\n\(function \(\) \{[\s\S]*?\}\)\(\);\n<\/script>/)?.[0];
-  assert.ok(script, 'signing island inline script is present');
-  assert.match(
-    script,
-    /var GATE_CLOSED_RETRY_COPY = "Live contribution writes are not enabled on this portal yet\. Nothing was submitted on-chain or accepted as a public attestation\. You can review the packet and try again after intake is enabled\.";/,
-  );
-  assert.match(script, /var BASE_CHAIN_HEX = "0x2105";/);
-  assert.match(script, /response\.status === 501 \|\| \(body && body\.error === 'write_disabled'\)/);
-  assert.match(script, /provider\.request\(\{\s*method: 'personal_sign',\s*params: \[SIGNING_MESSAGE, account\],/);
-  assert.doesNotMatch(script, /writeContract/);
-  assert.doesNotMatch(script, /rawSignature/i);
+test('workflow HTML responses keep script-src none without inline scripts or wallet controls', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const landingResponse = await fetch(`${baseUrl}/`, {
+      headers: { Accept: 'text/html' },
+    });
+    const disabledGatewayResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+      method: 'POST',
+      headers: {
+        Accept: 'text/html',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ schema: 'agent.bittrees.contribution-intent.v1' }).toString(),
+    });
+
+    for (const [path, response, expectedStatus] of [
+      ['/', landingResponse, 200],
+      ['/gateway/contribution-intents POST', disabledGatewayResponse, 501],
+    ]) {
+      const html = await response.text();
+
+      assert.equal(response.status, expectedStatus, path);
+      assert.match(response.headers.get('content-security-policy') ?? '', /script-src 'none'/, path);
+      assert.doesNotMatch(html, /<script\b/i, path);
+      assert.doesNotMatch(html, /id="intent-connect-wallet"/, path);
+      assert.doesNotMatch(html, />Connect wallet<\/button>/, path);
+      assert.doesNotMatch(html, /data-signing-state="pending"/, path);
+    }
+
+    const gatewayContractResponse = await fetch(`${baseUrl}/gateway/contribution-intents`, {
+      headers: { Accept: 'application/json' },
+    });
+    const gatewayContractBody = await gatewayContractResponse.text();
+
+    assert.equal(gatewayContractResponse.status, 200);
+    assert.match(gatewayContractResponse.headers.get('content-security-policy') ?? '', /script-src 'none'/);
+    assert.match(gatewayContractResponse.headers.get('content-type') ?? '', /^application\/json/);
+    assert.doesNotMatch(gatewayContractBody, /<script\b/i);
+  });
 });
 
 test('human lookup forms expose mobile accessible labels and instructions', () => {
@@ -1004,7 +1060,7 @@ test('human lookup forms expose mobile accessible labels and instructions', () =
   assert.match(statusHtml, /<input id="status-record-id" type="search" name="id"[^>]+aria-describedby="status-record-id-hint"/);
   assert.match(statusHtml, /<label for="status-kind">/);
   assert.match(statusHtml, /<select id="status-kind" name="kind" aria-describedby="status-kind-hint">/);
-  assert.match(statusHtml, /input,\n\s+select \{\n\s+width: 100%;\n\s+min-height: 44px;/);
+  assert.match(statusHtml, /input,\n\s+select,\n\s+textarea \{\n\s+width: 100%;\n\s+min-height: 44px;/);
   assert.match(statusHtml, /button \{\n\s+min-height: 44px;/);
   assert.match(statusHtml, /@media \(max-width: 820px\)[\s\S]+button \{ width: 100%; \}/);
 
@@ -1878,6 +1934,22 @@ test('homepage and monitoring expose contribution workflow', () => {
   assert.ok(response.data.monitoring.claimDrift.baselineExcludedClaimIds.includes(EXCLUDED_CLAIM_REVIEW[0].id));
   assert.equal(response.data.monitoring.observability.responseHeaders.includes('X-Request-Id'), true);
   assert.equal(response.data.monitoring.observability.telemetryFields.includes('requestId'), true);
+  assert.equal(response.data.monitoring.sloWindow, '30d rolling');
+  assert.ok(response.data.monitoring.sloTargets.some((target) => (
+    target.id === 'public-health-availability'
+    && target.objectivePercent === 99.9
+    && target.errorBudgetMinutes === 43
+  )));
+  assert.ok(response.data.monitoring.sloTargets.some((target) => (
+    target.id === 'route-contract-smoke'
+    && target.objectivePercent === 99.5
+  )));
+  assert.equal(response.data.monitoring.alerts.issueTitles.productionMonitor, 'agent.bittrees.org production monitor failed');
+  assert.ok(response.data.monitoring.alerts.paging.some((alert) => (
+    alert.severity === 'SEV-1' && alert.responseTargetMinutes === 15
+  )));
+  assert.ok(response.data.monitoring.incidentResponse.firstResponseChecklist.length >= 4);
+  assert.ok(response.data.monitoring.incidentResponse.severities.some((severity) => severity.id === 'SEV-2'));
   assert.ok(response.data.monitoring.errorPathChecks.some((check) => (
     check.method === 'POST'
     && check.path === '/v1/registry/heartbeats'
@@ -2669,6 +2741,10 @@ test('human status and reputation views render lookup results and caveats', () =
   assert.match(statusHtml, /status_found/);
   assert.match(statusHtml, /source-registry-hardening/);
   assert.match(statusHtml, /from assignments, approvals, publication, and public attestations/);
+  assert.match(statusHtml, /data-copyable-json-result/);
+  assert.match(statusHtml, /<textarea id="status-result-json" readonly/);
+  assert.match(statusHtml, /aria-labelledby="result-title status-result-json-label"/);
+  assert.doesNotMatch(statusHtml, /<pre><code>[\s\S]*status_found/);
 
   assert.match(reputationHtml, /Agent reputation/);
   assert.match(reputationHtml, /get_agent_reputation/);

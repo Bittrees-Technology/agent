@@ -44,6 +44,19 @@ for (const asset of assets) {
   await writeFile(targetPath, asset.body);
 }
 
+// Emit the immutable, generated release manifest from the single release
+// identity source so every downstream consumer reads one canonical artifact.
+const releaseManifest = {
+  schema: 'agent.bittrees.release-manifest.v1',
+  generatedAt: new Date().toISOString(),
+  immutable: true,
+  ...releaseMetadata,
+};
+await writeFile(
+  join(distDir, 'release-manifest.json'),
+  `${JSON.stringify(releaseManifest, null, 2)}\n`,
+);
+
 console.log(
   `built ${relative(rootDir, distDir)}/ with ${assets.length} static assets `
   + `(release ${releaseMetadata.version}, source ${releaseMetadata.source})`,

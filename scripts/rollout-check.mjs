@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { requestUrl } from './request-url.mjs';
+import { RELEASE_METADATA_SCHEMA } from './smoke-policy.mjs';
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_BASE_URL = 'https://agent.bittrees.org';
@@ -48,7 +49,7 @@ async function parseJsonResponse(response, url, label) {
 }
 
 function assertReleaseMetadataMatches(releaseMetadata, { expectedReleaseVersion, expectedReleaseTag, expectedReleaseCommit }, label) {
-  if (releaseMetadata?.schemaVersion !== 'agent.bittrees.release-metadata.v1') {
+  if (releaseMetadata?.schemaVersion !== RELEASE_METADATA_SCHEMA) {
     throw new Error(`${label} health route did not expose release metadata.`);
   }
   if (expectedReleaseVersion && releaseMetadata?.version !== expectedReleaseVersion) {

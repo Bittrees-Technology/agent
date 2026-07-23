@@ -142,6 +142,42 @@ test('authenticated registry writes are versioned, idempotent, and fail closed o
   assert.ok((await plane.quarantineRecords()).some((entry) => entry.reason_code === 'authority_mutation'));
 });
 
+test('registry writes reject wallet registry governance and publication authority abuse', async () => {
+  const abuseCases = [
+    ['unsafe wallet grant', { wallet_address: '0x0000000000000000000000000000000000000000' }, 'authority_mutation'],
+    ['registry controller change', { controller_id: 'attacker-controller' }, 'authority_mutation'],
+    ['governance execution request', { governance: { proposal_id: '42', execute: true } }, 'invalid_schema'],
+    ['publication authority claim', { publication: { approved: true, public_claim_expansion: true } }, 'invalid_schema'],
+  ];
+
+  for (const [label, extraRecord, expectedCode] of abuseCases) {
+    const { plane, privateKey, publicKeyPem, now } = await makePlane();
+    const safe = registryWrite({
+      privateKey,
+      publicKeyPem,
+      now,
+      requestId: randomUUID(),
+    });
+    const unsafe = { ...safe, record: { ...safe.record, ...extraRecord } };
+
+    await assert.rejects(
+      () => plane.writeRegistry(unsafe),
+      (error) => error instanceof RegistryRejectedError && error.code === expectedCode,
+      label,
+    );
+
+    const record = await plane.getRecord('agent-one');
+    assert.equal(record.authority_state.authority_changes_allowed, false, label);
+    assert.equal(record.authority_state.spend_allowed, false, label);
+    assert.equal(record.authority_state.execution_allowed, false, label);
+    assert.equal(record.controller_id, 'controller-one', label);
+    assert.equal(record.record_version, 1, label);
+
+    const quarantine = await plane.quarantineRecords();
+    assert.equal(quarantine.at(-1).reason_code, expectedCode, label);
+  }
+});
+
 test('same expected version yields one commit and one audited conflict', async () => {
   const { plane, privateKey, publicKeyPem, now } = await makePlane();
   const first = registryWrite({ privateKey, publicKeyPem, now, nonce: 'abcdefghijklmnop' });

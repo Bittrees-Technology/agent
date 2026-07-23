@@ -18,6 +18,15 @@ import {
   buildOnboardingContractsData,
 } from './onboarding-contracts.mjs';
 import { DEPLOYED_RELEASE_METADATA } from './release-metadata.mjs';
+import {
+  DURABLE_CONTRIBUTION_WRITES_FLAG_NAMES,
+  isDurableContributionWritesEnabled,
+  isPublicIndexingEnabled,
+  isTruthyFlag,
+  resolveFeatureGates,
+  robotsTagFor,
+  robotsTxtBodyFor,
+} from './feature-gates.mjs';
 import { createContributionService, loadStatusProjection } from './contributions/service.mjs';
 import {
   ContributorPortalWorkflow,
@@ -61,11 +70,9 @@ const LIVE_REGISTRY_CONTROL_PLANE = new RegistryControlPlane({ store: new JsonFi
 // persistence is supplied by the service repository without changing the
 // public projection shape.
 export const LIVE_CONTRIBUTION_SERVICE = createContributionService();
-const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = [
-  'CONTRIBUTION_INTENTS_WRITE_ENABLED',
-  'CONTRIBUTION_INTENTS_ENABLED',
-  'PORTAL_ENABLE_CONTRIBUTION_INTENTS',
-];
+// Contribution-write and public-indexing gates are defined once in
+// ./feature-gates.mjs; this alias keeps the existing local references working.
+const CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES = DURABLE_CONTRIBUTION_WRITES_FLAG_NAMES;
 const CONTRIBUTION_INTENT_CONTRACT_PATH = '/contribution-intents';
 const GATEWAY_CONTRIBUTION_INTENT_PATH = '/gateway/contribution-intents';
 const CONTRIBUTION_INTENT_POST_PATHS = new Set([
@@ -81,15 +88,8 @@ const CONTRIBUTION_SIGNING_MESSAGE =
 const CONTRIBUTION_SIGNING_EXPLAINER =
   'This wallet signature derives a local encryption key. It is not a transaction, does not spend funds, and does not grant Bittrees, IDACC, or this portal authority over your wallet.';
 const CONTRIBUTION_SIGNING_DISTINCTION =
-  'The wallet prompt signs only the key-derivation message above. Your form contents are shown here for review and are handled by the portal write gate separately.';
+  'If wallet signing is enabled in a reviewed enhancement, the wallet prompt signs only the key-derivation message above. Your form contents are shown here for review and are handled by the portal write gate separately.';
 const CONTRIBUTION_CONTEXT_ROW = 'Base (8453) - agent.bittrees.org - contributor review intake';
-const CONTRIBUTION_BASE_CHAIN_ID_HEX = '0x2105';
-const CONTRIBUTION_SUCCESS_COPY_LINES = [
-  'Contribution package received for review.',
-  'Reviewer acceptance is required before publication, assignment, reputation credit, authority, or any public attestation.',
-];
-const CONTRIBUTION_RETRY_GATE_CLOSED_COPY =
-  'Live contribution writes are not enabled on this portal yet. Nothing was submitted on-chain or accepted as a public attestation. You can review the packet and try again after intake is enabled.';
 const WORKFLOW_API_BASE_PATH = '/v1/workflow';
 // Backward-compatible alias for the originally declared contract path; the
 // implementation lives under WORKFLOW_API_BASE_PATH (see the reconciliation
@@ -281,12 +281,8 @@ export const CONTRIBUTION_INTENT_LAUNCH_POSTURE = {
   ],
 };
 
-function isTruthyFlag(value) {
-  return typeof value === 'string' && ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-}
-
 function isContributionIntentsWriteEnabled() {
-  return CONTRIBUTION_INTENTS_WRITE_FLAG_NAMES.some((flagName) => isTruthyFlag(process.env[flagName]));
+  return isDurableContributionWritesEnabled(process.env);
 }
 
 function getContributionIntentStoragePaths() {
@@ -1650,6 +1646,58 @@ export const IDACC_RELEASE_SNAPSHOT = {
 export const LAUNCH_FRESHNESS_MONITORING = {
   status: 'daily-smoke-ready',
   cadence: 'daily and after each portal or IDACC release update',
+  sloWindow: '30d rolling',
+  sloTargets: [
+    {
+      id: 'public-health-availability',
+      description: 'Public production health endpoint remains available and returns release metadata.',
+      indicator: 'Successful GET /api/health checks from the production monitor.',
+      objectivePercent: 99.9,
+      errorBudgetMinutes: 43,
+      alertWhen: '2 consecutive monitor runs fail or a single run shows release metadata drift.',
+    },
+    {
+      id: 'route-contract-smoke',
+      description: 'Published HTML, JSON, and MCP routes continue to satisfy the public smoke contract.',
+      indicator: 'Successful npm run smoke checks against /monitoring.json route coverage and error-path assertions.',
+      objectivePercent: 99.5,
+      errorBudgetMinutes: 216,
+      alertWhen: 'Any monitor run fails the route contract or a required route disappears from /monitoring.json.',
+    },
+    {
+      id: 'daily-backup-freshness',
+      description: 'A production backup artifact is captured and retained each UTC day.',
+      indicator: 'Successful backup workflow artifact with latest-manifest.json matching backup-manifest.json.',
+      objectivePercent: 100,
+      errorBudgetMinutes: 0,
+      alertWhen: 'The daily 02:17 UTC backup run fails or the latest manifest pointer does not match the selected backup manifest.',
+    },
+  ],
+  alerts: {
+    paging: [
+      {
+        severity: 'SEV-1',
+        trigger: 'Public /api/health unavailable for 2 consecutive monitor runs or smoke shows site-wide outage.',
+        responseTargetMinutes: 15,
+      },
+      {
+        severity: 'SEV-2',
+        trigger: 'Release provenance drift, route-contract regression, or backup freshness miss with no active customer-visible outage.',
+        responseTargetMinutes: 60,
+      },
+    ],
+    ticketOnly: [
+      {
+        severity: 'SEV-3',
+        trigger: 'Single-run flake, dated release snapshot older than 24 hours during active release work, or non-blocking evidence drift.',
+        responseTargetMinutes: 1440,
+      },
+    ],
+    issueTitles: {
+      productionMonitor: 'agent.bittrees.org production monitor failed',
+      productionBackup: 'agent.bittrees.org production backup failed',
+    },
+  },
   launchGate: LAUNCH_STATUS.publicLaunchGate,
   robotsPolicy: 'Require noindex,nofollow on every route until public claims are approved.',
   routeStatusChecks: [
@@ -1729,6 +1777,41 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       'Dynamic routes must emit telemetry-safe JSON logs with a request id and status, and error responses must echo the same request id without leaking filesystem paths, secrets, or internal host details.',
     telemetryFields: ['timestamp', 'method', 'path', 'status', 'requestId', 'error', 'jsonRpcCode'],
     responseHeaders: [REQUEST_ID_HEADER],
+  },
+  incidentResponse: {
+    firstResponseChecklist: [
+      'Confirm whether /api/health, /monitoring.json, and the current production deployment all fail or only one contract slice is degraded.',
+      'Capture the failing GitHub Actions run URL, uploaded artifacts, releaseMetadata, and the echoed X-Request-Id from a representative failure.',
+      'Classify severity before changing deployment, DNS, TLS, Vercel protection, or secrets.',
+      'If rollback is considered, validate the candidate through protected health and smoke checks before any alias move.',
+    ],
+    severities: [
+      {
+        id: 'SEV-1',
+        definition: 'Customer-visible production outage or complete loss of public health and smoke coverage.',
+        notify: ['ops-lead', 'engineering-lead'],
+      },
+      {
+        id: 'SEV-2',
+        definition: 'Production route-contract, release-provenance, or backup freshness failure with partial functionality retained.',
+        notify: ['ops-lead', 'engineering-lead'],
+      },
+      {
+        id: 'SEV-3',
+        definition: 'Non-blocking evidence drift, monitor flake, or documentation mismatch without active production impact.',
+        notify: ['ops-lead'],
+      },
+    ],
+    evidence: [
+      'GitHub Actions artifact production-observability-<run_id> or production-backup-<run_id>',
+      '/api/health releaseMetadata payload',
+      '/monitoring.json contract snapshot',
+      'Protected rollout:check and smoke-check output for any rollback candidate',
+    ],
+    runbooks: [
+      '/docs/production-operations-runbook.md',
+      '/docs/production-observability-backups.md',
+    ],
   },
   errorPathChecks: [
     {
@@ -3369,6 +3452,7 @@ function deploymentEnvironment() {
 
 function buildHealthRouteResponse({ releaseMetadata = DEPLOYED_RELEASE_METADATA } = {}) {
   const writesEnabled = isContributionIntentsWriteEnabled();
+  const indexingEnabled = isPublicIndexingEnabled(process.env);
 
   return {
     status: 'ok',
@@ -3408,6 +3492,13 @@ function buildHealthRouteResponse({ releaseMetadata = DEPLOYED_RELEASE_METADATA 
             ? 'Contribution-intent writes are enabled for this runtime.'
             : 'Contribution-intent writes remain disabled by default.',
         },
+        {
+          id: 'public-indexing-gate',
+          status: indexingEnabled ? 'warn' : 'ok',
+          detail: indexingEnabled
+            ? 'Public indexing is enabled; responses advertise index,follow.'
+            : 'Public indexing remains disabled by default; responses retain noindex,nofollow.',
+        },
       ],
     },
     observability: {
@@ -3424,6 +3515,7 @@ function buildHealthRouteResponse({ releaseMetadata = DEPLOYED_RELEASE_METADATA 
       workflowWrites: 'review-gated queue only',
       publicAuthority: 'health status does not grant authority or approval',
     },
+    featureGates: resolveFeatureGates(process.env),
   };
 }
 
@@ -3582,8 +3674,8 @@ const JSON_ROUTES = [
       reviewRegistry: {
         owner: 'lead',
         reviewer: 'lead',
-        lastReviewedAt: '2026-07-07',
-        nextReviewDue: '2026-07-14',
+        lastReviewedAt: '2026-07-17',
+        nextReviewDue: '2026-07-24',
         freshnessWindow: '7d during launch preparation; source-specific windows override this default',
         requiredFields: [
           'citationTargets',
@@ -4079,6 +4171,15 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function renderReadonlyJsonResult({ id, label, value }) {
+  const fieldId = `${id}-json`;
+  const labelId = `${fieldId}-label`;
+  return `<div class="json-result" data-copyable-json-result>
+          <p id="${escapeHtml(labelId)}" class="json-result-label">${escapeHtml(label)}</p>
+          <textarea id="${escapeHtml(fieldId)}" readonly rows="18" spellcheck="false" autocomplete="off" autocapitalize="off" aria-labelledby="result-title ${escapeHtml(labelId)}">${escapeHtml(JSON.stringify(value, null, 2))}</textarea>
+        </div>`;
+}
+
 function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow', image = null, imageAlt = '' }) {
   const canonicalUrl = new URL(path, PORTAL_BASE_URL).toString();
   // Social-preview image is emitted only when an asset is supplied, so we never
@@ -4354,15 +4455,14 @@ function renderContributionIntentFormStyles() {
         flex-wrap: wrap;
       }
 
-      .signing-connect-button {
-        min-height: 44px;
+      .signing-wallet-state {
+        margin: 0;
         border: 1px solid var(--line);
         background: #fff;
         color: var(--ink);
-        font: inherit;
         font-weight: 750;
-        padding: 0 14px;
-        touch-action: manipulation;
+        line-height: 1.55;
+        padding: 10px 12px;
       }
 
       .signing-account {
@@ -4415,33 +4515,6 @@ function renderContributionIntentFormStyles() {
       .signing-server-fallback noscript {
         color: var(--muted);
         line-height: 1.55;
-      }
-
-      .signing-island .caveat[role="alert"] {
-        border-left: 3px solid var(--gold);
-        padding-left: 10px;
-      }
-
-      .signing-retry {
-        display: grid;
-        gap: 8px;
-      }
-
-      .signing-retry-actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-
-      .signing-retry-actions button {
-        min-height: 44px;
-        border: 1px solid var(--line);
-        background: #fff;
-        color: var(--ink);
-        font: inherit;
-        font-weight: 750;
-        padding: 0 14px;
-        touch-action: manipulation;
       }
 
       [data-signing-state] [hidden] {
@@ -5074,7 +5147,8 @@ function renderHumanLookupStyles() {
       }
 
       input,
-      select {
+      select,
+      textarea {
         width: 100%;
         min-height: 44px;
         border: 1px solid var(--line);
@@ -5125,6 +5199,33 @@ function renderHumanLookupStyles() {
         background: var(--panel);
         border: 1px solid var(--line);
         padding: 14px;
+      }
+
+      .json-result {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .json-result-label {
+        margin: 0;
+        color: var(--ink);
+        font-size: 0.82rem;
+        font-weight: 750;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .json-result textarea {
+        min-height: min(520px, 62vh);
+        max-height: 520px;
+        overflow: auto;
+        resize: vertical;
+        background: var(--panel);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        text-transform: none;
       }
 
       code {
@@ -5192,271 +5293,16 @@ function summarizeContributionIntentFormValues(values, laneOptions) {
   ].join(' | ');
 }
 
-function renderContributionSigningScript() {
-  const messageJson = JSON.stringify(CONTRIBUTION_SIGNING_MESSAGE);
-  const baseChainHexJson = JSON.stringify(CONTRIBUTION_BASE_CHAIN_ID_HEX);
-  const gateClosedCopyJson = JSON.stringify(CONTRIBUTION_RETRY_GATE_CLOSED_COPY);
-  const submitEndpointJson = JSON.stringify(GATEWAY_CONTRIBUTION_INTENT_PATH);
-
-  return `
-(function () {
-  var root = document.getElementById('intent-signing-island');
-  if (!root) return;
-  var form = document.getElementById('intent-form');
-  if (!form) return;
-  var submitButton = form.querySelector('button[type="submit"]');
-  var connectButton = document.getElementById('intent-connect-wallet');
-  var accountLabel = document.getElementById('intent-connected-account');
-  var payloadAccount = document.getElementById('intent-payload-account');
-  var payloadSummary = document.getElementById('intent-payload-form-summary');
-  var chainWarning = document.getElementById('intent-chain-warning');
-  var failureBox = document.getElementById('intent-signing-failure');
-  var successBox = document.getElementById('intent-signing-success');
-  var receiptLine = document.getElementById('intent-signing-receipt');
-  var retryBox = document.getElementById('intent-signing-retry');
-  var retryCopyEl = document.getElementById('intent-signing-retry-copy');
-  var retryButton = document.getElementById('intent-retry-button');
-  var editButton = document.getElementById('intent-edit-button');
-
-  var SIGNING_MESSAGE = ${messageJson};
-  var BASE_CHAIN_HEX = ${baseChainHexJson};
-  var GATE_CLOSED_RETRY_COPY = ${gateClosedCopyJson};
-  var SUBMIT_ENDPOINT = ${submitEndpointJson};
-
-  var account = null;
-  var chainId = null;
-  var defaultButtonLabel = submitButton ? submitButton.textContent : '';
-
-  function setState(next) {
-    root.setAttribute('data-signing-state', next);
-    if (next !== 'retry' && chainWarning) chainWarning.hidden = true;
-    if (failureBox) failureBox.hidden = next !== 'failure';
-    if (successBox) successBox.hidden = next !== 'success';
-    if (retryBox) retryBox.hidden = next !== 'retry';
-  }
-
-  function setBusy(isBusy, label) {
-    if (!submitButton) return;
-    submitButton.disabled = isBusy;
-    submitButton.textContent = isBusy && label ? label : defaultButtonLabel;
-  }
-
-  function summarizeForm() {
-    if (!payloadSummary) return;
-    var lane = form.querySelector('[name="targetLane"]');
-    var name = form.querySelector('[name="contributor.name"]');
-    var summary = form.querySelector('[name="summary"]');
-    var sourceIds = form.querySelector('[name="handoff.sourceIds"]');
-    var sourceCount = sourceIds && sourceIds.value
-      ? sourceIds.value.split(/\\r?\\n|,/).map(function (entry) { return entry.trim(); }).filter(Boolean).length
-      : 0;
-    var laneLabel = lane && lane.selectedIndex >= 0 ? lane.options[lane.selectedIndex].text : '';
-    var parts = [];
-    parts.push('Lane: ' + (laneLabel || 'not set'));
-    parts.push('Name: ' + (name && name.value ? name.value : '(not set)'));
-    parts.push('Summary length: ' + (summary ? summary.value.length : 0) + ' chars');
-    parts.push('Source IDs: ' + sourceCount);
-    payloadSummary.textContent = parts.join(' | ');
-  }
-
-  function updateAccountDisplay() {
-    if (payloadAccount) payloadAccount.textContent = account || 'Not connected';
-    if (accountLabel) {
-      accountLabel.hidden = !account;
-      accountLabel.textContent = account ? ('Connected: ' + account) : '';
-    }
-  }
-
-  form.addEventListener('input', summarizeForm);
-  summarizeForm();
-  updateAccountDisplay();
-
-  var provider = window.ethereum;
-  if (!provider) {
-    setState('retry');
-    if (retryCopyEl) retryCopyEl.textContent = 'No browser wallet detected. Install a wallet extension to review and sign before submitting, or use the offline packet copy above.';
-    if (editButton) editButton.hidden = true;
-    if (retryButton) retryButton.addEventListener('click', function () { window.location.reload(); });
-    return;
-  }
-
-  function invalidateOnChange() {
-    setState('pending');
-    updateAccountDisplay();
-  }
-
-  if (provider.on) {
-    provider.on('accountsChanged', function (accounts) {
-      account = accounts && accounts[0] ? accounts[0] : null;
-      invalidateOnChange();
-    });
-    provider.on('chainChanged', function (nextChainId) {
-      chainId = nextChainId;
-      invalidateOnChange();
-    });
-  }
-
-  function refreshAccounts(requestPermission) {
-    return provider.request({ method: requestPermission ? 'eth_requestAccounts' : 'eth_accounts' }).then(function (accounts) {
-      account = accounts && accounts[0] ? accounts[0] : null;
-      updateAccountDisplay();
-      return account;
-    });
-  }
-
-  function refreshChain() {
-    return provider.request({ method: 'eth_chainId' }).then(function (nextChainId) {
-      chainId = nextChainId;
-      return chainId;
-    });
-  }
-
-  if (connectButton) {
-    connectButton.addEventListener('click', function () {
-      setState('pending');
-      refreshAccounts(true).then(refreshChain).catch(function () {
-        setState('retry');
-        if (retryCopyEl) retryCopyEl.textContent = 'Wallet connection was closed or rejected. You can try again.';
-      });
-    });
-  }
-
-  form.addEventListener('submit', function (event) {
-    if (!form.checkValidity()) return;
-    event.preventDefault();
-    runSigningFlow();
-  });
-
-  function runSigningFlow() {
-    setState('pending');
-    setBusy(true, 'Review and sign');
-    refreshAccounts(true).then(function (connectedAccount) {
-      if (!connectedAccount) {
-        setState('retry');
-        if (retryCopyEl) retryCopyEl.textContent = 'Connect a wallet to continue.';
-        setBusy(false);
-        return null;
-      }
-      setBusy(true, 'Switching to Base...');
-      return refreshChain().then(function () {
-        if (chainId === BASE_CHAIN_HEX) return true;
-        return provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: BASE_CHAIN_HEX }],
-        }).then(refreshChain).then(function () {
-          return chainId === BASE_CHAIN_HEX;
-        }).catch(function () {
-          return false;
-        });
-      }).then(function (onBase) {
-        if (!onBase) {
-          if (chainWarning) {
-            chainWarning.hidden = false;
-            chainWarning.textContent = 'Connected to chain ' + chainId + '. This flow requires Base (8453). Switch to Base before signing.';
-          }
-          setState('retry');
-          if (retryCopyEl) retryCopyEl.textContent = 'Switch your wallet network to Base (8453) and try again.';
-          setBusy(false);
-          return null;
-        }
-        setBusy(true, 'Confirm in wallet...');
-        var preSignAccount = account;
-        var preSignChain = chainId;
-        return provider.request({
-          method: 'personal_sign',
-          params: [SIGNING_MESSAGE, account],
-        }).then(function () {
-          return Promise.all([refreshAccounts(false), refreshChain()]).then(function () {
-            if (account !== preSignAccount || chainId !== preSignChain) {
-              setState('pending');
-              setBusy(false);
-              return null;
-            }
-            setBusy(true, 'Preparing review packet...');
-            var params = new URLSearchParams();
-            new FormData(form).forEach(function (value, key) { params.append(key, String(value)); });
-            return fetch(SUBMIT_ENDPOINT, {
-              method: 'POST',
-              headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/x-www-form-urlencoded',
-              },
-              body: params.toString(),
-            }).then(function (response) {
-              return response.json().catch(function () { return null; }).then(function (body) {
-                return { response: response, body: body };
-              });
-            }).then(function (result) {
-              var response = result.response;
-              var body = result.body;
-              if (response.status === 501 || (body && body.error === 'write_disabled')) {
-                setState('retry');
-                if (retryCopyEl) retryCopyEl.textContent = GATE_CLOSED_RETRY_COPY;
-                setBusy(false);
-                return;
-              }
-              if (response.ok && body && body.accepted) {
-                setState('success');
-                if (receiptLine) {
-                  receiptLine.textContent = body.receiptId
-                    ? ('Receipt: ' + body.receiptId + (body.statusLookup ? ' - ' + body.statusLookup : ''))
-                    : '';
-                }
-                setBusy(false);
-                return;
-              }
-              if (response.status === 429 || response.status >= 500) {
-                setState('retry');
-                if (retryCopyEl) retryCopyEl.textContent = 'The request could not be completed right now. Nothing was submitted. You can try again.';
-                setBusy(false);
-                return;
-              }
-              setState('failure');
-              if (failureBox) {
-                failureBox.textContent = (body && body.message) || 'The submission was rejected. Nothing was submitted or signed on your behalf.';
-              }
-              setBusy(false);
-            });
-          });
-        });
-      });
-    }).catch(function (walletError) {
-      var code = walletError && walletError.code;
-      setState('retry');
-      if (retryCopyEl) {
-        retryCopyEl.textContent = code === 4001
-          ? 'Wallet request was rejected. Nothing was submitted or signed. You can try again.'
-          : 'Wallet or network error. Nothing was submitted or signed. You can try again.';
-      }
-      setBusy(false);
-    });
-  }
-
-  if (retryButton) {
-    retryButton.addEventListener('click', runSigningFlow);
-  }
-  if (editButton) {
-    editButton.addEventListener('click', function () {
-      setState('pending');
-    });
-  }
-
-  setState('pending');
-})();
-`;
-}
-
 function renderContributionSigningIsland(values, laneOptions) {
   const writePostureLabel = isContributionIntentsWriteEnabled()
     ? 'non-production write-enabled'
     : 'read-only public launch default';
   const initialFormSummary = summarizeContributionIntentFormValues(values, laneOptions);
 
-  return `<section class="signing-island" id="intent-signing-island" data-signing-state="pending" aria-live="polite">
+  return `<section class="signing-island" id="intent-signing-island" data-signing-state="server-fallback" aria-live="polite">
     <p class="signing-context-row" id="intent-context-row">${escapeHtml(CONTRIBUTION_CONTEXT_ROW)}</p>
     <div class="signing-wallet-row">
-      <button type="button" class="signing-connect-button" id="intent-connect-wallet">Connect wallet</button>
-      <p class="signing-account" id="intent-connected-account" hidden></p>
+      <p class="signing-wallet-state" id="intent-wallet-state">Wallet connection is not exposed while this portal uses a no-script production CSP.</p>
     </div>
     <details class="signing-preview" id="intent-message-preview" open>
       <summary>Wallet signature preview</summary>
@@ -5469,33 +5315,19 @@ function renderContributionSigningIsland(values, laneOptions) {
         <dt>Purpose</dt><dd>Contributor application / contribution review intake</dd>
         <dt>Portal</dt><dd>agent.bittrees.org</dd>
         <dt>Network</dt><dd>Base (8453)</dd>
-        <dt>Account</dt><dd id="intent-payload-account">Not connected</dd>
+        <dt>Account</dt><dd id="intent-payload-account">Not requested by this no-script page</dd>
         <dt>Review gate</dt><dd>review_required_before_publication_or_assignment</dd>
         <dt>Write posture</dt><dd id="intent-payload-write-posture">${escapeHtml(writePostureLabel)}</dd>
         <dt>Form summary</dt><dd id="intent-payload-form-summary">${escapeHtml(initialFormSummary)}</dd>
       </dl>
-      <p class="form-notice">${escapeHtml(CONTRIBUTION_SIGNING_DISTINCTION)}</p>
+      <p class="form-notice">${escapeHtml(CONTRIBUTION_SIGNING_DISTINCTION)} Optional wallet-signing enhancement remains disabled under this CSP; the submit action uses the server-rendered packet path.</p>
     </details>
     <div class="signing-server-fallback" role="note" aria-labelledby="intent-server-fallback-title">
       <h3 id="intent-server-fallback-title">Offline packet path</h3>
       <p>If wallet signing is unavailable, submitting this form returns a server-rendered offline contribution packet. That fallback does not create an assignment, approval, public attestation, onchain action, or wallet grant.</p>
       <noscript>Client scripting is unavailable, so this form will use the offline packet path.</noscript>
+      <p>Client scripting is unavailable by policy, so this form uses the offline packet path.</p>
     </div>
-    <p class="caveat" id="intent-chain-warning" role="alert" hidden></p>
-    <p class="caveat" id="intent-signing-failure" role="alert" hidden></p>
-    <div class="signing-success" id="intent-signing-success" hidden>
-      <p>${escapeHtml(CONTRIBUTION_SUCCESS_COPY_LINES[0])}</p>
-      <p>${escapeHtml(CONTRIBUTION_SUCCESS_COPY_LINES[1])}</p>
-      <p id="intent-signing-receipt"></p>
-    </div>
-    <div class="signing-retry" id="intent-signing-retry" hidden>
-      <p id="intent-signing-retry-copy"></p>
-      <div class="signing-retry-actions">
-        <button type="button" id="intent-retry-button">Try again</button>
-        <button type="button" id="intent-edit-button">Edit application</button>
-      </div>
-    </div>
-    <script>${renderContributionSigningScript()}</script>
   </section>`;
 }
 
@@ -7729,7 +7561,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
     : null;
   const kindOptions = STATUS_LOOKUP_KINDS.map((item) => ({ value: item, label: item }));
   const resultBody = lookup
-    ? `<pre><code>${escapeHtml(JSON.stringify(lookup, null, 2))}</code></pre>`
+    ? renderReadonlyJsonResult({ id: 'status-result', label: 'Status JSON result', value: lookup })
     : '<p class="lede">Enter an opportunity id, queued review id, submission id, feedback id, or attestation id to inspect review status.</p>';
   const opportunityRows = OPPORTUNITIES.map(
     (opportunity) => `
@@ -8686,6 +8518,7 @@ function sendBody(res, statusCode, body, contentType, includeBody = true, teleme
     'Content-Length': payload.byteLength,
     ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
     ...PORTAL_RESPONSE_HARDENING_HEADERS,
+    'X-Robots-Tag': robotsTagFor(process.env),
     ...extraHeaders,
   });
   res.end(includeBody ? payload : undefined);
@@ -8710,6 +8543,7 @@ function sendEmpty(res, statusCode, telemetry = null, extraHeaders = {}) {
     'Content-Length': '0',
     ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
     ...PORTAL_RESPONSE_HARDENING_HEADERS,
+    'X-Robots-Tag': robotsTagFor(process.env),
     ...extraHeaders,
   });
   res.end();
@@ -9615,7 +9449,7 @@ export function createRequestHandler({
     }
 
     if (pathname === ROBOTS_TXT_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
-      return sendBody(res, 200, ROBOTS_TXT_BODY, 'text/plain; charset=utf-8', includeBody, {
+      return sendBody(res, 200, robotsTxtBodyFor(process.env), 'text/plain; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
