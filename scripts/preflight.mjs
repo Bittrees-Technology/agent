@@ -68,8 +68,10 @@ async function runSchemaGate() {
       if (parsed.$schema !== DRAFT_2020_12) {
         problems.push(`${file} is not declared against draft 2020-12`);
       }
-      if (typeof parsed.type !== 'string' && !Array.isArray(parsed.type)) {
-        problems.push(`${file} is missing a root type`);
+      // A valid root schema declares a type or a recognized combinator/reference.
+      const ROOT_KEYWORDS = ['type', 'oneOf', 'anyOf', 'allOf', '$ref', 'enum', 'const', 'properties'];
+      if (!ROOT_KEYWORDS.some((keyword) => keyword in parsed)) {
+        problems.push(`${file} has no root type or schema combinator`);
       }
     } catch (error) {
       problems.push(`${file} did not parse: ${error.message}`);
