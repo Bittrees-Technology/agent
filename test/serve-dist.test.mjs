@@ -15,6 +15,8 @@ const distDir = fileURLToPath(new URL('../dist', import.meta.url));
 // crashed run never leaves them tracked or shipped.
 const SVG_FIXTURE = '__serve-dist-mime-fixture__.svg';
 const XML_FIXTURE = '__serve-dist-mime-fixture__.xml';
+const MIXED_CASE_SVG_FIXTURE = '__serve-dist-mime-fixture__.SVG';
+const MIXED_CASE_XML_FIXTURE = '__serve-dist-mime-fixture__.XML';
 const SVG_BODY = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
 const XML_BODY = '<?xml version="1.0" encoding="UTF-8"?><urlset></urlset>';
 
@@ -49,8 +51,12 @@ async function withDistServer(run) {
   const baseUrl = `http://127.0.0.1:${port}`;
   const svgPath = join(distDir, SVG_FIXTURE);
   const xmlPath = join(distDir, XML_FIXTURE);
+  const mixedCaseSvgPath = join(distDir, MIXED_CASE_SVG_FIXTURE);
+  const mixedCaseXmlPath = join(distDir, MIXED_CASE_XML_FIXTURE);
   await writeFile(svgPath, SVG_BODY);
   await writeFile(xmlPath, XML_BODY);
+  await writeFile(mixedCaseSvgPath, SVG_BODY);
+  await writeFile(mixedCaseXmlPath, XML_BODY);
 
   const stderrRef = { value: '' };
   const child = spawn(process.execPath, [scriptPath], {
@@ -72,6 +78,8 @@ async function withDistServer(run) {
     }
     await rm(svgPath, { force: true });
     await rm(xmlPath, { force: true });
+    await rm(mixedCaseSvgPath, { force: true });
+    await rm(mixedCaseXmlPath, { force: true });
   }
 }
 
@@ -98,6 +106,14 @@ test('dist server sends explicit SVG and XML types alongside nosniff', async () 
     assert.equal(xml.headers.get('content-type'), 'application/xml; charset=utf-8');
     assert.equal(xml.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(xmlBody, XML_BODY);
+
+    const mixedCaseSvg = await fetch(`${baseUrl}/${MIXED_CASE_SVG_FIXTURE}`);
+    assert.equal(mixedCaseSvg.headers.get('content-type'), 'image/svg+xml; charset=utf-8');
+    assert.equal(mixedCaseSvg.headers.get('x-content-type-options'), 'nosniff');
+
+    const mixedCaseXml = await fetch(`${baseUrl}/${MIXED_CASE_XML_FIXTURE}`);
+    assert.equal(mixedCaseXml.headers.get('content-type'), 'application/xml; charset=utf-8');
+    assert.equal(mixedCaseXml.headers.get('x-content-type-options'), 'nosniff');
   });
 });
 
@@ -112,6 +128,8 @@ test('dist server never falls back to octet-stream under nosniff for known stati
       { path: '/llms.txt', type: 'text/plain; charset=utf-8' },
       { path: `/${SVG_FIXTURE}`, type: 'image/svg+xml; charset=utf-8' },
       { path: `/${XML_FIXTURE}`, type: 'application/xml; charset=utf-8' },
+      { path: `/${MIXED_CASE_SVG_FIXTURE}`, type: 'image/svg+xml; charset=utf-8' },
+      { path: `/${MIXED_CASE_XML_FIXTURE}`, type: 'application/xml; charset=utf-8' },
     ];
     for (const { path, type } of cases) {
       const res = await fetch(`${baseUrl}${path}`);
