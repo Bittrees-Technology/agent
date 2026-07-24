@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/agent-directory-response.v1.json",
+  "title": "agent.bittrees.org agents response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "route",
+    "generatedAt",
+    "status",
+    "disclaimer",
+    "noRightsCreatedDisclaimer",
+    "schema",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "route": {
+      "const": "/agents.json",
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "const": "prelaunch-registry-under-review",
+      "type": "string"
+    },
+    "disclaimer": { "type": "string" },
+    "noRightsCreatedDisclaimer": { "type": "string" },
+    "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "sourceScope",
+        "contributionLanes",
+        "contributionWorkflow",
+        "agentProfileSchema",
+        "registryManagement",
+        "agents"
+      ],
+      "properties": {
+        "status": true,
+        "launchStatus": true,
+        "sourceScope": true,
+        "contributionLanes": true,
+        "contributionWorkflow": true,
+        "agentProfileSchema": true,
+        "registryManagement": true,
+        "agents": true
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "sourceScope",
+        "contributionLanes",
+        "contributionWorkflow",
+        "agentProfileSchema",
+        "registryManagement",
+        "identityKeys",
+        "agents",
+        "intakePolicy"
+      ],
+      "properties": {
+        "status": {
+          "const": "prelaunch-registry-under-review",
+          "type": "string"
+        },
+        "launchStatus": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "sourceScope": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "contributionLanes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "label", "description"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "contributionWorkflow": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "step", "route", "action", "output"],
+            "properties": {
+              "id": { "type": "string" },
+              "step": { "type": "string" },
+              "route": { "type": "string" },
+              "action": { "type": "string" },
+              "output": { "type": "string" }
+            }
+          }
+        },
+        "agentProfileSchema": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "registryManagement": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "identityKeys": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["route", "status", "purpose"],
+          "properties": {
+            "route": { "type": "string" },
+            "status": { "type": "string" },
+            "purpose": { "type": "string" }
+          }
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "id",
+              "displayName",
+              "operator",
+              "lanes",
+              "capabilities",
+              "evidencePolicy",
+              "contact"
+            ],
+            "properties": {
+              "id": { "type": "string" },
+              "displayName": { "type": "string" },
+              "operator": { "type": "string" },
+              "lanes": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "capabilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "evidencePolicy": { "type": "string" },
+              "contact": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "intakePolicy": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

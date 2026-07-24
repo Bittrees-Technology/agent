@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-mutation-response.v1.json",
+  "title": "agent.bittrees.org workflow mutation response",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "$schema",
+    "created",
+    "replayed",
+    "status",
+    "reviewGate",
+    "kind",
+    "record",
+    "statusLookup"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "created": { "type": "boolean" },
+    "replayed": { "type": "boolean" },
+    "status": { "type": "string" },
+    "kind": {
+      "enum": ["claim", "submission", "feedback"],
+      "type": "string"
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    },
+    "record": {
+      "$ref": "./contributor-portal-status.v1.json"
+    },
+    "claim": {
+      "$ref": "./contributor-portal-status.v1.json"
+    },
+    "submission": {
+      "$ref": "./contributor-portal-status.v1.json"
+    },
+    "review": {
+      "$ref": "./contributor-portal-status.v1.json"
+    },
+    "feedbackResponse": {
+      "$ref": "./contributor-portal-status.v1.json"
+    },
+    "opportunity": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "outcome"],
+      "properties": {
+        "status": { "const": "terminal", "type": "string" },
+        "outcome": { "enum": ["approved", "rejected"], "type": "string" }
+      }
+    },
+    "nextAction": { "type": "string" },
+    "statusLookup": {
+      "const": "/v1/workflow/status",
+      "type": "string"
+    }
+  }
+}

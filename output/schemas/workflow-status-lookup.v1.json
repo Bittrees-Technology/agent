@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-status-lookup.v1.json",
+  "title": "agent.bittrees.org workflow status lookup",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "query",
+    "result",
+    "reviewGate"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "status_found",
+        "not_found"
+      ],
+      "type": "string"
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "kind": {
+          "enum": [
+            "any",
+            "opportunity",
+            "registration",
+            "claim",
+            "submission",
+            "feedback",
+            "attestation"
+          ],
+          "type": "string"
+        }
+      }
+    },
+    "result": {
+      "anyOf": [
+        { "$ref": "./contributor-portal-status.v1.json" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Public opportunity or non-public attestation status projection."
+        },
+        { "type": "null" }
+      ]
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redacted"
+      ],
+      "properties": {
+        "redacted": { "type": "boolean" },
+        "notFoundForUnauthorizedOwner": { "type": "boolean" },
+        "omittedFields": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -36,10 +36,16 @@ const extensionlessStaticRoutePaths = new Set(
     .map((definition) => definition.path),
 );
 
+// Every extension the dist server can emit needs an explicit type here. The
+// static and error responses set `X-Content-Type-Options: nosniff`, so the
+// browser will not infer a type: an SVG icon or an XML sitemap served as the
+// `application/octet-stream` fallback is downloaded or refused instead of
+// rendered. Keep these aligned with the asset kinds scripts/build.mjs can emit.
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
   ['.txt', 'text/plain; charset=utf-8'],
+  ['.svg', 'image/svg+xml; charset=utf-8'],
   ['.xml', 'application/xml; charset=utf-8'],
   ['.png', 'image/png'],
 ]);
@@ -166,9 +172,9 @@ const server = createServer(async (req, res) => {
     res.end(req.method === 'HEAD' ? undefined : body);
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'EISDIR') {
-      // Preserve the portal's JSON 404 contract for unknown GET routes. This
-      // also keeps smoke/error-path checks identical between start and
-      // start:dist while static assets remain directly readable.
+      // Let the portal handler content-negotiate unknown routes: browser GETs
+      // receive the branded HTML 404 while API and agent clients retain the
+      // structured JSON error contract. Static assets remain directly readable.
       return dynamicPortalHandler(req, res);
     }
 

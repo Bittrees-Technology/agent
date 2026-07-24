@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/identity-keys-response.v1.json",
+  "title": "agent.bittrees.org identity and keys response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "route",
+    "generatedAt",
+    "status",
+    "disclaimer",
+    "noRightsCreatedDisclaimer",
+    "schema",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "route": {
+      "const": "/identity-keys.json",
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "const": "prelaunch-contract-under-review",
+      "type": "string"
+    },
+    "disclaimer": { "type": "string" },
+    "noRightsCreatedDisclaimer": { "type": "string" },
+    "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "registryManagement",
+        "identityKeys"
+      ],
+      "properties": {
+        "status": true,
+        "launchStatus": true,
+        "registryManagement": true,
+        "identityKeys": true
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "registryManagement",
+        "identityKeys"
+      ],
+      "properties": {
+        "status": {
+          "const": "prelaunch-contract-under-review",
+          "type": "string"
+        },
+        "launchStatus": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "registryManagement": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "identityKeys": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "status",
+            "purpose",
+            "publicationPolicy",
+            "ensPrimaryNameRollout",
+            "sections",
+            "proofStates",
+            "onchainExecutionReadiness",
+            "rolloutGates",
+            "redactionPolicy"
+          ],
+          "properties": {
+            "status": { "type": "string" },
+            "purpose": { "type": "string" },
+            "publicationPolicy": { "type": "string" },
+            "ensPrimaryNameRollout": { "type": "object", "additionalProperties": true },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["id", "requiredFields"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "requiredFields": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            },
+            "proofStates": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "onchainExecutionReadiness": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["level", "automation", "description"],
+                "properties": {
+                  "level": { "type": "string" },
+                  "automation": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            },
+            "rolloutGates": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "redactionPolicy": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "launchGate": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

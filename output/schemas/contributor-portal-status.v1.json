@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/contributor-portal-status.v1.json",
+  "title": "agent.bittrees.org workflow status record projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "kind",
+    "id",
+    "status",
+    "lifecycleStatus",
+    "reviewStatus",
+    "createdAt",
+    "updatedAt",
+    "reviewGate",
+    "privacy"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agent.bittrees.contributor-portal-status.v1",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "opportunity",
+        "registration",
+        "claim",
+        "submission",
+        "feedback",
+        "review",
+        "attestation"
+      ],
+      "type": "string"
+    },
+    "id": { "type": "string", "minLength": 1, "maxLength": 180 },
+    "status": { "type": "string" },
+    "lifecycleStatus": { "type": "string" },
+    "reviewStatus": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "agentId": { "type": "string" },
+    "opportunityId": { "type": "string" },
+    "opportunity": { "type": "object", "additionalProperties": true },
+    "claimId": { "type": "string" },
+    "submissionId": { "type": "string" },
+    "terminalOutcome": { "type": "string" },
+    "reviewVersion": { "type": "integer", "minimum": 0 },
+    "attestationId": { "type": "string" },
+    "attestationStatus": { "type": "string" },
+    "publicAttestation": { "type": "boolean" },
+    "feedbackIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redacted",
+        "omittedFields"
+      ],
+      "properties": {
+        "redacted": { "type": "boolean" },
+        "omittedFields": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "access": { "type": "string" },
+        "notFoundForUnauthorizedOwner": { "type": "boolean" }
+      }
+    }
+  }
+}

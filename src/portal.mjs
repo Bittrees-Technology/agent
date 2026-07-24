@@ -3101,6 +3101,25 @@ function buildWorkflowOpportunityResponse(opportunityId, workflow = LIVE_CONTRIB
   };
 }
 
+// Route parameters arrive percent-encoded. Keep malformed identifiers on the
+// normal, documented client-error path instead of letting decodeURIComponent
+// throw through the request handler.
+function decodeWorkflowOpportunityId(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+function invalidWorkflowOpportunityIdResponse() {
+  return {
+    $schema: SCHEMA_URL,
+    error: 'invalid_opportunity_id',
+    message: 'opportunityId must be valid percent-encoded text.',
+  };
+}
+
 function buildWorkflowStatusResponse(
   searchParams = new URLSearchParams(),
   service = LIVE_CONTRIBUTION_SERVICE,
@@ -9886,7 +9905,14 @@ export function createRequestHandler({
 
     const workflowOpportunityMatch = pathname.match(WORKFLOW_OPPORTUNITY_PATH_PATTERN);
     if (workflowOpportunityMatch) {
-      const response = buildWorkflowOpportunityResponse(decodeURIComponent(workflowOpportunityMatch[1]), workflow);
+      const opportunityId = decodeWorkflowOpportunityId(workflowOpportunityMatch[1]);
+      if (opportunityId === null) {
+        return sendJson(res, 400, invalidWorkflowOpportunityIdResponse(), includeBody, {
+          ...telemetry,
+          status: 400,
+        });
+      }
+      const response = buildWorkflowOpportunityResponse(opportunityId, workflow);
       return sendJson(res, response.statusCode, response.body, includeBody, {
         ...telemetry,
         status: response.statusCode,
@@ -9896,7 +9922,13 @@ export function createRequestHandler({
     const workflowBriefMatch = pathname.match(WORKFLOW_BRIEF_PATH_PATTERN);
     if (workflowBriefMatch) {
       try {
-        const opportunityId = decodeURIComponent(workflowBriefMatch[1]);
+        const opportunityId = decodeWorkflowOpportunityId(workflowBriefMatch[1]);
+        if (opportunityId === null) {
+          return sendJson(res, 400, invalidWorkflowOpportunityIdResponse(), includeBody, {
+            ...telemetry,
+            status: 400,
+          });
+        }
         const brief = workflow.getBrief(opportunityId);
         return sendJson(res, 200, {
           $schema: SCHEMA_URL,

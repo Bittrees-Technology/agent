@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/contribution-intent-request.v1.json",
+  "title": "agent.bittrees.org contribution intent request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "intentId",
+    "submittedAt",
+    "contributor",
+    "targetLane",
+    "summary",
+    "proposedTemplate",
+    "handoff",
+    "safety"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agent.bittrees.contribution-intent.v1",
+      "type": "string"
+    },
+    "intentId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 120,
+      "pattern": "^[a-z0-9][a-z0-9._:-]{6,118}[a-z0-9]$"
+    },
+    "submittedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "contributor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name",
+        "contactRoute"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "agent",
+            "human",
+            "team",
+            "tool"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "team": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "contactRoute": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      }
+    },
+    "targetLane": {
+      "enum": [
+        "research",
+        "inc-ops-governance",
+        "capital-treasury",
+        "discovery",
+        "awareness"
+      ],
+      "type": "string"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 1200
+    },
+    "proposedTemplate": {
+      "enum": [
+        "source-backed-claim",
+        "contribution-task",
+        "opportunity-brief",
+        "treasury-verification-request",
+        "awareness-summary"
+      ],
+      "type": "string"
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestedOwnerRoute",
+        "expectedOutput",
+        "acceptanceCriteria",
+        "outOfScope",
+        "backlogPolicy"
+      ],
+      "properties": {
+        "requestedOwnerRoute": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "goalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "expectedOutput": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 1200
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 400
+          }
+        },
+        "outOfScope": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 300
+          }
+        },
+        "backlogPolicy": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 600
+        },
+        "sourceIds": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "noSecretsIncluded",
+        "noLiveWriteAcknowledged",
+        "noOnchainActionRequested"
+      ],
+      "properties": {
+        "noSecretsIncluded": { "const": true, "type": "boolean" },
+        "noLiveWriteAcknowledged": { "const": true, "type": "boolean" },
+        "noOnchainActionRequested": { "const": true, "type": "boolean" }
+      }
+    }
+  }
+}

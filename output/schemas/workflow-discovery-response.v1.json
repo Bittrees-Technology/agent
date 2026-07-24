@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/workflow-discovery-response.v1.json",
+  "title": "agent.bittrees.org workflow discovery response",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "$schema",
+    "status",
+    "reviewGate"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ready-for-triage",
+        "opportunity_brief_ready",
+        "source-grounded-context-ready",
+        "brief-ready"
+      ],
+      "type": "string"
+    },
+    "launchStatus": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lane": { "type": ["string", "null"] },
+        "priority": { "type": ["string", "null"] },
+        "status": { "type": ["string", "null"] }
+      }
+    },
+    "opportunity": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    },
+    "opportunities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "brief": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "lane": {
+      "type": ["string", "null"]
+    },
+    "workflow": {
+      "type": "array"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "reviewGate": {
+      "$ref": "./review-gate.v1.json"
+    }
+  }
+}

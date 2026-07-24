@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/error-envelope.v1.json",
+  "title": "agent.bittrees.org error envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "error",
+    "message"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "error": { "type": "string" },
+    "message": { "type": "string" },
+    "code": { "type": "string" },
+    "requestId": { "type": "string" },
+    "requiredScope": { "type": "string" },
+    "statusLookup": { "type": "string" },
+    "availableRoutes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "availableOpportunityIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "acceptedKinds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "allowedMethods": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "details": { "type": "object", "additionalProperties": true },
+    "data": { "type": "object", "additionalProperties": true }
+  }
+}

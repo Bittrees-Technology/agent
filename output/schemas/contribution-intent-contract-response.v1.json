@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent.bittrees.org/schemas/contribution-intent-contract-response.v1.json",
+  "title": "agent.bittrees.org contribution intent contract response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "route",
+    "generatedAt",
+    "status",
+    "disclaimer",
+    "noRightsCreatedDisclaimer",
+    "privacyNotice",
+    "schema",
+    "data"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://json-schema.org/draft/2020-12/schema",
+      "type": "string"
+    },
+    "route": {
+      "enum": [
+        "/contribution-intents",
+        "/gateway/contribution-intents"
+      ],
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "contract-only-disabled",
+        "feature-flag-non-production-write-enabled"
+      ],
+      "type": "string"
+    },
+    "disclaimer": { "type": "string" },
+    "noRightsCreatedDisclaimer": { "type": "string" },
+    "privacyNotice": { "type": "string" },
+    "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "requestSchema",
+        "responseSchema",
+        "formSubmission"
+      ],
+      "properties": {
+        "status": true,
+        "launchStatus": true,
+        "requestSchema": true,
+        "responseSchema": true,
+        "formSubmission": true
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "launchStatus",
+        "privacyNotice",
+        "noRightsCreatedDisclaimer",
+        "requestSchema",
+        "responseSchema",
+        "formSubmission",
+        "contract"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "contract-only-disabled",
+            "feature-flag-non-production-write-enabled"
+          ],
+          "type": "string"
+        },
+        "launchStatus": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "privacyNotice": { "type": "string" },
+        "noRightsCreatedDisclaimer": { "type": "string" },
+        "requestSchema": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "responseSchema": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "formSubmission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action",
+            "method",
+            "enctype",
+            "requestSchema",
+            "generatedDefaults",
+            "arrayEncoding",
+            "canonicalFields"
+          ],
+          "properties": {
+            "action": { "type": "string" },
+            "method": { "type": "string" },
+            "enctype": { "type": "string" },
+            "requestSchema": { "type": "string" },
+            "generatedDefaults": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "arrayEncoding": { "type": "string" },
+            "canonicalFields": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "contract": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "schema",
+            "endpoint",
+            "gatewayFormEndpoint",
+            "methods",
+            "privacyNotice",
+            "noRightsCreatedDisclaimer",
+            "requestSchema",
+            "responseSchema",
+            "formSubmission",
+            "disabledResponse"
+          ],
+          "properties": {
+            "schema": {
+              "enum": [
+                "agent.bittrees.contribution-intent.contract.v1",
+                "agent.bittrees.gateway-contribution-intent.contract.v1"
+              ],
+              "type": "string"
+            },
+            "endpoint": {
+              "enum": [
+                "/contribution-intents",
+                "/gateway/contribution-intents"
+              ],
+              "type": "string"
+            },
+            "canonicalContractEndpoint": { "type": "string" },
+            "gatewayFormEndpoint": { "type": "string" },
+            "methods": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "privacyNotice": { "type": "string" },
+            "noRightsCreatedDisclaimer": { "type": "string" },
+            "requestSchema": { "type": "object", "additionalProperties": true },
+            "responseSchema": { "type": "object", "additionalProperties": true },
+            "formSubmission": { "type": "object", "additionalProperties": true },
+            "disabledResponse": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": [
+                "statusCode",
+                "status",
+                "accepted",
+                "liveWrite",
+                "message",
+                "nextStep"
+              ],
+              "properties": {
+                "statusCode": { "type": "integer" },
+                "status": { "type": "string" },
+                "accepted": { "type": "boolean" },
+                "liveWrite": { "type": "boolean" },
+                "message": { "type": "string" },
+                "nextStep": { "type": "string" }
+              }
+            },
+            "launchStatus": { "type": "string" },
+            "securityGate": { "type": "object", "additionalProperties": true },
+            "featureFlag": { "type": "object", "additionalProperties": true }
+          }
+        }
+      }
+    }
+  }
+}

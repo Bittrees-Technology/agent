@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema": "agent.bittrees.agent-facing-data-route-contract-fixture.v1",
+  "sources": {
+    "design": "docs/agent-onboarding-interface-contracts.md",
+    "workflowDesign": "output/agent-bittrees-workflow-data-contract-spec.md",
+    "openapi": "output/agent-interaction-contract.openapi.yaml",
+    "registrationRequestSchema": "output/schemas/workflow-registration-request.v1.json",
+    "registrationResponseSchema": "output/schemas/workflow-registration-response.v1.json",
+    "identityResponseSchema": "output/schemas/identity-keys-response.v1.json",
+    "errorSchema": "output/schemas/error-envelope.v1.json"
+  },
+  "schemaUrl": "https://json-schema.org/draft/2020-12/schema",
+  "opportunity": {
+    "id": "source-registry-hardening",
+    "lane": "research",
+    "priority": "high",
+    "unknownId": "unknown-route-contract-opportunity",
+    "malformedId": "%ZZ",
+    "emptyFilter": {
+      "lane": "no-such-route-contract-lane"
+    },
+    "requiredKeys": [
+      "id",
+      "title",
+      "lane",
+      "priority",
+      "owner",
+      "status",
+      "nextAction",
+      "summary",
+      "acceptanceCriteria"
+    ]
+  },
+  "registration": {
+    "token": "route-contract-register-token",
+    "invalidIdentityToken": "route-contract-invalid-identity-token",
+    "unknownToken": "route-contract-unknown-token",
+    "tokenConfig": {
+      "route-contract-register-token": {
+        "subject": "route-contract-agent",
+        "scopes": [
+          "contributor:register"
+        ]
+      },
+      "route-contract-invalid-identity-token": {
+        "subject": "not valid",
+        "scopes": [
+          "contributor:register"
+        ]
+      }
+    },
+    "validPayload": {
+      "agentId": "route-contract-agent",
+      "displayName": "Route Contract Agent",
+      "operator": "Route contract test operator",
+      "contact": {
+        "kind": "url",
+        "value": "https://example.invalid/route-contract-agent"
+      },
+      "capabilities": [
+        "source-grounded contract verification"
+      ],
+      "evidencePolicy": "Cite public route contracts and preserve review-gate caveats.",
+      "idempotencyKey": "route-contract-registration-v1"
+    },
+    "invalidIdentityPayload": {
+      "agentId": "not valid",
+      "displayName": "Invalid Route Contract Agent",
+      "operator": "Route contract test operator",
+      "contact": {
+        "kind": "url",
+        "value": "https://example.invalid/invalid-route-contract-agent"
+      },
+      "capabilities": [
+        "source-grounded contract verification"
+      ],
+      "evidencePolicy": "Cite public route contracts and preserve review-gate caveats.",
+      "idempotencyKey": "route-contract-invalid-registration-v1"
+    },
+    "malformedJson": "{\"agentId\":",
+    "requiredResponseKeys": [
+      "$schema",
+      "created",
+      "replayed",
+      "status",
+      "reviewGate",
+      "kind",
+      "registration",
+      "authorizedRoute",
+      "statusLookup",
+      "record"
+    ]
+  },
+  "routes": {
+    "discovery": "/v1/workflow/opportunities",
+    "requirement": "/v1/workflow/opportunities/:opportunityId",
+    "brief": "/v1/workflow/brief/:opportunityId",
+    "context": "/v1/workflow/context",
+    "identity": "/identity-keys.json",
+    "registration": "/v1/workflow/registrations",
+    "status": "/v1/workflow/status"
+  },
+  "successStatus": {
+    "discovery": "ready-for-triage",
+    "requirement": "opportunity_brief_ready",
+    "brief": "brief-ready",
+    "context": "source-grounded-context-ready",
+    "identity": "prelaunch-contract-under-review",
+    "registration": "queued_for_review"
+  },
+  "errors": {
+    "unknownOpportunity": {
+      "statusCode": 404,
+      "error": "opportunity_not_found"
+    },
+    "malformedOpportunity": {
+      "statusCode": 400,
+      "error": "invalid_opportunity_id"
+    },
+    "missingIdentity": {
+      "statusCode": 401,
+      "error": "unauthorized"
+    },
+    "invalidIdentity": {
+      "statusCode": 401,
+      "error": "unauthorized"
+    },
+    "missingAgentId": {
+      "statusCode": 422,
+      "error": "registration_rejected",
+      "messagePattern": "agentId is required"
+    },
+    "invalidAgentId": {
+      "statusCode": 422,
+      "error": "registration_rejected",
+      "messagePattern": "agentId is required"
+    },
+    "malformedJson": {
+      "statusCode": 400,
+      "error": "invalid_json"
+    },
+    "unsupportedMethod": {
+      "statusCode": 405,
+      "error": "method_not_allowed",
+      "allowedMethods": [
+        "GET",
+        "HEAD"
+      ]
+    }
+  }
+}
