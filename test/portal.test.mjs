@@ -1112,14 +1112,107 @@ test('human lookup forms expose mobile accessible labels and instructions', () =
   assert.match(reputationHtml, /<input id="reputation-agent-id" type="search" name="agentId"[^>]+aria-describedby="reputation-agent-id-hint"/);
 });
 
-test('landing route links use working examples or documentation for templates and POST-only APIs', () => {
+test('landing and onboarding route links use working examples or documentation for templates and POST-only APIs', () => {
+  for (const html of [renderLandingPage(), renderOnboardingPage()]) {
+    // Never emit a clickable GET anchor to a templated placeholder route or a
+    // POST-only API; both would 404/405 for a human clicking through.
+    assert.doesNotMatch(html, /href="\/v1\/workflow\/opportunities\/:opportunityId"/);
+    assert.doesNotMatch(html, /href="\/v1\/workflow\/registrations"/);
+    assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
+    assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
+    assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
+  }
+});
+
+test('landing route cards never expose a broken GET anchor for POST-only or templated workflow APIs', () => {
   const html = renderLandingPage();
 
+  // Every POST-only workflow route is rendered as a non-clickable method label,
+  // not a clickable GET anchor that would 404.
+  for (const route of [
+    '/v1/workflow/registrations',
+    '/v1/workflow/claims',
+    '/v1/workflow/submissions',
+    '/v1/workflow/reviews',
+    '/v1/workflow/feedback',
+  ]) {
+    assert.doesNotMatch(html, new RegExp(`href="${route}"`), `${route} must not be a clickable GET anchor`);
+    assert.match(html, new RegExp(`<code>POST ${route.replace(/\//g, '\\/')}<\\/code>`), `${route} needs a POST method label`);
+  }
+
+  // Templated routes never ship their literal `:opportunityId` placeholder; they
+  // point at a concrete, resolvable example instead.
+  assert.doesNotMatch(html, /href="\/v1\/workflow\/brief\/:opportunityId"/);
   assert.doesNotMatch(html, /href="\/v1\/workflow\/opportunities\/:opportunityId"/);
-  assert.doesNotMatch(html, /href="\/v1\/workflow\/registrations"/);
+  assert.match(html, /href="\/v1\/workflow\/brief\/contribution-template-pilot"/);
   assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
-  assert.match(html, /href="\/onboarding">Read the authenticated POST request contract<\/a>/);
-  assert.match(html, /<code>POST \/v1\/workflow\/registrations<\/code>/);
+});
+
+test('landing hero exposes a primary onboarding CTA and a secondary contribution-paths CTA', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<a class="cta cta-primary" href="\/onboarding">Start onboarding<\/a>/);
+  assert.match(html, /<a class="cta cta-secondary" href="#lanes-title">See contribution paths<\/a>/);
+  // The secondary CTA target must resolve to an on-page anchor, not a dead link.
+  assert.match(html, /id="lanes-title"/);
+});
+
+test('landing renders a prelaunch status panel above the contribution intent form', () => {
+  const html = renderLandingPage();
+
+  assert.match(html, /<aside class="prelaunch-panel"[^>]*>[\s\S]*?Before you submit[\s\S]*?<\/aside>/);
+  // Panel lives in the contribution-intent section and precedes the form.
+  const intentSection = html.slice(html.indexOf('id="intent-title"'));
+  const panelPos = intentSection.indexOf('class="prelaunch-panel"');
+  const formPos = intentSection.indexOf('<form');
+  assert.ok(panelPos !== -1, 'panel must live in the intent section');
+  assert.ok(formPos !== -1, 'intent form must be present');
+  assert.ok(panelPos < formPos, 'panel must render above the form');
+});
+
+test('static build publishes a sitemap and a same-origin social-preview asset', () => {
+  const assets = buildStaticAssets('2026-07-06T00:00:00.000Z');
+  const assetPaths = new Set(assets.map((asset) => asset.path));
+
+  assert.ok(assetPaths.has('sitemap.xml'));
+  assert.ok(assetPaths.has('social-preview.png'));
+
+  const sitemap = assets.find((asset) => asset.path === 'sitemap.xml').body;
+  assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.match(sitemap, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+  assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+
+  const image = assets.find((asset) => asset.path === 'social-preview.png').body;
+  assert.ok(Buffer.isBuffer(image));
+  assert.equal(image.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+
+  // The sitemap must not lift the sitewide noindex/robots posture.
+  const robots = assets.find((asset) => asset.path === 'robots.txt').body;
+  assert.equal(robots, 'User-agent: *\nDisallow: /\n');
+});
+
+test('sitemap and social-preview routes serve with the noindex posture intact', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
+    const sitemapBody = await sitemap.text();
+    assert.equal(sitemap.status, 200);
+    assert.match(sitemap.headers.get('content-type'), /application\/xml/);
+    assert.equal(sitemap.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(sitemapBody, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+
+    const image = await fetch(`${baseUrl}/social-preview.png`);
+    const imageBody = Buffer.from(await image.arrayBuffer());
+    assert.equal(image.status, 200);
+    assert.match(image.headers.get('content-type'), /image\/png/);
+    assert.equal(image.headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.equal(imageBody.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+
+    const robots = await fetch(`${baseUrl}/robots.txt`);
+    const robotsBody = await robots.text();
+    assert.equal(robots.status, 200);
+    assert.equal(robotsBody, 'User-agent: *\nDisallow: /\n');
+  });
 });
 
 test('visible route lists collapse canonical alias destinations', () => {

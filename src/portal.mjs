@@ -4109,19 +4109,32 @@ function buildSitemapXml() {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries}\n</urlset>\n`;
 }
 
-function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow', image = null, imageAlt = '' }) {
+function renderPageMetadata({
+  title,
+  description,
+  path,
+  robots = 'noindex,nofollow',
+  image = SOCIAL_PREVIEW_IMAGE_PATH,
+  imageAlt = SOCIAL_PREVIEW_IMAGE_ALT,
+}) {
   const canonicalUrl = new URL(path, PORTAL_BASE_URL).toString();
   // Social-preview image is emitted only when an asset is supplied, so we never
   // ship an og:image that 404s. When present it must be a same-origin path to
   // satisfy the portal CSP (img-src 'self' data:). Absent an image, we keep the
-  // smaller `summary` card rather than claim a large one with no artwork.
+  // smaller `summary` card rather than claim a large one with no artwork. The
+  // default asset is a same-origin 1200x630 SVG served by the portal, so every
+  // page ships a complete large-image social card.
   const hasImage = typeof image === 'string' && image.length > 0;
   const imageUrl = hasImage ? new URL(image, PORTAL_BASE_URL).toString() : null;
   const imageTags = hasImage
     ? `
     <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${escapeHtml(imageAlt || title)}" />
-    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`
+    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
+    <meta name="twitter:image:alt" content="${escapeHtml(imageAlt || title)}" />`
     : '';
   const twitterCard = hasImage ? 'summary_large_image' : 'summary';
 
@@ -4764,6 +4777,25 @@ const WORKFLOW_POST_ONLY_PATHS = new Set([
   WORKFLOW_FEEDBACK_PATH,
 ]);
 
+// Templated GET routes whose literal `:opportunityId` segment 404s. Each maps to
+// a concrete, resolvable example so the "working link" is a real 200 response.
+const WORKFLOW_TEMPLATED_ROUTE_EXAMPLES = new Map([
+  [
+    `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`,
+    {
+      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
+      linkText: 'Open a working opportunity example',
+    },
+  ],
+  [
+    `${WORKFLOW_API_BASE_PATH}/brief/:opportunityId`,
+    {
+      href: `${WORKFLOW_API_BASE_PATH}/brief/contribution-template-pilot`,
+      linkText: 'Open a working brief example',
+    },
+  ],
+]);
+
 function routeLinkPresentation(path) {
   if (WORKFLOW_POST_ONLY_PATHS.has(path)) {
     return {
@@ -4773,11 +4805,12 @@ function routeLinkPresentation(path) {
     };
   }
 
-  if (path === `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`) {
+  const templatedExample = WORKFLOW_TEMPLATED_ROUTE_EXAMPLES.get(path);
+  if (templatedExample) {
     return {
       displayPath: path,
-      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
-      linkText: 'Open a working opportunity example',
+      href: templatedExample.href,
+      linkText: templatedExample.linkText,
     };
   }
 
@@ -7196,6 +7229,69 @@ export function renderLandingPage() {
         gap: 10px;
       }
 
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 24px 0 0;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 22px;
+        font-weight: 700;
+        font-size: 0.98rem;
+        text-decoration: none;
+        border: 2px solid var(--green);
+      }
+
+      .cta-primary {
+        color: #ffffff;
+        background: var(--green);
+      }
+
+      .cta-secondary {
+        color: var(--green);
+        background: transparent;
+      }
+
+      .cta:hover { text-decoration: underline; }
+
+      .prelaunch-panel {
+        margin: 0 0 20px;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        background: var(--panel);
+      }
+
+      .prelaunch-panel-badge {
+        display: inline-flex;
+        align-items: center;
+        margin: 0 0 8px;
+        padding: 2px 10px;
+        border: 1px solid var(--line);
+        color: var(--gold);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .prelaunch-panel h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        letter-spacing: 0;
+      }
+
+      .prelaunch-panel p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
       .route-card {
         display: flex;
         align-items: center;
@@ -7464,6 +7560,10 @@ export function renderLandingPage() {
           <p class="lede">
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
+          <div class="cta-row">
+            <a class="cta cta-primary" href="/onboarding">Start onboarding</a>
+            <a class="cta cta-secondary" href="#lanes-title">See contribution paths</a>
+          </div>
         </div>
         <nav id="contribution-paths" class="action-grid" aria-label="Portal route directory">
           ${renderRouteDirectory()}
@@ -7539,7 +7639,15 @@ export function renderLandingPage() {
             ${escapeHtml(contributionIntentCopy.sectionNotice)}
           </p>
         </div>
-        ${renderContributionIntentForm()}
+        <div>
+          <aside class="prelaunch-panel" aria-labelledby="prelaunch-panel-title">
+            <p class="prelaunch-panel-badge">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</p>
+            <h3 id="prelaunch-panel-title">Before you submit</h3>
+            <p>${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}</p>
+            <p>Submissions are queued for review only. A receipt does not grant approval, authority, compensation, or publication rights.</p>
+          </aside>
+          ${renderContributionIntentForm()}
+        </div>
       </section>
 
       <section class="band" aria-labelledby="scope-title">
