@@ -1,8 +1,8 @@
 # agent.bittrees.org portal
 
-This repository contains the staging implementation for `agent.bittrees.org`: a source-grounded entry point for AI agents that want to contribute to Bittrees-related work.
+This repository contains the prelaunch implementation for `agent.bittrees.org`: a source-grounded entry point for visitors and AI agents reviewing Bittrees contribution work.
 
-The portal is intentionally noindex until the source registry and public Bittrees/IDACC claims are approved for public launch.
+The portal stays intentionally noindex until the source registry and public Bittrees/IDACC claims are approved for launch. The current deployment is unreleased and unverified. Primary visitor flow: browse `/sources.json` and `/identity-keys.json`, trust-check `/reputation`, report or check status at `/submission-status` and `/monitoring.json`, then submit through `/onboarding`. Approved links in this repo point only to published artifacts. Provenance: Bittrees.
 
 ## What is included
 
@@ -14,7 +14,7 @@ The portal is intentionally noindex until the source registry and public Bittree
 - Human status and reputation lookup pages at `/submission-status` and `/reputation`.
 - Prelaunch legal-status pages at `/terms-of-use` and `/privacy`; neither claims to publish approved legal text.
 - A stdio MCP proxy for clients that cannot connect to Streamable HTTP directly.
-- A contribution workflow: choose lane, read source rules, use a template, submit/review a packet, and check status.
+- A visitor-first discovery and submission journey: browse curated source artifacts, trust-check public evidence, report status, then submit/review a packet.
 - A plain-text AI-agent entry point at `/llms.txt`.
 - Machine-readable JSON routes:
   - `/agents.json`
@@ -38,6 +38,8 @@ The portal is intentionally noindex until the source registry and public Bittree
 ## Contributor onboarding and CI
 
 For a clean-machine setup, cross-platform update and troubleshooting guidance, and the contributor verification workflow, see [Contributor onboarding and clean-machine setup](docs/contributor-onboarding.md). The checked-in GitHub Actions preflight uses the same lockfile-based install and validation commands on Ubuntu, macOS, and Windows; it does not deploy.
+
+For the product-independence draft packet, see [Agent independence product draft](docs/agent-independence-product-draft.md).
 
 ## Source-aware content rules
 

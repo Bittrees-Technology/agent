@@ -635,6 +635,18 @@ export function buildApprovedContentPackage() {
       publicPrivateStatus: claim.publicPrivateStatus,
       status: claim.status,
     })),
+    excludedClaimReview: EXCLUDED_CLAIM_REVIEW.map((claim) => ({
+      id: claim.id,
+      claim: claim.claim,
+      citationTargets: claim.citationTargets,
+      owner: claim.owner,
+      reviewer: claim.reviewer,
+      freshnessWindow: claim.freshnessWindow,
+      lastReviewedAt: claim.lastReviewedAt,
+      mutable: claim.mutable,
+      publicPrivateStatus: claim.publicPrivateStatus,
+      status: claim.status,
+    })),
   };
 }
 
@@ -1103,7 +1115,6 @@ function buildManagedAgentProfile({
     identity: {
       agentRegistryId: registryId,
       chain: 'not-published',
-      controller: 'IDACC operator-reviewed control plane',
       manifestUrl: `/agents.json#${id}`,
       manifestHash: 'pending-controller-signed-manifest-publication',
       verificationStatus: 'self-attested',
@@ -3269,15 +3280,10 @@ export function buildPublicRegistryFeed(feed) {
       revoked: record.revoked,
       recordVersion: record.record_version,
       updatedAt: record.updated_at,
-      authorityState: {
-        authorityChangesAllowed: false,
-        spendAllowed: false,
-        executionAllowed: false,
-      },
     })),
     privacy: {
       contactResolution: 'No approved privacy-contact endpoint is published; do not infer one from registry data.',
-      omittedFields: ['controller identifiers', 'public keys', 'profile URIs', 'descriptions', 'metadata', 'tags', 'contact details'],
+      omittedFields: ['controller identifiers', 'public keys', 'profile URIs', 'descriptions', 'metadata', 'tags', 'contact details', 'authority state'],
     },
     reviewGate: reviewGateRecord(),
   };
@@ -3683,10 +3689,10 @@ const JSON_ROUTES = [
         ],
       },
       approvedContentPackage: APPROVED_CONTENT_PACKAGE,
-      sources: SOURCE_REGISTRY.filter((source) => source.publicSafe === true),
-      approvedClaims: APPROVED_CLAIMS,
-      excludedClaims: EXCLUDED_CLAIMS,
-      excludedClaimReview: EXCLUDED_CLAIM_REVIEW,
+      sources: APPROVED_CONTENT_PACKAGE.sources,
+      approvedClaims: APPROVED_CONTENT_PACKAGE.approvedClaims,
+      excludedClaims: APPROVED_CONTENT_PACKAGE.excludedClaims,
+      excludedClaimReview: APPROVED_CONTENT_PACKAGE.excludedClaimReview,
     },
   },
   {
@@ -4936,13 +4942,13 @@ const ROUTE_DIRECTORY_GROUPS = Object.freeze([
   {
     id: 'portal-pages',
     label: 'Portal pages',
-    description: 'Human-readable pages for onboarding, status, reputation, legal gates, and documentation.',
+    description: 'Human-readable pages for discovery, submission, status, reputation, legal gates, and documentation.',
     includes: (definition) => definition.kind === 'html' && definition.path !== MCP_GATEWAY.path,
   },
   {
     id: 'agent-contracts',
     label: 'Agent-readable contracts',
-    description: 'Text and JSON contracts for crawlers, agent clients, release checks, and source verification.',
+    description: 'Text and JSON contracts for browsing curated artifacts, trust checks, release checks, and source verification.',
     includes: (definition) => (
       (definition.kind === 'json' || definition.kind === 'text')
       && !definition.path.startsWith(WORKFLOW_API_BASE_PATH)
@@ -4953,7 +4959,7 @@ const ROUTE_DIRECTORY_GROUPS = Object.freeze([
   {
     id: 'workflow-apis',
     label: 'Workflow APIs',
-    description: 'Review-gated HTTP and MCP routes for contribution discovery, submission, and status lookup.',
+    description: 'Review-gated HTTP and MCP routes for discovery, submission, and status lookup.',
     includes: (definition) => (
       definition.path === MCP_GATEWAY.path
       || definition.path.startsWith(WORKFLOW_API_BASE_PATH)
@@ -7017,6 +7023,43 @@ export function renderLandingPage() {
         border: 1px solid var(--line);
       }
 
+      .journey-links {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .journey-links li {
+        display: grid;
+        gap: 6px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .journey-links strong {
+        color: var(--ink);
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      .journey-links a {
+        color: var(--blue);
+        font-weight: 750;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      .journey-links span {
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
       .status-panel {
         margin: 0 0 22px;
         padding: 14px 16px;
@@ -7358,6 +7401,7 @@ export function renderLandingPage() {
         h1 { max-width: 100%; }
         .route-card { align-items: flex-start; flex-direction: column; }
         .route-card span { white-space: normal; text-align: left; }
+        .journey-links { grid-template-columns: 1fr; }
         .workflow-list { grid-template-columns: 1fr; }
         .hero-workflow-list { grid-template-columns: 1fr; }
       }
@@ -7377,25 +7421,49 @@ export function renderLandingPage() {
 
       <section id="page-content" class="hero" aria-labelledby="hero-title">
         <div>
-          <h1 id="hero-title">Bittrees agent portal.</h1>
+          <h1 id="hero-title">Discover Bittrees. Submit with evidence.</h1>
           <p class="lede">
-            A source-grounded entry point for AI agents that want to contribute to Bittrees.
+            A visitor-first entry point for people and agents to browse curated artifacts, check trust signals,
+            and submit review packets.
           </p>
-          <p class="term-gloss"><strong>Source-grounded</strong> means each public claim can be traced to the portal's published sources.</p>
+          <p class="term-gloss"><strong>Browse</strong> means inspect the published artifacts first; <strong>submit</strong> means follow the onboarding route and its review gates.</p>
+          <p class="lede caveat">
+            The current deployment is unreleased and unverified. It remains noindex/nofollow until launch approval clears.
+          </p>
           <ol class="hero-workflow-list">
             ${heroWorkflowItems}
           </ol>
           <p class="hero-cta-group">
-            <a class="hero-cta hero-cta-primary" href="/onboarding">Start onboarding</a>
-            <a class="hero-cta hero-cta-secondary" href="#contribution-paths">See available contribution paths</a>
+            <a class="hero-cta hero-cta-primary" href="/sources.json">Browse curated sources</a>
+            <a class="hero-cta hero-cta-secondary" href="/onboarding">Submit a contribution</a>
           </p>
           <p class="lede">
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
           <div class="cta-row">
-            <a class="cta cta-primary" href="/onboarding">Start onboarding</a>
-            <a class="cta cta-secondary" href="#lanes-title">See contribution paths</a>
+            <a class="cta cta-primary" href="/identity-keys.json">Check trust evidence</a>
+            <a class="cta cta-secondary" href="/submission-status">View status</a>
+            <a class="cta cta-secondary" href="/monitoring.json">Open reporting data</a>
           </div>
+          <ul class="journey-links" aria-label="Curation trust and reporting links">
+            <li>
+              <strong>Curation</strong>
+              <a href="/sources.json">/sources.json</a>
+              <span>Published sources and approved claim packaging.</span>
+            </li>
+            <li>
+              <strong>Trust</strong>
+              <a href="/identity-keys.json">/identity-keys.json</a>
+              <a href="/reputation">/reputation</a>
+              <span>Public keys, evidence, and reviewed reputation signals.</span>
+            </li>
+            <li>
+              <strong>Reporting</strong>
+              <a href="/submission-status">/submission-status</a>
+              <a href="/monitoring.json">/monitoring.json</a>
+              <span>Status lookup and portal health reporting.</span>
+            </li>
+          </ul>
         </div>
         <nav id="contribution-paths" class="action-grid" aria-label="Portal route directory">
           ${renderRouteDirectory()}
@@ -7985,6 +8053,10 @@ function renderPortalFooter() {
         .site-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 10px; font-weight: 700; }
         .site-footer a { color: var(--ink, #17201c); }
         .site-footer p { margin: 6px 0 0; max-width: 78ch; }
+        .site-footer .site-credit {
+          color: var(--muted, #5e6963);
+          font-size: 0.82rem;
+        }
       </style>
       <nav aria-label="Footer routes">
         <a href="/">Home</a>
@@ -7995,6 +8067,7 @@ function renderPortalFooter() {
         <a href="/privacy">Privacy</a>
       </nav>
       <p>agent.bittrees.org — the Bittrees agent contribution portal. Prelaunch staging surface; nothing here is legal, financial, tax, or professional advice, an offer, or a grant of authority.</p>
+      <p class="site-credit">Created by Bittrees.</p>
       <p>&copy; ${year} Bittrees. All rights reserved.</p>
     </footer>`;
 }

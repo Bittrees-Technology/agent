@@ -607,9 +607,9 @@ test('source guardrails include approved and excluded Bittrees claims', () => {
 
 test('sources JSON only serves explicitly public-safe source records', async () => {
   const sourcesRoute = JSON_ROUTE_MAP.get('/sources.json');
-  const expectedPublicSources = SOURCE_REGISTRY.filter((source) => source.publicSafe === true);
+  const expectedPublicSourceIds = APPROVED_CONTENT_PACKAGE.sources.map((source) => source.id);
 
-  assert.deepEqual(sourcesRoute.data.sources, expectedPublicSources);
+  assert.deepEqual(sourcesRoute.data.sources.map((source) => source.id), expectedPublicSourceIds);
 
   await withPortalServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/sources.json`);
@@ -618,9 +618,20 @@ test('sources JSON only serves explicitly public-safe source records', async () 
     assert.equal(response.status, 200);
     assert.deepEqual(
       body.data.sources.map((source) => source.id),
-      expectedPublicSources.map((source) => source.id),
+      expectedPublicSourceIds,
     );
-    assert.ok(body.data.sources.every((source) => source.publicSafe === true));
+    assert.ok(body.data.sources.every((source) => !Object.hasOwn(source, 'publicSafe')));
+    assert.ok(body.data.sources.every((source) => !Object.hasOwn(source, 'sourceIds')));
+    assert.ok(body.data.sources.every((source) => source.owner && !/-lead$/.test(source.owner)));
+    assert.ok(body.data.sources.every((source) => source.reviewer && !/-lead$/.test(source.reviewer)));
+    assert.ok(body.data.sources.every((source) => source.citationTargets.every((target) => !target.startsWith('memory:'))));
+    assert.equal(body.data.approvedClaims.length, APPROVED_CONTENT_PACKAGE.approvedClaims.length);
+    assert.deepEqual(body.data.approvedClaims.map((claim) => claim.id), APPROVED_CONTENT_PACKAGE.approvedClaims.map((claim) => claim.id));
+    assert.equal(body.data.excludedClaimReview.length, APPROVED_CONTENT_PACKAGE.excludedClaimReview.length);
+    assert.deepEqual(
+      body.data.excludedClaimReview.map((claim) => claim.id),
+      APPROVED_CONTENT_PACKAGE.excludedClaimReview.map((claim) => claim.id),
+    );
     assert.doesNotMatch(JSON.stringify(body), /bittrees-research-executive-summary|ops-guide-1-5-1/);
     assert.doesNotMatch(JSON.stringify(body), RAW_BRAIN_MEMORY_ID_PATTERN);
   });
@@ -853,14 +864,20 @@ test('workflow mutation-queue and placeholder routes are not exposed as broken c
   );
 });
 
-test('homepage adds a primary onboarding CTA and a clarified MCP nav label', () => {
+test('homepage adds browse and submit CTAs plus explicit curation, trust, and reporting links', () => {
   const html = renderLandingPage();
 
-  assert.match(html, /<a class="hero-cta hero-cta-primary" href="\/onboarding">Start onboarding<\/a>/);
+  assert.match(html, /<a class="hero-cta hero-cta-primary" href="\/sources\.json">Browse curated sources<\/a>/);
   assert.match(
     html,
-    /<a class="hero-cta hero-cta-secondary" href="#contribution-paths">See available contribution paths<\/a>/,
+    /<a class="hero-cta hero-cta-secondary" href="\/onboarding">Submit a contribution<\/a>/,
   );
+  assert.match(html, /The current deployment is unreleased and unverified\./);
+  assert.match(html, /<ul class="journey-links" aria-label="Curation trust and reporting links">/);
+  assert.match(html, /<a href="\/identity-keys\.json">\/identity-keys\.json<\/a>/);
+  assert.match(html, /<a href="\/reputation">\/reputation<\/a>/);
+  assert.match(html, /<a href="\/submission-status">\/submission-status<\/a>/);
+  assert.match(html, /<a href="\/monitoring\.json">\/monitoring\.json<\/a>/);
   assert.match(html, /<nav id="contribution-paths" class="action-grid"/);
   assert.match(html, /<p class="status-panel">[^<]*Prelaunch:[^<]*<\/p>/);
 
@@ -1204,13 +1221,13 @@ test('landing route cards never expose a broken GET anchor for POST-only or temp
   assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
 });
 
-test('landing hero exposes a primary onboarding CTA and a secondary contribution-paths CTA', () => {
+test('landing hero exposes trust and reporting CTAs on the browse-first path', () => {
   const html = renderLandingPage();
 
-  assert.match(html, /<a class="cta cta-primary" href="\/onboarding">Start onboarding<\/a>/);
-  assert.match(html, /<a class="cta cta-secondary" href="#lanes-title">See contribution paths<\/a>/);
-  // The secondary CTA target must resolve to an on-page anchor, not a dead link.
-  assert.match(html, /id="lanes-title"/);
+  assert.match(html, /<a class="cta cta-primary" href="\/identity-keys\.json">Check trust evidence<\/a>/);
+  assert.match(html, /<a class="cta cta-secondary" href="\/submission-status">View status<\/a>/);
+  assert.match(html, /<a class="cta cta-secondary" href="\/monitoring\.json">Open reporting data<\/a>/);
+  assert.match(html, /Created by Bittrees\./);
 });
 
 test('landing renders a prelaunch status panel above the contribution intent form', () => {
@@ -1299,16 +1316,16 @@ test('visible route lists collapse canonical alias destinations', () => {
   assertNoDuplicateCanonicalDestinations('JSON routes', [...JSON_ROUTE_MAP.keys()]);
 });
 
-test('landing route directory groups human pages contracts and workflow APIs', () => {
+test('landing route directory groups discovery pages contracts and workflow APIs', () => {
   const html = renderLandingPage();
   const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
 
   assert.match(actionGrid, /<h2 id="route-group-portal-pages">Portal pages<\/h2>/);
-  assert.match(actionGrid, /Human-readable pages for onboarding, status, reputation, legal gates, and documentation\./);
+  assert.match(actionGrid, /Human-readable pages for discovery, submission, status, reputation, legal gates, and documentation\./);
   assert.match(actionGrid, /<h2 id="route-group-agent-contracts">Agent-readable contracts<\/h2>/);
-  assert.match(actionGrid, /Text and JSON contracts for crawlers, agent clients, release checks, and source verification\./);
+  assert.match(actionGrid, /Text and JSON contracts for browsing curated artifacts, trust checks, release checks, and source verification\./);
   assert.match(actionGrid, /<h2 id="route-group-workflow-apis">Workflow APIs<\/h2>/);
-  assert.match(actionGrid, /Review-gated HTTP and MCP routes for contribution discovery, submission, and status lookup\./);
+  assert.match(actionGrid, /Review-gated HTTP and MCP routes for discovery, submission, and status lookup\./);
 
   const portalGroup = actionGrid.match(/id="route-group-portal-pages"[\s\S]*?<\/section>/)?.[0] ?? '';
   const contractsGroup = actionGrid.match(/id="route-group-agent-contracts"[\s\S]*?<\/section>/)?.[0] ?? '';
@@ -2029,6 +2046,7 @@ test('agents route advertises prelaunch registry management rather than manual-o
     assert.ok(agent.trustEvidence, `${agent.id} should separate trust evidence`);
     assert.ok(agent.authority, `${agent.id} should separate authority`);
     assert.ok(agent.authorization, `${agent.id} should separate authorization`);
+    assert.equal(Object.hasOwn(agent.identity, 'controller'), false, `${agent.id} should not expose controller binding in the public profile`);
     assert.equal(agent.authorization.executionAllowed, false);
     assert.equal(agent.signedProfile.status, 'registry-reviewed-profile-record');
     assert.deepEqual(agent.contact, {
@@ -2067,11 +2085,13 @@ test('source registry is review-ready with citation and freshness metadata', () 
     assert.ok(source.lastReviewedAt, `${source.id} should have last reviewed date`);
     assert.equal(typeof source.mutable, 'boolean', `${source.id} should have mutable flag`);
     assert.ok(source.publicPrivateStatus, `${source.id} should have public/private status`);
+    assert.equal(Object.hasOwn(source, 'sourceIds'), false, `${source.id} should not expose internal source routing`);
   }
   for (const claim of response.data.approvedClaims) {
     assert.ok(claim.citationTargets.length > 0, `${claim.id} should have citation targets`);
     assert.ok(claim.owner, `${claim.id} should have owner`);
     assert.ok(claim.reviewer, `${claim.id} should have reviewer`);
+    assert.equal(Object.hasOwn(claim, 'sourceIds'), false, `${claim.id} should not expose internal source routing`);
   }
   assert.equal(response.data.excludedClaimReview.length, EXCLUDED_CLAIM_REVIEW.length);
 });
@@ -2297,12 +2317,8 @@ test('public registry feed omits controller, contact, and arbitrary record metad
     revoked: false,
     recordVersion: 2,
     updatedAt: '2026-07-13T00:00:00.000Z',
-    authorityState: {
-      authorityChangesAllowed: false,
-      spendAllowed: false,
-      executionAllowed: false,
-    },
   }]);
+  assert.equal(Object.hasOwn(response.records[0], 'authorityState'), false);
   assert.doesNotMatch(JSON.stringify(response), /private-agent/);
 });
 
@@ -2323,6 +2339,7 @@ test('public registry feed route is readable and keeps registry writes unavailab
       'metadata',
       'tags',
       'contact details',
+      'authority state',
     ]);
     assert.equal(feed.reviewGate.status, 'review_required_before_publication_or_assignment');
     assert.equal(feed.reviewGate.registryMutationAllowed, false);
