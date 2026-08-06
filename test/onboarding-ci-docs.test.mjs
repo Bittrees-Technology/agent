@@ -16,14 +16,16 @@ test('clean-machine workflow validates every supported platform with the documen
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /macos-latest/);
   assert.match(workflow, /windows-latest/);
-  assert.match(workflow, /push:\n\s+branches: \[main\]/);
+  assert.match(workflow, /push:\r?\n\s+branches: \[main\]/);
   assert.match(workflow, /node:\s*\[20\]/);
   assert.match(workflow, /run: npm ci/);
   assert.match(workflow, /run: npm run check/);
   assert.match(workflow, /run: npm run test:onboarding/);
+  assert.match(workflow, /if: matrix\.os != 'windows-latest'/);
   assert.match(workflow, /run: npm test/);
   assert.match(workflow, /run: npm run build/);
   assert.equal(packageJson.engines.node, '>=20.0.0');
+  assert.equal(packageJson.scripts.test, 'node scripts/run-tests.mjs');
   assert.equal(packageJson.scripts['test:onboarding'], 'node --test test/onboarding-ci-docs.test.mjs');
 });
 

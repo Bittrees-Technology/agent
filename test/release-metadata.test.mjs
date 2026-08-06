@@ -8,7 +8,7 @@ import {
   buildStaticAssets,
   createRequestHandler,
 } from '../src/portal.mjs';
-import { resolveReleaseMetadata } from '../src/release-metadata.mjs';
+import { resolveBuildDirtyState, resolveReleaseMetadata } from '../src/release-metadata.mjs';
 
 const RELEASE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -55,6 +55,19 @@ test('untagged and dirty builds use immutable commit-derived versions', () => {
   assert.equal(metadata.buildId, '0123456789ab');
   assert.equal(metadata.source, 'git-commit');
   assert.equal(metadata.dirty, true);
+});
+
+test('hosted immutable commits do not inherit build-platform worktree noise', () => {
+  assert.equal(resolveBuildDirtyState({
+    env: { VERCEL_GIT_COMMIT_SHA: RELEASE_COMMIT },
+    trackedChanges: ' M package.json',
+  }), false);
+  assert.equal(resolveBuildDirtyState({
+    env: { GITHUB_SHA: RELEASE_COMMIT },
+    trackedChanges: ' M package.json',
+  }), false);
+  assert.equal(resolveBuildDirtyState({ env: {}, trackedChanges: ' M package.json' }), true);
+  assert.equal(resolveBuildDirtyState({ env: {}, trackedChanges: '' }), false);
 });
 
 test('static release artifacts carry the injected build identity', () => {

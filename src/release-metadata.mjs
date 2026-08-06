@@ -102,4 +102,15 @@ export function resolveReleaseMetadata({
   });
 }
 
+/**
+ * Hosted builders identify the immutable source revision explicitly. Files
+ * generated or normalized by the platform must not make that revision appear
+ * dirty in static release artifacts. Local builds still honor Git's tracked
+ * worktree result so they cannot claim clean provenance accidentally.
+ */
+export function resolveBuildDirtyState({ env = process.env, trackedChanges = '' } = {}) {
+  const hostedCommit = firstDefined(env.VERCEL_GIT_COMMIT_SHA, env.GITHUB_SHA);
+  return hostedCommit ? false : Boolean(String(trackedChanges).trim());
+}
+
 export const DEPLOYED_RELEASE_METADATA = resolveReleaseMetadata();

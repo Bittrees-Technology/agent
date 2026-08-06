@@ -38,6 +38,10 @@ import {
 const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
+export const SITEMAP_XML_PATH = '/sitemap.xml';
+export const SOCIAL_PREVIEW_IMAGE_PATH = '/social-preview.png';
+const SOCIAL_PREVIEW_IMAGE_ALT =
+  'agent.bittrees.org — source-grounded, review-gated agent contribution portal (Preview)';
 const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
 const TERMS_PAGE_ROUTE = '/terms';
 const TERMS_OF_USE_SHORT_ROUTE = '/tou';
@@ -59,6 +63,13 @@ const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
 );
 const ONBOARDING_CONTRIBUTION_WORKFLOW_DATA = JSON.parse(
   readFileSync(new URL('../data/agent-onboarding/contribution-workflow.json', import.meta.url), 'utf8'),
+);
+// Social-preview asset for Open Graph/Twitter Card image tags. Same-origin,
+// served from every HTML route's metadata so link unfurls in chat/social
+// tools show a branded preview instead of a blank card. See
+// docs/social-preview-image.md for provenance/regeneration instructions.
+const SOCIAL_PREVIEW_IMAGE_BUFFER = readFileSync(
+  new URL('../public/social-preview.png', import.meta.url),
 );
 const DEFAULT_REGISTRY_STATE_PATH = process.env.VERCEL === '1'
   ? join(tmpdir(), 'agent-bittrees', 'registry', 'state.json')
@@ -1593,41 +1604,25 @@ export const LIVE_CONTRIBUTOR_PORTAL_WORKFLOW = new ContributorPortalWorkflow({
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-16T20:40:46Z',
+  checkedAt: '2026-07-20T21:27:36Z',
   latest: {
-    tag: 'v0.1.645',
-    name: 'v0.1.645',
-    publishedAt: '2026-07-15T15:01:40Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.645',
-    tagCommitSha: '0cbd97515b38d46c166c8effbc051ff86091fd7b',
+    tag: 'v0.1.654',
+    name: 'v0.1.654',
+    publishedAt: '2026-07-20T21:27:36Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.654',
+    tagCommitSha: 'c311ccb29b30173bfa3aea9fa48a58b4ba8069ac',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-16T20:40:46Z.',
-      'Release notes: Identity & Keys replaces the desktop mock lifecycle with receipt-verified Safe 1.4.1 and Zodiac Roles proposals, atomic WalletConnect submission, and bounded zero-value contract/function authority.',
+      'Latest public GitHub release observed by the portal update on 2026-07-20T21:27:36Z.',
+      'Release notes: Treat one failed fleet snapshot as a transient reconnect instead of declaring the manager offline, while preserving last-known fleet state and requiring consecutive failures before the offline transition.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.645 on 2026-07-16T20:40:46Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.654 on 2026-07-20T21:27:36Z.',
       tagRef:
-        'git ls-remote --tags https://github.com/bobofbuilding/idacc.git refs/tags/v0.1.645 resolved refs/tags/v0.1.645 at 0cbd97515b38d46c166c8effbc051ff86091fd7b.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.645',
+        'https://api.github.com/repos/bobofbuilding/idacc/git/ref/tags/v0.1.654 resolved refs/tags/v0.1.654 at commit c311ccb29b30173bfa3aea9fa48a58b4ba8069ac on 2026-07-20.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.654',
     },
-    assets: [
-      {
-        name: 'ID-Agents-Control-Center-0.1.645-arm64.zip',
-        platform: 'macos-arm64',
-        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.645/ID-Agents-Control-Center-0.1.645-arm64.zip',
-        sizeBytes: 118044815,
-        contentType: 'application/zip',
-        sha256: '0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736',
-        sha256Provenance: {
-          algorithm: 'SHA-256',
-          githubExpandedAssetDigest:
-            'sha256:0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736',
-          localVerification:
-            'GitHub release API reported sha256:0c61a123f8d9107bcd1357bd889c57fe2688ded175481f0e958c72dd70ae8736 for the 118044815-byte asset on 2026-07-16.',
-        },
-      },
-    ],
+    assets: [],
   },
   freshnessPolicy:
     'Treat this as a dated release snapshot. Re-check GitHub before publishing, mirroring, or recommending a latest-version install.',
@@ -4065,6 +4060,8 @@ export const ROUTE_DEFINITIONS = [
 export const JSON_ROUTE_MAP = new Map(JSON_ROUTES.map((definition) => [definition.path, definition]));
 const CANONICAL_ROUTE_PATHS = new Set([
   ROBOTS_TXT_PATH,
+  SITEMAP_XML_PATH,
+  SOCIAL_PREVIEW_IMAGE_PATH,
   ...ROUTE_DEFINITIONS.map((definition) => definition.path),
   GATEWAY_CONTRIBUTION_INTENT_PATH,
   '/portal-manifest.json',
@@ -4180,19 +4177,65 @@ function renderReadonlyJsonResult({ id, label, value }) {
         </div>`;
 }
 
-function renderPageMetadata({ title, description, path, robots = 'noindex,nofollow', image = null, imageAlt = '' }) {
+// Canonical human-facing HTML pages advertised in sitemap.xml. Deliberately a
+// curated list rather than every ROUTE_DEFINITIONS entry with kind 'html':
+// it excludes JSON/API contract routes and the /terms + /tou legacy alias
+// routes for /terms-of-use, so the sitemap doesn't advertise duplicate-content
+// URLs for the same page.
+const SITEMAP_HTML_PATHS = Object.freeze([
+  '/',
+  '/onboarding',
+  MCP_GATEWAY.path,
+  '/mcp-docs',
+  '/reputation',
+  '/identity-keys',
+  '/submission-status',
+  TERMS_OF_USE_PAGE_ROUTE,
+  PRIVACY_PAGE_ROUTE,
+]);
+
+// sitemap.xml is generated even though the site remains noindex/disallow-all
+// (see ROBOTS_TXT_BODY, PORTAL_RESPONSE_HARDENING_HEADERS): the file itself
+// carries the same noindex response header as every other route, and it is
+// not referenced from robots.txt while the sitewide disallow is active, so it
+// cannot change what crawlers actually index. It exists so the sitemap is
+// ready to publish the moment the noindex/launch gate lifts, per the SEO
+// audit's routed follow-up.
+function buildSitemapXml() {
+  const urlEntries = SITEMAP_HTML_PATHS.map((path) => {
+    const loc = new URL(path, PORTAL_BASE_URL).toString();
+    return `  <url>\n    <loc>${escapeHtml(loc)}</loc>\n  </url>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries}\n</urlset>\n`;
+}
+
+function renderPageMetadata({
+  title,
+  description,
+  path,
+  robots = 'noindex,nofollow',
+  image = SOCIAL_PREVIEW_IMAGE_PATH,
+  imageAlt = SOCIAL_PREVIEW_IMAGE_ALT,
+}) {
   const canonicalUrl = new URL(path, PORTAL_BASE_URL).toString();
   // Social-preview image is emitted only when an asset is supplied, so we never
   // ship an og:image that 404s. When present it must be a same-origin path to
   // satisfy the portal CSP (img-src 'self' data:). Absent an image, we keep the
-  // smaller `summary` card rather than claim a large one with no artwork.
+  // smaller `summary` card rather than claim a large one with no artwork. The
+  // default asset is a same-origin 1200x630 SVG served by the portal, so every
+  // page ships a complete large-image social card.
   const hasImage = typeof image === 'string' && image.length > 0;
   const imageUrl = hasImage ? new URL(image, PORTAL_BASE_URL).toString() : null;
   const imageTags = hasImage
     ? `
     <meta property="og:image" content="${escapeHtml(imageUrl)}" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${escapeHtml(imageAlt || title)}" />
-    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`
+    <meta name="twitter:image" content="${escapeHtml(imageUrl)}" />
+    <meta name="twitter:image:alt" content="${escapeHtml(imageAlt || title)}" />`
     : '';
   const twitterCard = hasImage ? 'summary_large_image' : 'summary';
 
@@ -4610,7 +4653,12 @@ const PRIMARY_PORTAL_NAV_GROUPS = Object.freeze([
   {
     label: 'Contribute',
     items: [
-      { path: '/mcp', label: 'Gateway' },
+      // Renamed from the ambiguous "Gateway" per the IA/nav/trust marketing
+      // review (#3a45a78c, #b9a461ba): a bare "Gateway" label didn't tell a
+      // new contributor whether this was a human task, an API, or a
+      // developer console, especially next to the separate "Docs" nav item
+      // for the same MCP surface's human-readable documentation.
+      { path: '/mcp', label: 'Contribute via MCP' },
       { path: '/submission-status', label: 'Status' },
     ],
   },
@@ -4786,8 +4834,43 @@ function renderExcludedClaimItems() {
   `).join('');
 }
 
+// Bearer-authenticated, review-gated mutation queues. Each one only accepts
+// POST (see isWorkflowClaimPost/isWorkflowSubmissionPost/isWorkflowReviewPost/
+// isWorkflowFeedbackPost above); a browser GET on any of them 404s. The
+// funnel/CTA marketing-review audit (#3a45a78c, #c21eb108) flagged rendering
+// them as plain clickable <a href> headings as a true trust/UX defect
+// ("the product looks broken"), so — like WORKFLOW_REGISTRATIONS_PATH below —
+// they get a non-clickable method label plus a link to the human-readable
+// contract explanation instead of a raw link to the 404ing path.
+const WORKFLOW_POST_ONLY_PATHS = new Set([
+  WORKFLOW_REGISTRATIONS_PATH,
+  WORKFLOW_CLAIMS_PATH,
+  WORKFLOW_SUBMISSIONS_PATH,
+  WORKFLOW_REVIEWS_PATH,
+  WORKFLOW_FEEDBACK_PATH,
+]);
+
+// Templated GET routes whose literal `:opportunityId` segment 404s. Each maps to
+// a concrete, resolvable example so the "working link" is a real 200 response.
+const WORKFLOW_TEMPLATED_ROUTE_EXAMPLES = new Map([
+  [
+    `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`,
+    {
+      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
+      linkText: 'Open a working opportunity example',
+    },
+  ],
+  [
+    `${WORKFLOW_API_BASE_PATH}/brief/:opportunityId`,
+    {
+      href: `${WORKFLOW_API_BASE_PATH}/brief/contribution-template-pilot`,
+      linkText: 'Open a working brief example',
+    },
+  ],
+]);
+
 function routeLinkPresentation(path) {
-  if (path === WORKFLOW_REGISTRATIONS_PATH) {
+  if (WORKFLOW_POST_ONLY_PATHS.has(path)) {
     return {
       displayPath: `POST ${path}`,
       href: '/onboarding',
@@ -4795,11 +4878,24 @@ function routeLinkPresentation(path) {
     };
   }
 
-  if (path === `${WORKFLOW_OPPORTUNITIES_PATH}/:opportunityId`) {
+  const templatedExample = WORKFLOW_TEMPLATED_ROUTE_EXAMPLES.get(path);
+  if (templatedExample) {
     return {
       displayPath: path,
-      href: `${WORKFLOW_OPPORTUNITIES_PATH}/contribution-template-pilot`,
-      linkText: 'Open a working opportunity example',
+      href: templatedExample.href,
+      linkText: templatedExample.linkText,
+    };
+  }
+
+  // Same placeholder-link defect as the opportunity brief above, on the
+  // read-only (GET) dispatch-brief route: WORKFLOW_BRIEF_PATH_PATTERN
+  // confirms this is a live parameterized GET route, so link to a concrete,
+  // resolvable example instead of the literal `:opportunityId` placeholder.
+  if (path === `${WORKFLOW_API_BASE_PATH}/brief/:opportunityId`) {
+    return {
+      displayPath: path,
+      href: `${WORKFLOW_API_BASE_PATH}/brief/contribution-template-pilot`,
+      linkText: 'Open a working brief example',
     };
   }
 
@@ -5266,6 +5362,8 @@ function getContributionIntentCtaCopy() {
         'Submit a source-aware packet for lead review. A non-production write flag is enabled, so valid contribution intents can receive receipts and local review-record persistence.',
       formNotice:
         'Non-production contribution-intent writes are enabled. A valid submission can create a local review record and receipt for lead review.',
+      statusPanel:
+        'Prelaunch: a non-production write flag is enabled in this environment for review-record testing only. Production stays offline-packet-only until security, legal/IP/NDA, and named reviewer authority are cleared.',
     };
   }
 
@@ -5275,6 +5373,8 @@ function getContributionIntentCtaCopy() {
       'Prepare a source-aware offline packet for lead review. Live contribution-intent writes are disabled by default; this form returns offline guidance and does not create a live submission or review record.',
     formNotice:
       'Live contribution-intent writes are disabled. Use this action to prepare offline guidance and a packet template; it will not create a live submission or review record.',
+    statusPanel:
+      'Prelaunch: offline packets only until security, legal/IP/NDA, and named reviewer authority are cleared.',
   };
 }
 
@@ -6114,7 +6214,7 @@ function renderContributionIntentPage({ title, heading, lead, body, path = CONTR
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: lead, path })}
+    ${renderPageMetadata({ title: pageTitle, description: lead, path, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderContributionIntentPageStyles()}
   </head>
   <body>
@@ -6667,6 +6767,11 @@ export function buildLlmsTxt() {
   const approvedClaims = APPROVED_CLAIMS.map((claim) => `- ${claim.claim} Caveat: ${claim.caveat}`).join('\n');
   const excludedClaims = EXCLUDED_CLAIMS.map((claim) => `- ${claim}`).join('\n');
   const releaseAsset = IDACC_RELEASE_SNAPSHOT.latest.assets[0];
+  const releaseAssetLines = releaseAsset
+    ? `Asset: ${releaseAsset.name}
+Platform: ${releaseAsset.platform}
+SHA-256: ${releaseAsset.sha256}`
+    : 'Assets: none published for this GitHub release.';
   const executionReadiness = IDENTITY_KEYS_PUBLIC_CONTRACT.onchainExecutionReadiness
     .map((level) => `- ${level.level}: ${level.automation}. ${level.description}`)
     .join('\n');
@@ -6734,9 +6839,7 @@ ${excludedClaims}
 
 Latest checked release: ${IDACC_RELEASE_SNAPSHOT.latest.tag}, published ${IDACC_RELEASE_SNAPSHOT.latest.publishedAt}.
 Release page: ${IDACC_RELEASE_SNAPSHOT.latest.releaseUrl}
-Asset: ${releaseAsset.name}
-Platform: ${releaseAsset.platform}
-SHA-256: ${releaseAsset.sha256}
+${releaseAssetLines}
 Freshness: ${IDACC_RELEASE_SNAPSHOT.freshnessPolicy}
 Monitoring: ${LAUNCH_FRESHNESS_MONITORING.smokeCommand}
 
@@ -6777,7 +6880,7 @@ export function renderLandingPage() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     <style>
       :root {
         color-scheme: light;
@@ -6887,6 +6990,44 @@ export function renderLandingPage() {
         line-height: 1.5;
       }
 
+      .hero-cta-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 22px 0 0;
+      }
+
+      .hero-cta {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 20px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      .hero-cta-primary {
+        background: var(--green);
+        color: #fff;
+      }
+
+      .hero-cta-secondary {
+        background: var(--bg);
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+
+      .status-panel {
+        margin: 0 0 22px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+
       .action-grid {
         display: grid;
         gap: 18px;
@@ -6918,6 +7059,69 @@ export function renderLandingPage() {
       .route-card-stack {
         display: grid;
         gap: 10px;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 24px 0 0;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 22px;
+        font-weight: 700;
+        font-size: 0.98rem;
+        text-decoration: none;
+        border: 2px solid var(--green);
+      }
+
+      .cta-primary {
+        color: #ffffff;
+        background: var(--green);
+      }
+
+      .cta-secondary {
+        color: var(--green);
+        background: transparent;
+      }
+
+      .cta:hover { text-decoration: underline; }
+
+      .prelaunch-panel {
+        margin: 0 0 20px;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        background: var(--panel);
+      }
+
+      .prelaunch-panel-badge {
+        display: inline-flex;
+        align-items: center;
+        margin: 0 0 8px;
+        padding: 2px 10px;
+        border: 1px solid var(--line);
+        color: var(--gold);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .prelaunch-panel h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        letter-spacing: 0;
+      }
+
+      .prelaunch-panel p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        line-height: 1.6;
       }
 
       .route-card {
@@ -7181,11 +7385,19 @@ export function renderLandingPage() {
           <ol class="hero-workflow-list">
             ${heroWorkflowItems}
           </ol>
+          <p class="hero-cta-group">
+            <a class="hero-cta hero-cta-primary" href="/onboarding">Start onboarding</a>
+            <a class="hero-cta hero-cta-secondary" href="#contribution-paths">See available contribution paths</a>
+          </p>
           <p class="lede">
             ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
           </p>
+          <div class="cta-row">
+            <a class="cta cta-primary" href="/onboarding">Start onboarding</a>
+            <a class="cta cta-secondary" href="#lanes-title">See contribution paths</a>
+          </div>
         </div>
-        <nav class="action-grid" aria-label="Portal route directory">
+        <nav id="contribution-paths" class="action-grid" aria-label="Portal route directory">
           ${renderRouteDirectory()}
         </nav>
       </section>
@@ -7254,11 +7466,20 @@ export function renderLandingPage() {
       <section class="band" aria-labelledby="intent-title">
         <div>
           <h2 id="intent-title">Contribution intent</h2>
+          <p class="status-panel">${escapeHtml(contributionIntentCopy.statusPanel)}</p>
           <p class="note">
             ${escapeHtml(contributionIntentCopy.sectionNotice)}
           </p>
         </div>
-        ${renderContributionIntentForm()}
+        <div>
+          <aside class="prelaunch-panel" aria-labelledby="prelaunch-panel-title">
+            <p class="prelaunch-panel-badge">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</p>
+            <h3 id="prelaunch-panel-title">Before you submit</h3>
+            <p>${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}</p>
+            <p>Submissions are queued for review only. A receipt does not grant approval, authority, compensation, or publication rights.</p>
+          </aside>
+          ${renderContributionIntentForm()}
+        </div>
       </section>
 
       <section class="band" aria-labelledby="scope-title">
@@ -7317,7 +7538,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageLead, path: pagePath })}
+    ${renderPageMetadata({ title: pageTitle, description: pageLead, path: pagePath, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     <style>
       :root {
         color-scheme: light;
@@ -7585,7 +7806,7 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/submission-status' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/submission-status', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -7684,7 +7905,7 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/reputation' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/reputation', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -7768,7 +7989,7 @@ function renderPortalFooter() {
       <nav aria-label="Footer routes">
         <a href="/">Home</a>
         <a href="/onboarding">Onboarding</a>
-        <a href="/mcp">Gateway</a>
+        <a href="/mcp">Contribute via MCP</a>
         <a href="/submission-status">Status</a>
         <a href="/terms-of-use">Terms</a>
         <a href="/privacy">Privacy</a>
@@ -7793,7 +8014,7 @@ export function renderNotFoundPage() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/404' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/404', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -7839,7 +8060,7 @@ export function renderTermsOfUsePage() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/terms-of-use' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/terms-of-use', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -7900,7 +8121,7 @@ export function renderPrivacyPage() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: PRIVACY_PAGE_ROUTE })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: PRIVACY_PAGE_ROUTE, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -7961,7 +8182,7 @@ export function renderOnboardingPage() {
     (item) => `
       <li>
         <strong>${escapeHtml(item.step)}</strong> — ${escapeHtml(item.action)}
-        <a href="${escapeHtml(item.route)}">${escapeHtml(item.route)}</a>
+        ${renderWorkflowRouteDestination(item.route)}
       </li>
     `,
   ).join('');
@@ -7984,7 +8205,7 @@ export function renderOnboardingPage() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/onboarding' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/onboarding', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
   </head>
   <body>
@@ -8165,7 +8386,7 @@ export function renderIdentityKeysPage() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/identity-keys' })}
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/identity-keys', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     <style>
       :root {
         color-scheme: light;
@@ -9366,6 +9587,14 @@ export function buildStaticAssets(
       body: ROBOTS_TXT_BODY,
     },
     {
+      path: SITEMAP_XML_PATH.replace(/^\//, ''),
+      body: buildSitemapXml(),
+    },
+    {
+      path: SOCIAL_PREVIEW_IMAGE_PATH.replace(/^\//, ''),
+      body: SOCIAL_PREVIEW_IMAGE_BUFFER,
+    },
+    {
       path: 'llms.txt',
       body: buildLlmsTxt(),
     },
@@ -9450,6 +9679,20 @@ export function createRequestHandler({
 
     if (pathname === ROBOTS_TXT_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
       return sendBody(res, 200, robotsTxtBodyFor(process.env), 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === SITEMAP_XML_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendBody(res, 200, buildSitemapXml(), 'application/xml; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === SOCIAL_PREVIEW_IMAGE_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendBody(res, 200, SOCIAL_PREVIEW_IMAGE_BUFFER, 'image/png', includeBody, {
         ...telemetry,
         status: 200,
       });
