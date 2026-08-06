@@ -39,6 +39,8 @@ The portal stays intentionally noindex until the source registry and public Bitt
 
 For a clean-machine setup, cross-platform update and troubleshooting guidance, and the contributor verification workflow, see [Contributor onboarding and clean-machine setup](docs/contributor-onboarding.md). The checked-in GitHub Actions preflight uses the same lockfile-based install and validation commands on Ubuntu, macOS, and Windows; it does not deploy.
 
+For the product-independence draft packet, see [Agent independence product draft](docs/agent-independence-product-draft.md).
+
 ## Source-aware content rules
 
 The portal currently limits Bittrees claims to the approved local/Brain grounding:
