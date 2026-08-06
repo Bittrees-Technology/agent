@@ -10,9 +10,17 @@ export const HEARTBEAT_DOMAIN = 'bittrees.agent.registry.heartbeat.v1';
 export const REGISTRY_WRITE_SCHEMA_VERSION = 'registry-write.v1';
 export const SIGNED_HEARTBEAT_SCHEMA_VERSION = 'signed-heartbeat.v1';
 export const REGISTRY_WRITE_DOMAIN = 'bittrees.agent.registry.write.v1';
+export const IDENTITY_WALLET_AUTHORITY_SCHEMA_VERSION = 'agent.identity-wallet.authority.v1';
+export const IDENTITY_WALLET_PROOF_SCHEMA_VERSION = 'agent.identity-wallet.proof.v1';
+export const IDENTITY_WALLET_VERIFICATION_RECORD_SCHEMA_VERSION = 'agent.identity-wallet.verification.v1';
+export const IDENTITY_WALLET_PROOF_DOMAIN = 'bittrees.agent.identity.wallet.proof.v1';
+export const IDENTITY_WALLET_PROOF_METHODS = Object.freeze(['siwe-equivalent', 'siws-equivalent', 'erc1271-equivalent']);
+export const SUPPORTED_IDENTITY_WALLET_CHAIN_IDS = Object.freeze([8453, 84532, 11155111, 17000, 31337]);
 
 const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_HEARTBEAT_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_MAX_IDENTITY_PROOF_LIFETIME_MS = 15 * 60 * 1000;
+const EIP155_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const MUTABLE_FIELDS = new Set([
   'description',
   'display_name',
@@ -105,6 +113,8 @@ export const REGISTRY_STATE_SCHEMA = Object.freeze({
     idempotency: { type: 'object' },
     quarantine: { type: 'array' },
     audit: { type: 'array' },
+    identity_authorities: { type: 'object' },
+    identity_wallet_verifications: { type: 'object' },
   },
   additionalProperties: false,
 });
@@ -399,6 +409,122 @@ function validateRecord(record) {
   return true;
 }
 
+function normalizeAddress(value, field) {
+  assertString(value, field);
+  if (!EIP155_ADDRESS_PATTERN.test(value)) throw new RegistryError('invalid_schema', `${field} must be an EIP-155 address`, { field });
+  return value.toLowerCase();
+}
+
+function normalizeChainId(value, field) {
+  assertInteger(value, field, 1);
+  return value;
+}
+
+function canonicalIdentityPrincipal(agentId) {
+  return `${String(agentId).toLowerCase()}.agent.bittrees.eth`;
+}
+
+function verificationKey(agentId, walletAddress) {
+  return `${agentId}:${normalizeAddress(walletAddress, 'wallet_address')}`;
+}
+
+function ensureIdentityStateMaps(state) {
+  state.identity_authorities ??= {};
+  state.identity_wallet_verifications ??= {};
+  return state;
+}
+
+function validateAuthoritySigner(value, field, { revocable = false } = {}) {
+  assertObject(value, field);
+  const allowed = revocable
+    ? new Set([
+      'address', 'key_id', 'public_key', 'authority_class', 'scopes', 'methods',
+      'chain_ids', 'expires_at', 'revoked_at', 'revocation_epoch', 'safe_root_revision',
+    ])
+    : new Set(['address', 'key_id', 'public_key']);
+  assertNoUnknown(value, allowed, 'invalid_schema');
+  normalizeAddress(value.address, `${field}.address`);
+  assertString(value.key_id, `${field}.key_id`);
+  assertString(value.public_key, `${field}.public_key`);
+  try { toPublicKeyObject(value.public_key); } catch { throw new RegistryError('invalid_schema', `${field}.public_key is not a public key`); }
+  if (!revocable) return true;
+  if (!['revocable_signer', 'session_key'].includes(value.authority_class)) throw new RegistryError('invalid_schema', `${field}.authority_class is invalid`);
+  for (const arrayField of ['scopes', 'methods', 'chain_ids']) {
+    if (!Array.isArray(value[arrayField]) || value[arrayField].length === 0) throw new RegistryError('invalid_schema', `${field}.${arrayField} must be a non-empty array`);
+  }
+  if (value.scopes.some((item) => typeof item !== 'string' || item.length === 0)) throw new RegistryError('invalid_schema', `${field}.scopes must contain strings`);
+  if (value.methods.some((item) => typeof item !== 'string' || item.length === 0)) throw new RegistryError('invalid_schema', `${field}.methods must contain strings`);
+  value.chain_ids.forEach((chainId, index) => normalizeChainId(chainId, `${field}.chain_ids[${index}]`));
+  assertDateTime(value.expires_at, `${field}.expires_at`);
+  if (value.revoked_at !== null && value.revoked_at !== undefined) assertDateTime(value.revoked_at, `${field}.revoked_at`);
+  assertInteger(value.revocation_epoch, `${field}.revocation_epoch`);
+  assertString(value.safe_root_revision, `${field}.safe_root_revision`);
+  return true;
+}
+
+function validateIdentityAuthorityRecord(value, field = 'identity_authority') {
+  assertObject(value, field);
+  assertNoUnknown(value, new Set([
+    'schema_version', 'agent_id', 'identity_principal', 'safe_address', 'safe_chain_id',
+    'supported_chain_ids', 'safe_threshold', 'owner_signers', 'revocable_signers',
+    'root_revision', 'observed_at', 'updated_at',
+  ]), 'invalid_schema');
+  if (value.schema_version !== IDENTITY_WALLET_AUTHORITY_SCHEMA_VERSION) throw new RegistryError('invalid_schema', `${field}.schema_version is unsupported`);
+  assertString(value.agent_id, `${field}.agent_id`);
+  if (value.identity_principal !== canonicalIdentityPrincipal(value.agent_id)) throw new RegistryError('identity_binding_mismatch', `${field}.identity_principal must be the canonical agent.bittrees.eth name`);
+  normalizeAddress(value.safe_address, `${field}.safe_address`);
+  normalizeChainId(value.safe_chain_id, `${field}.safe_chain_id`);
+  if (!SUPPORTED_IDENTITY_WALLET_CHAIN_IDS.includes(value.safe_chain_id)) throw new RegistryError('unsupported_network', `${field}.safe_chain_id is not supported`);
+  if (!Array.isArray(value.supported_chain_ids) || value.supported_chain_ids.length === 0) throw new RegistryError('invalid_schema', `${field}.supported_chain_ids must be non-empty`);
+  value.supported_chain_ids.forEach((chainId, index) => normalizeChainId(chainId, `${field}.supported_chain_ids[${index}]`));
+  if (!value.supported_chain_ids.includes(value.safe_chain_id)) throw new RegistryError('unsupported_network', `${field}.supported_chain_ids must include safe_chain_id`);
+  assertInteger(value.safe_threshold, `${field}.safe_threshold`, 1);
+  if (!Array.isArray(value.owner_signers) || value.owner_signers.length === 0) throw new RegistryError('invalid_schema', `${field}.owner_signers must be non-empty`);
+  if (value.safe_threshold > value.owner_signers.length) throw new RegistryError('invalid_schema', `${field}.safe_threshold cannot exceed owner signer count`);
+  value.owner_signers.forEach((signer, index) => validateAuthoritySigner(signer, `${field}.owner_signers[${index}]`));
+  if (!Array.isArray(value.revocable_signers)) throw new RegistryError('invalid_schema', `${field}.revocable_signers must be an array`);
+  value.revocable_signers.forEach((signer, index) => validateAuthoritySigner(signer, `${field}.revocable_signers[${index}]`, { revocable: true }));
+  assertString(value.root_revision, `${field}.root_revision`);
+  assertDateTime(value.observed_at, `${field}.observed_at`);
+  assertDateTime(value.updated_at, `${field}.updated_at`);
+  const ownerAddresses = new Set(value.owner_signers.map((signer) => normalizeAddress(signer.address, `${field}.owner_signers.address`)));
+  if (ownerAddresses.size !== value.owner_signers.length) throw new RegistryError('invalid_schema', `${field}.owner_signers must be unique by address`);
+  const delegateAddresses = new Set(value.revocable_signers.map((signer) => normalizeAddress(signer.address, `${field}.revocable_signers.address`)));
+  if (delegateAddresses.size !== value.revocable_signers.length) throw new RegistryError('invalid_schema', `${field}.revocable_signers must be unique by address`);
+  return true;
+}
+
+function validateVerificationRecord(value, field = 'identity_wallet_verification') {
+  assertObject(value, field);
+  assertNoUnknown(value, new Set([
+    'schema_version', 'verification_id', 'agent_id', 'subject_kind', 'identity_principal',
+    'wallet_address', 'wallet_chain_id', 'safe_address', 'verification_status',
+    'verification_method', 'proof_digest', 'proof_subject', 'proof_signer',
+    'signer_authority_class', 'session_key_scope', 'safe_authority', 'verified_at',
+    'expires_at', 'revoked_at', 'conflict_code', 'source_event_uids', 'record_version',
+    'updated_at',
+  ]), 'invalid_schema');
+  if (value.schema_version !== IDENTITY_WALLET_VERIFICATION_RECORD_SCHEMA_VERSION) throw new RegistryError('invalid_schema', `${field}.schema_version is unsupported`);
+  for (const key of ['verification_id', 'agent_id', 'identity_principal', 'verification_method', 'proof_digest', 'signer_authority_class']) assertString(value[key], `${field}.${key}`);
+  normalizeAddress(value.wallet_address, `${field}.wallet_address`);
+  normalizeAddress(value.safe_address, `${field}.safe_address`);
+  normalizeAddress(value.proof_subject, `${field}.proof_subject`);
+  normalizeAddress(value.proof_signer, `${field}.proof_signer`);
+  normalizeChainId(value.wallet_chain_id, `${field}.wallet_chain_id`);
+  if (value.subject_kind !== 'agent') throw new RegistryError('invalid_schema', `${field}.subject_kind is invalid`);
+  if (!['verified', 'expired', 'revoked', 'conflict'].includes(value.verification_status)) throw new RegistryError('invalid_schema', `${field}.verification_status is invalid`);
+  assertObject(value.session_key_scope, `${field}.session_key_scope`);
+  assertObject(value.safe_authority, `${field}.safe_authority`);
+  assertDateTime(value.verified_at, `${field}.verified_at`);
+  assertDateTime(value.expires_at, `${field}.expires_at`);
+  if (value.revoked_at !== null && value.revoked_at !== undefined) assertDateTime(value.revoked_at, `${field}.revoked_at`);
+  if (value.conflict_code !== null && value.conflict_code !== undefined) assertString(value.conflict_code, `${field}.conflict_code`);
+  if (!Array.isArray(value.source_event_uids)) throw new RegistryError('invalid_schema', `${field}.source_event_uids must be an array`);
+  assertInteger(value.record_version, `${field}.record_version`, 1);
+  assertDateTime(value.updated_at, `${field}.updated_at`);
+  return true;
+}
+
 export function validateStoredState(state) {
   assertObject(state, 'state');
   if (state.schema_version !== REGISTRY_STATE_SCHEMA_VERSION) {
@@ -427,6 +553,20 @@ export function validateStoredState(state) {
     assertString(item.reason_code, 'quarantine.reason_code');
     assertDateTime(item.received_at, 'quarantine.received_at');
     if (item.input !== undefined) assertSafeJson(item.input, 'quarantine.input');
+  }
+  if (state.identity_authorities !== undefined) {
+    assertObject(state.identity_authorities, 'identity_authorities');
+    for (const [agentId, authority] of Object.entries(state.identity_authorities)) {
+      if (authority.agent_id !== agentId) throw new RegistryError('invalid_state', 'identity authority key does not match agent_id');
+      validateIdentityAuthorityRecord(authority, `identity_authorities.${agentId}`);
+    }
+  }
+  if (state.identity_wallet_verifications !== undefined) {
+    assertObject(state.identity_wallet_verifications, 'identity_wallet_verifications');
+    for (const [key, record] of Object.entries(state.identity_wallet_verifications)) {
+      if (key !== verificationKey(record.agent_id, record.wallet_address)) throw new RegistryError('invalid_state', 'identity wallet verification key does not match record subject');
+      validateVerificationRecord(record, `identity_wallet_verifications.${key}`);
+    }
   }
   return true;
 }
@@ -475,6 +615,8 @@ function emptyState() {
     idempotency: {},
     quarantine: [],
     audit: [],
+    identity_authorities: {},
+    identity_wallet_verifications: {},
   };
 }
 
@@ -482,15 +624,18 @@ export class MemoryRegistryStore {
   #state;
 
   constructor(state = emptyState()) {
+    ensureIdentityStateMaps(state);
     validateStoredState(state);
     this.#state = clone(state);
   }
 
   async read() {
+    ensureIdentityStateMaps(this.#state);
     return clone(this.#state);
   }
 
   async write(next, expectedVersion) {
+    ensureIdentityStateMaps(next);
     validateStoredState(next);
     if (this.#state.version !== expectedVersion) {
       throw new RegistryConflictError('registry state changed while writing', { expectedVersion, actualVersion: this.#state.version });
@@ -513,6 +658,7 @@ export class JsonFileRegistryStore {
   async read() {
     try {
       const state = parseJsonEnvelope(await readFile(this.#filePath, 'utf8'));
+      ensureIdentityStateMaps(state);
       validateStoredState(state);
       return state;
     } catch (error) {
@@ -540,6 +686,7 @@ export class JsonFileRegistryStore {
     const lock = await this.#lock();
     try {
       const current = await this.read();
+      ensureIdentityStateMaps(current);
       if (current.version !== expectedVersion) {
         throw new RegistryConflictError('registry file changed while writing', { expectedVersion, actualVersion: current.version });
       }
@@ -882,6 +1029,209 @@ export function signSignedHeartbeat(input, privateKey) {
   return sign(null, buildSignedHeartbeatSigningBytes(input), privateKey).toString('base64url');
 }
 
+function optionalAlias(input, snake, camel) {
+  return Object.hasOwn(input, snake) || Object.hasOwn(input, camel)
+    ? alias(input, snake, camel, { required: false })
+    : undefined;
+}
+
+function normalizeStringSet(values, field) {
+  if (!Array.isArray(values) || values.length === 0) throw new RegistryError('invalid_schema', `${field} must be a non-empty array`, { field });
+  const normalized = values.map((value, index) => {
+    assertString(value, `${field}[${index}]`);
+    return value;
+  });
+  return [...new Set(normalized)].sort();
+}
+
+function normalizeChainSet(values, field) {
+  if (!Array.isArray(values) || values.length === 0) throw new RegistryError('invalid_schema', `${field} must be a non-empty array`, { field });
+  return [...new Set(values.map((value, index) => normalizeChainId(value, `${field}[${index}]`)))].sort((a, b) => a - b);
+}
+
+function normalizeOwnerSigner(input, field) {
+  assertObject(input, field);
+  assertNoUnknown(input, new Set(['address', 'key_id', 'keyId', 'public_key', 'publicKey']), 'invalid_schema');
+  const signer = {
+    address: normalizeAddress(alias(input, 'address', 'address'), `${field}.address`),
+    key_id: alias(input, 'key_id', 'keyId'),
+    public_key: alias(input, 'public_key', 'publicKey'),
+  };
+  validateAuthoritySigner(signer, field);
+  return signer;
+}
+
+function normalizeRevocableSigner(input, field, rootRevision) {
+  assertObject(input, field);
+  assertNoUnknown(input, new Set([
+    'address', 'key_id', 'keyId', 'public_key', 'publicKey', 'authority_class', 'authorityClass',
+    'scopes', 'methods', 'chain_ids', 'chainIds', 'expires_at', 'expiresAt', 'revoked_at',
+    'revokedAt', 'revocation_epoch', 'revocationEpoch', 'safe_root_revision', 'safeRootRevision',
+  ]), 'invalid_schema');
+  const signer = {
+    address: normalizeAddress(alias(input, 'address', 'address'), `${field}.address`),
+    key_id: alias(input, 'key_id', 'keyId'),
+    public_key: alias(input, 'public_key', 'publicKey'),
+    authority_class: alias(input, 'authority_class', 'authorityClass'),
+    scopes: normalizeStringSet(alias(input, 'scopes', 'scopes'), `${field}.scopes`),
+    methods: normalizeStringSet(alias(input, 'methods', 'methods'), `${field}.methods`),
+    chain_ids: normalizeChainSet(alias(input, 'chain_ids', 'chainIds'), `${field}.chain_ids`),
+    expires_at: alias(input, 'expires_at', 'expiresAt'),
+    revoked_at: optionalAlias(input, 'revoked_at', 'revokedAt') ?? null,
+    revocation_epoch: optionalAlias(input, 'revocation_epoch', 'revocationEpoch') ?? 0,
+    safe_root_revision: optionalAlias(input, 'safe_root_revision', 'safeRootRevision') ?? rootRevision,
+  };
+  validateAuthoritySigner(signer, field, { revocable: true });
+  return signer;
+}
+
+export function normalizeIdentityWalletAuthority(input) {
+  if (!isPlainObject(input)) throw new RegistryError('invalid_schema', 'identity authority must be an object');
+  assertNoUnknown(input, new Set([
+    'schema_version', 'schemaVersion', 'request_id', 'requestId', 'agent_id', 'agentId',
+    'identity_principal', 'identityPrincipal', 'safe_address', 'safeAddress',
+    'safe_chain_id', 'safeChainId', 'supported_chain_ids', 'supportedChainIds',
+    'safe_threshold', 'safeThreshold', 'owner_signers', 'ownerSigners',
+    'revocable_signers', 'revocableSigners', 'root_revision', 'rootRevision',
+    'observed_at', 'observedAt',
+  ]), 'invalid_schema');
+  const agentId = alias(input, 'agent_id', 'agentId');
+  const rootRevision = optionalAlias(input, 'root_revision', 'rootRevision') ?? `safe-root:${digest({
+    agent_id: agentId,
+    safe_address: optionalAlias(input, 'safe_address', 'safeAddress'),
+    safe_chain_id: optionalAlias(input, 'safe_chain_id', 'safeChainId'),
+    owner_signers: optionalAlias(input, 'owner_signers', 'ownerSigners') ?? [],
+  }).slice(0, 24)}`;
+  const authority = {
+    schema_version: alias(input, 'schema_version', 'schemaVersion', { defaultValue: IDENTITY_WALLET_AUTHORITY_SCHEMA_VERSION }),
+    agent_id: agentId,
+    identity_principal: optionalAlias(input, 'identity_principal', 'identityPrincipal') ?? canonicalIdentityPrincipal(agentId),
+    safe_address: normalizeAddress(alias(input, 'safe_address', 'safeAddress'), 'safe_address'),
+    safe_chain_id: normalizeChainId(alias(input, 'safe_chain_id', 'safeChainId'), 'safe_chain_id'),
+    supported_chain_ids: normalizeChainSet(alias(input, 'supported_chain_ids', 'supportedChainIds'), 'supported_chain_ids'),
+    safe_threshold: alias(input, 'safe_threshold', 'safeThreshold'),
+    owner_signers: alias(input, 'owner_signers', 'ownerSigners').map((signer, index) => normalizeOwnerSigner(signer, `owner_signers[${index}]`)),
+    revocable_signers: (optionalAlias(input, 'revocable_signers', 'revocableSigners') ?? []).map((signer, index) => normalizeRevocableSigner(signer, `revocable_signers[${index}]`, rootRevision)),
+    root_revision: rootRevision,
+    observed_at: alias(input, 'observed_at', 'observedAt'),
+    updated_at: alias(input, 'observed_at', 'observedAt'),
+  };
+  validateIdentityAuthorityRecord(authority);
+  return authority;
+}
+
+function normalizeProofSigner(input, field) {
+  assertObject(input, field);
+  assertNoUnknown(input, new Set([
+    'address', 'authority_class', 'authorityClass', 'key_id', 'keyId',
+    'safe_root_revision', 'safeRootRevision',
+  ]), 'invalid_schema');
+  const signer = {
+    address: normalizeAddress(alias(input, 'address', 'address'), `${field}.address`),
+    authority_class: alias(input, 'authority_class', 'authorityClass'),
+    key_id: optionalAlias(input, 'key_id', 'keyId') ?? '',
+    safe_root_revision: optionalAlias(input, 'safe_root_revision', 'safeRootRevision') ?? '',
+  };
+  if (!['safe_owner', 'revocable_signer', 'session_key'].includes(signer.authority_class)) {
+    throw new RegistryError('invalid_schema', `${field}.authority_class is invalid`);
+  }
+  return signer;
+}
+
+function normalizeProofDetails(input, field, { signatureRequired }) {
+  assertObject(input, field);
+  assertNoUnknown(input, new Set([
+    'method', 'domain', 'uri', 'audience', 'nonce', 'issued_at', 'issuedAt',
+    'expires_at', 'expiresAt', 'statement', 'signature',
+  ]), 'invalid_schema');
+  const proof = {
+    method: alias(input, 'method', 'method'),
+    domain: alias(input, 'domain', 'domain'),
+    uri: alias(input, 'uri', 'uri'),
+    audience: alias(input, 'audience', 'audience'),
+    nonce: alias(input, 'nonce', 'nonce'),
+    issued_at: alias(input, 'issued_at', 'issuedAt'),
+    expires_at: alias(input, 'expires_at', 'expiresAt'),
+    statement: optionalAlias(input, 'statement', 'statement') ?? '',
+    ...(signatureRequired || Object.hasOwn(input, 'signature') ? { signature: input.signature ?? '' } : {}),
+  };
+  if (!IDENTITY_WALLET_PROOF_METHODS.includes(proof.method)) throw new RegistryError('invalid_schema', 'proof.method is unsupported');
+  if (proof.domain !== 'agent.bittrees.org') throw new RegistryError('domain_mismatch', 'proof.domain must be agent.bittrees.org');
+  if (proof.audience !== 'agent.bittrees.org') throw new RegistryError('audience_mismatch', 'proof.audience must be agent.bittrees.org');
+  if (!/^https:\/\/agent\.bittrees\.org(?:\/|$)/.test(proof.uri)) throw new RegistryError('domain_mismatch', 'proof.uri must be on agent.bittrees.org');
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(proof.nonce ?? '')) throw new RegistryError('invalid_schema', 'proof.nonce is invalid');
+  assertDateTime(proof.issued_at, 'proof.issued_at');
+  assertDateTime(proof.expires_at, 'proof.expires_at');
+  if (Date.parse(proof.expires_at) <= Date.parse(proof.issued_at)) throw new RegistryError('invalid_time_window', 'proof.expires_at must be after proof.issued_at');
+  if (signatureRequired && !/^[A-Za-z0-9_-]{86}$/.test(proof.signature ?? '')) throw new RegistryError('invalid_signature', 'proof.signature is invalid');
+  return proof;
+}
+
+export function normalizeIdentityWalletProof(input, { signatureRequired = true } = {}) {
+  if (!isPlainObject(input)) throw new RegistryError('invalid_schema', 'identity wallet proof must be an object');
+  assertNoUnknown(input, new Set([
+    'schema_version', 'schemaVersion', 'request_id', 'requestId', 'agent_id', 'agentId',
+    'expected_version', 'expectedVersion', 'identity_principal', 'identityPrincipal',
+    'wallet_address', 'walletAddress', 'wallet_chain_id', 'walletChainId',
+    'safe_address', 'safeAddress', 'requested_scope', 'requestedScope', 'proof',
+    'signer', 'source_event_uids', 'sourceEventUids',
+  ]), 'invalid_schema');
+  const normalized = {
+    schema_version: alias(input, 'schema_version', 'schemaVersion'),
+    request_id: alias(input, 'request_id', 'requestId'),
+    agent_id: alias(input, 'agent_id', 'agentId'),
+    expected_version: alias(input, 'expected_version', 'expectedVersion'),
+    identity_principal: alias(input, 'identity_principal', 'identityPrincipal'),
+    wallet_address: normalizeAddress(alias(input, 'wallet_address', 'walletAddress'), 'wallet_address'),
+    wallet_chain_id: normalizeChainId(alias(input, 'wallet_chain_id', 'walletChainId'), 'wallet_chain_id'),
+    safe_address: normalizeAddress(alias(input, 'safe_address', 'safeAddress'), 'safe_address'),
+    requested_scope: optionalAlias(input, 'requested_scope', 'requestedScope') ?? 'identity.verify',
+    signer: normalizeProofSigner(alias(input, 'signer', 'signer'), 'signer'),
+    proof: normalizeProofDetails(alias(input, 'proof', 'proof'), 'proof', { signatureRequired }),
+    source_event_uids: optionalAlias(input, 'source_event_uids', 'sourceEventUids') ?? [],
+  };
+  if (normalized.schema_version !== IDENTITY_WALLET_PROOF_SCHEMA_VERSION) throw new RegistryError('unsupported_schema', 'unsupported identity wallet proof schema version');
+  assertUuid(normalized.request_id, 'request_id');
+  if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(normalized.agent_id)) throw new RegistryError('invalid_schema', 'agent_id is invalid');
+  assertInteger(normalized.expected_version, 'expected_version');
+  if (normalized.identity_principal !== canonicalIdentityPrincipal(normalized.agent_id)) throw new RegistryError('identity_binding_mismatch', 'identity_principal must be canonical agent.bittrees.eth name');
+  assertString(normalized.requested_scope, 'requested_scope');
+  if (!Array.isArray(normalized.source_event_uids) || normalized.source_event_uids.some((uid) => typeof uid !== 'string')) throw new RegistryError('invalid_schema', 'source_event_uids must be strings');
+  return normalized;
+}
+
+export function buildIdentityWalletProofSigningBytes(input) {
+  const normalized = normalizeIdentityWalletProof(input, { signatureRequired: false });
+  return Buffer.from(canonicalize({
+    domain: IDENTITY_WALLET_PROOF_DOMAIN,
+    schema_version: normalized.schema_version,
+    request_id: normalized.request_id,
+    agent_id: normalized.agent_id,
+    expected_version: normalized.expected_version,
+    identity_principal: normalized.identity_principal,
+    wallet_address: normalized.wallet_address,
+    wallet_chain_id: normalized.wallet_chain_id,
+    safe_address: normalized.safe_address,
+    requested_scope: normalized.requested_scope,
+    signer: normalized.signer,
+    proof: {
+      method: normalized.proof.method,
+      domain: normalized.proof.domain,
+      uri: normalized.proof.uri,
+      audience: normalized.proof.audience,
+      nonce: normalized.proof.nonce,
+      issued_at: normalized.proof.issued_at,
+      expires_at: normalized.proof.expires_at,
+      statement: normalized.proof.statement,
+    },
+    source_event_uids: normalized.source_event_uids,
+  }));
+}
+
+export function signIdentityWalletProof(input, privateKey) {
+  return sign(null, buildIdentityWalletProofSigningBytes(input), privateKey).toString('base64url');
+}
+
 function digest(value) {
   return createHash('sha256').update(canonicalize(value)).digest('hex');
 }
@@ -978,7 +1328,7 @@ export class RegistryControlPlane {
   }
 
   async #commit(state, mutate, audit) {
-    const next = clone(state);
+    const next = ensureIdentityStateMaps(clone(state));
     next.version += 1;
     mutate(next, next.version);
     if (next.audit.length < state.audit.length
@@ -1034,6 +1384,235 @@ export class RegistryControlPlane {
         next.seen_nonces[agentId] = {};
       }, { event_type: 'agent.bootstrapped', agent_id: agentId, controller_id: controllerId, reason: 'explicit bootstrap only' });
       return { status: 'bootstrapped', record: clone(record), audit_event_id: event.event_id };
+    });
+  }
+
+  async configureIdentityWalletAuthority(input) {
+    return this.#withLock(async () => {
+      const state = await this.#store.read();
+      const authority = normalizeIdentityWalletAuthority(input);
+      const record = state.records[authority.agent_id];
+      if (!record) throw new RegistryError('unknown_agent', `unknown agent ${authority.agent_id}`);
+      const requestId = optionalAlias(input, 'request_id', 'requestId');
+      if (requestId !== undefined) assertUuid(requestId, 'request_id');
+      const envelopeDigest = digest(authority);
+      const { event } = await this.#commit(state, (next) => {
+        next.identity_authorities[authority.agent_id] = {
+          ...authority,
+          updated_at: new Date(this.#clock()).toISOString(),
+        };
+      }, {
+        event_type: 'identity.authority.configured',
+        agent_id: authority.agent_id,
+        controller_id: record.controller_id,
+        request_id: requestId,
+        reason: 'operator supplied Safe identity authority snapshot',
+        envelope_digest: envelopeDigest,
+      });
+      return { status: 'configured', agent_id: authority.agent_id, identity_principal: authority.identity_principal, safe_address: authority.safe_address, audit_event_id: event.event_id };
+    });
+  }
+
+  #resolveIdentitySigner(authority, proof, now) {
+    const signerAddress = proof.signer.address;
+    if (proof.signer.authority_class === 'safe_owner') {
+      const owner = authority.owner_signers.find((candidate) => candidate.address === signerAddress);
+      if (!owner) throw new RegistryError('unauthorized_signer', 'proof signer is not a Safe owner for this identity');
+      return {
+        address: owner.address,
+        key_id: owner.key_id,
+        public_key: owner.public_key,
+        authority_class: 'safe_owner',
+        scopes: ['identity.verify'],
+        methods: [proof.proof.method],
+        chain_ids: [authority.safe_chain_id],
+        expires_at: proof.proof.expires_at,
+        revocation_epoch: 0,
+        safe_root_revision: authority.root_revision,
+      };
+    }
+    const delegate = authority.revocable_signers.find((candidate) => candidate.address === signerAddress);
+    if (!delegate) throw new RegistryError('unauthorized_signer', 'proof signer is not an active revocable signer for this identity');
+    if (delegate.authority_class !== proof.signer.authority_class) throw new RegistryError('unauthorized_signer', 'proof signer authority class does not match the authority snapshot');
+    if (proof.signer.safe_root_revision && proof.signer.safe_root_revision !== authority.root_revision) throw new RegistryError('safe_root_mismatch', 'proof signer is bound to a stale Safe root revision');
+    if (delegate.safe_root_revision !== authority.root_revision) throw new RegistryError('safe_root_mismatch', 'revocable signer is bound to a stale Safe root revision');
+    if (delegate.revoked_at && Date.parse(delegate.revoked_at) <= now) throw new RegistryError('signer_revoked', 'revocable signer has been revoked');
+    if (Date.parse(delegate.expires_at) <= now) throw new RegistryError('signer_expired', 'revocable signer has expired');
+    if (!delegate.scopes.includes(proof.requested_scope)) throw new RegistryError('scope_not_authorized', 'revocable signer does not cover the requested scope');
+    if (!delegate.methods.includes(proof.proof.method)) throw new RegistryError('method_not_authorized', 'revocable signer does not cover this proof method');
+    if (!delegate.chain_ids.includes(proof.wallet_chain_id)) throw new RegistryError('unsupported_network', 'revocable signer does not cover this wallet chain');
+    return delegate;
+  }
+
+  #assertIdentityProofFresh(proof, now) {
+    const issuedAt = Date.parse(proof.proof.issued_at);
+    const expiresAt = Date.parse(proof.proof.expires_at);
+    if (issuedAt > now + this.#maxClockSkewMs || Math.abs(now - issuedAt) > this.#maxHeartbeatLifetimeMs) {
+      throw new RegistryError('stale_signature', 'identity wallet proof is outside the accepted clock window');
+    }
+    if (expiresAt <= now) throw new RegistryError('expired', 'identity wallet proof has expired');
+    if (expiresAt - issuedAt > DEFAULT_MAX_IDENTITY_PROOF_LIFETIME_MS) throw new RegistryError('expiry_window_too_long', 'identity wallet proof expiry window is too long');
+  }
+
+  #assertIdentityAuthorityMatches(authority, proof) {
+    if (proof.identity_principal !== authority.identity_principal) throw new RegistryError('identity_binding_mismatch', 'proof identity principal does not match authority snapshot');
+    if (proof.wallet_address !== authority.safe_address || proof.safe_address !== authority.safe_address) {
+      throw new RegistryError('safe_binding_mismatch', 'wallet proof subject must be the configured Safe public identity');
+    }
+    if (proof.wallet_chain_id !== authority.safe_chain_id || !authority.supported_chain_ids.includes(proof.wallet_chain_id)) {
+      throw new RegistryError('unsupported_network', 'wallet proof chain is not supported by this identity authority');
+    }
+    if (!SUPPORTED_IDENTITY_WALLET_CHAIN_IDS.includes(proof.wallet_chain_id)) throw new RegistryError('unsupported_network', 'wallet proof chain is not supported by the portal verifier');
+  }
+
+  async recordIdentityWalletVerification(input) {
+    return this.#withLock(async () => {
+      const state = await this.#store.read();
+      let proof;
+      let envelopeDigest;
+      try {
+        proof = normalizeIdentityWalletProof(input);
+        envelopeDigest = digest(proof);
+      } catch (error) {
+        return this.#quarantine(state, input, error.code ?? 'invalid_schema', error.message, undefined, 'identity.wallet.proof.quarantined');
+      }
+      const record = state.records[proof.agent_id];
+      if (!record || record.revoked) return this.#quarantine(state, proof, record?.revoked ? 'revoked' : 'unknown_agent', record?.revoked ? 'agent is revoked' : `unknown agent ${proof.agent_id}`, envelopeDigest, 'identity.wallet.proof.quarantined');
+      const authority = state.identity_authorities?.[proof.agent_id];
+      if (!authority) return this.#quarantine(state, proof, 'unknown_identity_authority', 'identity authority snapshot is not configured', envelopeDigest, 'identity.wallet.proof.quarantined');
+      const idempotencyKey = `identity-wallet:${proof.request_id}`;
+      const previousRequest = state.idempotency[idempotencyKey];
+      if (previousRequest) {
+        if (previousRequest.envelope_digest !== envelopeDigest) return this.#quarantine(state, proof, 'request_id_reuse', 'request_id was already used for a different identity wallet proof', envelopeDigest, 'identity.wallet.proof.quarantined');
+        const { event } = await this.#commit(state, () => {}, {
+          event_type: 'identity.wallet.proof.idempotent', agent_id: proof.agent_id, controller_id: record.controller_id,
+          request_id: proof.request_id, reason: 'exact identity wallet proof retry', envelope_digest: envelopeDigest,
+          record_version: previousRequest.record_version,
+        });
+        return { status: 'idempotent', verified: true, agent_id: proof.agent_id, record_version: previousRequest.record_version, audit_event_id: event.event_id };
+      }
+      const key = verificationKey(proof.agent_id, proof.wallet_address);
+      const currentVerification = state.identity_wallet_verifications?.[key];
+      const currentVersion = currentVerification?.record_version ?? 0;
+      if (proof.expected_version !== currentVersion) {
+        const { event } = await this.#commit(state, () => {}, {
+          event_type: 'identity.wallet.proof.conflict', agent_id: proof.agent_id, controller_id: record.controller_id,
+          request_id: proof.request_id, reason: 'expected_version does not match current identity wallet verification version',
+          envelope_digest: envelopeDigest, record_version: currentVersion,
+        });
+        throw new RegistryConflictError('identity wallet verification version conflict', { expectedVersion: proof.expected_version, actualVersion: currentVersion, audit_event_id: event.event_id });
+      }
+      try {
+        const now = this.#clock();
+        this.#assertIdentityProofFresh(proof, now);
+        this.#assertIdentityAuthorityMatches(authority, proof);
+        const signer = this.#resolveIdentitySigner(authority, proof, now);
+        const nonceKey = `identity-wallet:${proof.signer.address}:${proof.proof.nonce}`;
+        if (state.seen_nonces[proof.agent_id]?.[nonceKey]) throw new RegistryError('replay', 'identity wallet proof nonce was already consumed');
+        let signatureValid = false;
+        try { signatureValid = verify(null, buildIdentityWalletProofSigningBytes(proof), toPublicKeyObject(signer.public_key), decodeSignature(proof.proof.signature)); } catch { signatureValid = false; }
+        if (!signatureValid) throw new RegistryError('invalid_signature', 'identity wallet proof signature did not verify for the authorized signer');
+        const expiresAt = new Date(Math.min(Date.parse(proof.proof.expires_at), Date.parse(signer.expires_at))).toISOString();
+        const verification = {
+          schema_version: IDENTITY_WALLET_VERIFICATION_RECORD_SCHEMA_VERSION,
+          verification_id: `iwv-${digest({ key, envelopeDigest }).slice(0, 24)}`,
+          agent_id: proof.agent_id,
+          subject_kind: 'agent',
+          identity_principal: authority.identity_principal,
+          wallet_address: proof.wallet_address,
+          wallet_chain_id: proof.wallet_chain_id,
+          safe_address: authority.safe_address,
+          verification_status: 'verified',
+          verification_method: proof.proof.method,
+          proof_digest: `sha256:${envelopeDigest}`,
+          proof_subject: proof.wallet_address,
+          proof_signer: proof.signer.address,
+          signer_authority_class: signer.authority_class,
+          session_key_scope: {
+            status: signer.authority_class === 'safe_owner' ? 'none' : 'active',
+            authority_class: signer.authority_class,
+            scopes: clone(signer.scopes),
+            chain_ids: clone(signer.chain_ids),
+            methods: clone(signer.methods),
+            expires_at: expiresAt,
+            revocation_epoch: signer.revocation_epoch,
+            safe_root_revision: signer.safe_root_revision,
+          },
+          safe_authority: {
+            safe_address: authority.safe_address,
+            safe_chain_id: authority.safe_chain_id,
+            threshold: authority.safe_threshold,
+            owner_count: authority.owner_signers.length,
+            root_revision: authority.root_revision,
+            supported_chain_ids: clone(authority.supported_chain_ids),
+          },
+          verified_at: new Date(now).toISOString(),
+          expires_at: expiresAt,
+          revoked_at: null,
+          conflict_code: null,
+          source_event_uids: clone(proof.source_event_uids),
+          record_version: state.version + 1,
+          updated_at: new Date(now).toISOString(),
+        };
+        validateVerificationRecord(verification);
+        const { event } = await this.#commit(state, (next, version) => {
+          next.identity_wallet_verifications[key] = { ...verification, record_version: version };
+          next.seen_nonces[proof.agent_id] ??= {};
+          next.seen_nonces[proof.agent_id][nonceKey] = { digest: envelopeDigest, request_id: proof.request_id };
+          next.idempotency[idempotencyKey] = { envelope_digest: envelopeDigest, record_version: version, agent_id: proof.agent_id };
+        }, {
+          event_type: 'identity.wallet.proof.accepted', agent_id: proof.agent_id, controller_id: record.controller_id,
+          request_id: proof.request_id, reason: 'identity wallet proof verified against Safe authority snapshot',
+          envelope_digest: envelopeDigest,
+        });
+        return { status: 'accepted', verified: true, agent_id: proof.agent_id, wallet_address: proof.wallet_address, record_version: verification.record_version, audit_event_id: event.event_id, verification: clone({ ...verification, record_version: event.record_version }) };
+      } catch (error) {
+        return this.#quarantine(state, proof, error.code ?? 'identity_wallet_proof_rejected', error.message, envelopeDigest, 'identity.wallet.proof.quarantined');
+      }
+    });
+  }
+
+  async revokeIdentityWalletSigner({ agentId, signerAddress, reason = 'operator signer revocation', revokedAt = new Date(this.#clock()).toISOString() } = {}) {
+    return this.#withLock(async () => {
+      assertString(agentId, 'agentId');
+      const normalizedSigner = normalizeAddress(signerAddress, 'signerAddress');
+      assertDateTime(revokedAt, 'revokedAt');
+      const state = await this.#store.read();
+      const authority = state.identity_authorities?.[agentId];
+      if (!authority) throw new RegistryError('unknown_identity_authority', `identity authority is not configured for ${agentId}`);
+      const index = authority.revocable_signers.findIndex((signer) => signer.address === normalizedSigner);
+      if (index === -1) throw new RegistryError('signer_not_revocable', 'signer is not a revocable signer for this identity');
+      const { event } = await this.#commit(state, (next, version) => {
+        const nextAuthority = clone(next.identity_authorities[agentId]);
+        nextAuthority.revocable_signers[index] = {
+          ...nextAuthority.revocable_signers[index],
+          revoked_at: revokedAt,
+          revocation_epoch: nextAuthority.revocable_signers[index].revocation_epoch + 1,
+        };
+        nextAuthority.updated_at = new Date(this.#clock()).toISOString();
+        next.identity_authorities[agentId] = nextAuthority;
+        for (const [key, verification] of Object.entries(next.identity_wallet_verifications)) {
+          if (verification.agent_id !== agentId || verification.proof_signer !== normalizedSigner || verification.verification_status !== 'verified') continue;
+          next.identity_wallet_verifications[key] = {
+            ...verification,
+            verification_status: 'revoked',
+            revoked_at: revokedAt,
+            session_key_scope: {
+              ...verification.session_key_scope,
+              status: 'revoked',
+              revocation_epoch: nextAuthority.revocable_signers[index].revocation_epoch,
+            },
+            record_version: version,
+            updated_at: new Date(this.#clock()).toISOString(),
+          };
+        }
+      }, {
+        event_type: 'identity.wallet.signer.revoked',
+        agent_id: agentId,
+        reason: String(reason).slice(0, 256),
+        envelope_digest: digest({ agentId, signerAddress: normalizedSigner, revokedAt, reason }),
+      });
+      return { status: 'revoked', agent_id: agentId, signer_address: normalizedSigner, audit_event_id: event.event_id };
     });
   }
 
@@ -1399,6 +1978,78 @@ export class RegistryControlPlane {
     };
     assertSafeJson(feed, 'registry_feed');
     return feed;
+  }
+
+  #projectIdentityWalletVerification(record, authority, at = this.#clock()) {
+    const expired = Date.parse(record.expires_at) <= at;
+    const revoked = Boolean(record.revoked_at) || record.verification_status === 'revoked';
+    const conflict = Boolean(record.conflict_code) || record.verification_status === 'conflict';
+    let staleRoot = false;
+    if (authority && record.session_key_scope?.safe_root_revision) {
+      staleRoot = record.session_key_scope.safe_root_revision !== authority.root_revision;
+    }
+    const verificationStatus = revoked
+      ? 'revoked'
+      : expired
+        ? 'expired'
+        : conflict || staleRoot
+          ? 'conflict'
+          : record.verification_status;
+    const verified = verificationStatus === 'verified';
+    return {
+      schemaVersion: 'agent.identity-wallet.verification.projection.v1',
+      verified,
+      agentId: record.agent_id,
+      walletAddress: record.wallet_address,
+      walletChainId: record.wallet_chain_id,
+      safeAddress: record.safe_address,
+      verificationStatus,
+      identityPrincipal: record.identity_principal,
+      verificationMethod: record.verification_method,
+      proofDigest: record.proof_digest,
+      proofSubject: record.proof_subject,
+      proofSigner: record.proof_signer,
+      signerAuthorityClass: record.signer_authority_class,
+      verifiedAt: record.verified_at,
+      expiresAt: record.expires_at,
+      revokedAt: record.revoked_at,
+      conflictCode: staleRoot ? 'safe_root_changed' : record.conflict_code,
+      sessionKeyScope: {
+        status: verificationStatus === 'verified' ? record.session_key_scope.status : verificationStatus,
+        authorityClass: record.session_key_scope.authority_class,
+        scopes: clone(record.session_key_scope.scopes),
+        chainIds: clone(record.session_key_scope.chain_ids),
+        methods: clone(record.session_key_scope.methods),
+        expiresAt: record.session_key_scope.expires_at,
+        revocationEpoch: record.session_key_scope.revocation_epoch,
+        safeRootRevision: record.session_key_scope.safe_root_revision,
+      },
+      safeAuthority: clone(record.safe_authority),
+      authorityState: {
+        authorityChangesAllowed: false,
+        spendAllowed: false,
+        executionAllowed: false,
+      },
+      recordVersion: record.record_version,
+      updatedAt: record.updated_at,
+    };
+  }
+
+  async getIdentityWalletVerification(agentId, walletAddress, { at = this.#clock() } = {}) {
+    assertString(agentId, 'agentId');
+    const state = await this.#store.read();
+    const record = state.identity_wallet_verifications?.[verificationKey(agentId, walletAddress)];
+    if (!record) return undefined;
+    return this.#projectIdentityWalletVerification(record, state.identity_authorities?.[agentId], at);
+  }
+
+  async isIdentityWalletVerified(agentId, walletAddress, { at = this.#clock(), scope = 'identity.verify' } = {}) {
+    const projection = await this.getIdentityWalletVerification(agentId, walletAddress, { at });
+    if (!projection?.verified) return false;
+    if (scope && !projection.sessionKeyScope.scopes.includes(scope) && projection.signerAuthorityClass !== 'safe_owner') return false;
+    return projection.authorityState.authorityChangesAllowed === false
+      && projection.authorityState.spendAllowed === false
+      && projection.authorityState.executionAllowed === false;
   }
 
   async snapshot() {

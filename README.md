@@ -190,6 +190,20 @@ The default launch posture is read-only. Browser/form submissions receive an HTM
 
 Form fields use the v1 schema field names, including `contributor.*`, `targetLane`, `summary`, `proposedTemplate`, `handoff.*`, and `safety.*`. Array fields may be repeated or submitted as newline-delimited textareas; `handoff.sourceIds` also accepts comma-delimited values.
 
+## Release commands
+
+Two consolidated, fail-closed commands cover a production release (full detail in
+[docs/production-operations-runbook.md](docs/production-operations-runbook.md)):
+
+```bash
+npm run preflight   # check + test + build + schema + security -> evidence JSON + launch-readiness
+npm run rollout -- --action=publish --target=<url> [--confirm]   # dry-run unless --confirm
+```
+
+Two launch capabilities stay behind default-off gates (`src/feature-gates.mjs`):
+`PUBLIC_INDEXING_ENABLED` (off = `noindex,nofollow` + robots disallow) and
+`CONTRIBUTION_INTENTS_WRITE_ENABLED` (off = submissions never persisted).
+
 ## Monitoring
 
 `/monitoring.json` defines the daily smoke-check contract for route status, structured error paths, stale IDACC release snapshots, schema validity, noindex/nofollow retention, and accidental claim drift. Run it against a deployed or local build with:
@@ -211,6 +225,16 @@ To verify a candidate deployment together with a known-good rollback target:
 npm run rollout:check -- \
   --base-url=https://<candidate-url> \
   --rollback-url=https://<ready-rollback-url>
+```
+
+If the staging or shadow deployment is behind Vercel SSO / deployment
+protection, run the same checks through the authenticated Vercel CLI transport
+instead of weakening protection:
+
+```bash
+npm run rollout:check -- \
+  --base-url=https://agent-staging.bittrees.org \
+  --vercel-protected
 ```
 
 To select the most recent Ready production deployment that is not the one
@@ -326,6 +350,6 @@ npm run start:dist
 
 - `vercel.json` keeps `X-Robots-Tag: noindex, nofollow` enabled.
 - Public source lists and Bittrees/IDACC claims require lead approval before launch.
-- The identity/key route remains prelaunch-contract-under-review. The durable authenticated writer and signed-heartbeat ingestion primitives live in `src/registry-control-plane.mjs` with versioned schemas and behavioral coverage; they are intentionally not wired to a public route or any authority, spend, execution, deployment, DNS, credential, or asset-movement path.
+- The identity/key route remains prelaunch-contract-under-review. The durable authenticated writer and signed-heartbeat ingestion primitives in `src/registry-control-plane.mjs` are mounted only as signed control-plane routes: `PUT /v1/registry/agents/:agentId` and `POST /v1/registry/heartbeats`. They are not self-service onboarding APIs and cannot grant authority, spend, execution, deployment, DNS, credential, or asset-movement capability; the public read projection remains bounded.
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.

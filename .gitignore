@@ -5,5 +5,7 @@ node_modules/
 !.env.example
 var/
 .vercel
+output/
+test-results/
 output/874bc1ef-agent-portal-finalization/.npm-cache/
 output/874bc1ef-agent-portal-finalization/ms-playwright/

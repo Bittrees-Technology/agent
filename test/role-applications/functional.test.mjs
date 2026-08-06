@@ -61,6 +61,17 @@ async function withHarness({ decisionAuthority = false } = {}, callback) {
   }
 }
 
+async function withRoleApplicationServer(roleApplicationService, callback) {
+  const server = createServer(createServerRequestHandler({ roleApplicationService }));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    return await callback({ baseUrl });
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+}
+
 async function request(baseUrl, path, { method = 'GET', wallet, body, headers = {} } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
@@ -91,6 +102,69 @@ test('default server keeps role-application paths absent until a service is inje
     assert.deepEqual(await response.json(), { error: 'not_found', requestId: 'role-route-missing-01' });
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
+test('autonomous API journey discovers work, reads identity, submits, checks status, and reloads persisted state', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'role-applications-journey-'));
+  const statePath = join(directory, 'state.json');
+  const service = () => createRoleApplicationService({
+    store: new JsonRoleApplicationStore({ path: statePath }),
+    clock: () => Date.parse('2026-07-15T12:00:00.000Z'),
+  });
+  let applicationId;
+
+  try {
+    await withRoleApplicationServer(service(), async ({ baseUrl }) => {
+      const discovery = await request(baseUrl, '/v1/workflow/opportunities?lane=research&priority=high');
+      assert.equal(discovery.response.status, 200);
+      assert.equal(discovery.json.status, 'ready-for-triage');
+      assert.equal(discovery.json.opportunities.some((opportunity) => opportunity.lane === 'research'), true);
+
+      const identity = await request(baseUrl, '/identity-keys.json');
+      assert.equal(identity.response.status, 200);
+      assert.equal(identity.json.route, '/identity-keys.json');
+      assert.equal(identity.json.status, 'prelaunch-contract-under-review');
+      assert.equal(typeof identity.json.data.identityKeys.publicationPolicy, 'string');
+      assert.doesNotMatch(JSON.stringify(identity.json), /rawPrivateKey|secretKey|mnemonic|seedPhrase|bearerToken/i);
+
+      const submitted = await request(baseUrl, '/api/role-applications', {
+        method: 'POST',
+        wallet: APPLICANT,
+        body: applicationPayload(),
+      });
+      assert.equal(submitted.response.status, 201);
+      assert.equal(submitted.json.application.state, 'submitted');
+      assert.equal(submitted.json.application.lane, 'research');
+      assert.equal(submitted.json.application.capabilityGrant, null);
+      assert.equal(submitted.json.application.provisioning, 'not_requested');
+      applicationId = submitted.json.application.id;
+
+      const status = await request(baseUrl, `/api/role-applications/${encodeURIComponent(applicationId)}/status`, {
+        wallet: APPLICANT,
+      });
+      assert.equal(status.response.status, 200);
+      assert.equal(status.json.application.id, applicationId);
+      assert.equal(status.json.application.state, 'submitted');
+
+      const persisted = JSON.parse(await readFile(statePath, 'utf8'));
+      const fileMode = (await stat(statePath)).mode & 0o777;
+      assert.equal(fileMode, 0o600);
+      assert.equal(Object.hasOwn(persisted.applications, applicationId), true);
+      assert.equal(persisted.applications[applicationId].applicantWallet, APPLICANT);
+      assert.equal(persisted.applications[applicationId].capabilityGrant, null);
+    });
+
+    await withRoleApplicationServer(service(), async ({ baseUrl }) => {
+      const reloadedStatus = await request(baseUrl, `/api/role-applications/${encodeURIComponent(applicationId)}/status`, {
+        wallet: APPLICANT,
+      });
+      assert.equal(reloadedStatus.response.status, 200);
+      assert.equal(reloadedStatus.json.application.id, applicationId);
+      assert.equal(reloadedStatus.json.application.state, 'submitted');
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

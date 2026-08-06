@@ -1,6 +1,11 @@
 import { fileURLToPath } from 'node:url';
 
 import { requestUrl } from './request-url.mjs';
+import {
+  RELEASE_METADATA_SCHEMA,
+  SMOKE_ROUTES,
+  securityHeaderFailures,
+} from './smoke-policy.mjs';
 
 const DEFAULT_BASE_URL = 'https://agent.bittrees.org';
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
@@ -23,40 +28,7 @@ const defaultVercelDeployment = vercelDeploymentArg?.split('=').slice(1).join('=
   || '';
 const vercelProtected = args.includes('--vercel-protected');
 
-const routeChecks = [
-  { path: '/', kind: 'html' },
-  { path: '/identity-keys', kind: 'html' },
-  { path: '/submission-status', kind: 'html' },
-  { path: '/reputation', kind: 'html' },
-  { path: '/terms', kind: 'html' },
-  { path: '/terms-of-use', kind: 'html' },
-  { path: '/privacy', kind: 'html' },
-  { path: '/onboarding', kind: 'html' },
-  { path: '/tou', kind: 'html' },
-  { path: '/api/health', kind: 'health-json' },
-  { path: '/llms.txt', kind: 'text' },
-  { path: '/agents.json', kind: 'json' },
-  { path: '/identity-keys.json', kind: 'json' },
-  { path: '/templates.json', kind: 'json' },
-  { path: '/sources.json', kind: 'json' },
-  { path: '/opportunities.json', kind: 'json' },
-  { path: '/onboarding.json', kind: 'json' },
-  { path: '/v1/workflow/opportunities', kind: 'api-json' },
-  { path: '/v1/workflow/opportunities/contribution-template-pilot', kind: 'api-json' },
-  { path: '/v1/workflow/status?id=source-registry-hardening&kind=opportunity', kind: 'api-json' },
-  { path: '/v1/registry/agents', kind: 'api-json' },
-  { path: '/contribution-intents', kind: 'json' },
-  { path: '/gateway/contribution-intents', kind: 'json' },
-  { path: '/mcp', kind: 'html' },
-  { path: '/mcp-docs', kind: 'html' },
-  { path: '/mcp.json', kind: 'json' },
-  { path: '/submission-status.json', kind: 'json' },
-  { path: '/reputation.json', kind: 'json' },
-  { path: '/terms-of-use.json', kind: 'json' },
-  { path: '/privacy.json', kind: 'json' },
-  { path: '/idacc/releases.json', kind: 'json' },
-  { path: '/monitoring.json', kind: 'json' },
-];
+const routeChecks = SMOKE_ROUTES;
 
 const failures = [];
 const jsonResponses = new Map();
@@ -67,14 +39,9 @@ function check(condition, message) {
 }
 
 function checkSecurityHeaders(response, path) {
-  const csp = response.headers.get('content-security-policy') ?? '';
-  const xFrameOptions = response.headers.get('x-frame-options') ?? '';
-  const referrerPolicy = response.headers.get('referrer-policy') ?? '';
-
-  check(csp.includes("default-src 'none'"), `${path} missing restrictive CSP default-src`);
-  check(csp.includes("frame-ancestors 'none'"), `${path} missing CSP frame-ancestors`);
-  check(xFrameOptions.toLowerCase() === 'deny', `${path} missing X-Frame-Options DENY`);
-  check(referrerPolicy.toLowerCase() === 'no-referrer', `${path} missing Referrer-Policy no-referrer`);
+  for (const failure of securityHeaderFailures(response.headers, path)) {
+    check(false, failure);
+  }
 }
 
 function routeUrl(path) {
@@ -154,7 +121,7 @@ async function checkRoute(path, kind) {
         `${path} missing X-Request-Id observability contract`,
       );
       check(
-        json.releaseMetadata?.schemaVersion === 'agent.bittrees.release-metadata.v1',
+        json.releaseMetadata?.schemaVersion === RELEASE_METADATA_SCHEMA,
         `${path} missing deployed release metadata`,
       );
     } catch (error) {
@@ -321,6 +288,43 @@ function checkMonitoringObservabilityCoverage() {
   check(
     observability?.telemetryFields?.includes('requestId'),
     '/monitoring.json observability telemetryFields missing requestId',
+  );
+}
+
+function checkMonitoringSloCoverage() {
+  const monitoring = jsonResponses.get('/monitoring.json');
+  if (!monitoring) return;
+
+  const contract = monitoring.data?.monitoring;
+  const sloTargets = contract?.sloTargets ?? [];
+  const pagingAlerts = contract?.alerts?.paging ?? [];
+  const incidentResponse = contract?.incidentResponse;
+
+  check(contract?.sloWindow === '30d rolling', '/monitoring.json missing 30d rolling SLO window');
+  check(sloTargets.length >= 3, '/monitoring.json missing SLO targets');
+  check(
+    sloTargets.some((target) => target.id === 'public-health-availability' && target.objectivePercent === 99.9),
+    '/monitoring.json missing public-health-availability SLO',
+  );
+  check(
+    sloTargets.some((target) => target.id === 'route-contract-smoke' && target.objectivePercent === 99.5),
+    '/monitoring.json missing route-contract-smoke SLO',
+  );
+  check(
+    sloTargets.some((target) => target.id === 'daily-backup-freshness' && target.objectivePercent === 100),
+    '/monitoring.json missing daily-backup-freshness SLO',
+  );
+  check(
+    pagingAlerts.some((alert) => alert.severity === 'SEV-1' && alert.responseTargetMinutes === 15),
+    '/monitoring.json missing SEV-1 paging alert contract',
+  );
+  check(
+    Array.isArray(incidentResponse?.firstResponseChecklist) && incidentResponse.firstResponseChecklist.length >= 4,
+    '/monitoring.json missing incident first-response checklist',
+  );
+  check(
+    (incidentResponse?.severities ?? []).some((severity) => severity.id === 'SEV-2'),
+    '/monitoring.json missing SEV-2 incident definition',
   );
 }
 
@@ -643,9 +647,10 @@ await checkNotFoundContentNegotiation();
 checkSources();
 checkAgents();
 checkOpportunities();
-checkMonitoringRouteCoverage();
-checkMonitoringObservabilityCoverage();
-await checkErrorPaths();
+  checkMonitoringRouteCoverage();
+  checkMonitoringObservabilityCoverage();
+  checkMonitoringSloCoverage();
+  await checkErrorPaths();
 await checkMcpGateway();
 await checkWorkflowDataRoutes();
 await checkReleaseFreshness();

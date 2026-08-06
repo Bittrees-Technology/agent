@@ -66,6 +66,16 @@ jobs:
             ${{ github.event.inputs.allow_dirty_target == 'true' && '--allow-dirty-target' || '' }} \
             --summary-file=output/production-release-control/alias-plan.json
 
+      - name: Verify target deployment before alias move
+        env:
+          EXPECTED_RELEASE_COMMIT: ${{ github.event.inputs.expected_commit }}
+        run: |
+          target_url="$(node -e "const fs=require('node:fs'); const plan=JSON.parse(fs.readFileSync('output/production-release-control/alias-plan.json','utf8')); process.stdout.write(plan.selected.url);")"
+          npm run rollout:check -- \
+            --base-url="${target_url}" \
+            ${{ github.event.inputs.expected_commit != '' && format('--expected-release-commit={0}', github.event.inputs.expected_commit) || '' }} \
+            --summary-file=output/production-release-control/pre-release-rollout.json
+
       - name: Move the production alias
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -83,10 +93,26 @@ jobs:
         env:
           EXPECTED_RELEASE_COMMIT: ${{ github.event.inputs.expected_commit }}
         run: |
-          npm run health -- --base-url=https://${PRODUCTION_ALIAS} \
+          npm run rollout:check -- --base-url=https://${PRODUCTION_ALIAS} \
             ${{ github.event.inputs.expected_commit != '' && format('--expected-release-commit={0}', github.event.inputs.expected_commit) || '' }} \
+            --health-only \
             --summary-file=output/production-release-control/post-release-health.json
-          npm run smoke -- --base-url=https://${PRODUCTION_ALIAS}
+          npm run smoke -- --base-url=https://${PRODUCTION_ALIAS} \
+            ${{ github.event.inputs.expected_commit != '' && format('--expected-release-commit={0}', github.event.inputs.expected_commit) || '' }} \
+            2>&1 | tee output/production-release-control/post-release-smoke.log
+
+      - name: Write immutable release manifest
+        run: |
+          node scripts/write-release-manifest.mjs \
+            --output=output/production-release-control/release-manifest.json \
+            --action=${{ github.event.inputs.action }} \
+            --alias=${PRODUCTION_ALIAS} \
+            --plan=output/production-release-control/alias-plan.json \
+            --preview=output/production-release-control/pre-release-rollout.json \
+            --result=output/production-release-control/alias-result.json \
+            --post=output/production-release-control/post-release-health.json \
+            --smoke-log=output/production-release-control/post-release-smoke.log \
+            ${{ github.event.inputs.expected_commit != '' && format('--expected-commit={0}', github.event.inputs.expected_commit) || '' }}
 
       - name: Upload release-control evidence
         if: always()

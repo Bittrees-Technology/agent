@@ -86,7 +86,7 @@ function getContentType(assetPath, requestPathname) {
     return 'application/json; charset=utf-8';
   }
 
-  return contentTypes.get(extname(assetPath)) ?? 'application/octet-stream';
+  return contentTypes.get(extname(assetPath).toLowerCase()) ?? 'application/octet-stream';
 }
 
 function sendText(res, statusCode, body) {

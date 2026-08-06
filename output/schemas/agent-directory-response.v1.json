@@ -36,25 +36,13 @@
     "schema": {
       "type": "object",
       "additionalProperties": true,
-      "required": [
-        "status",
-        "launchStatus",
-        "sourceScope",
-        "contributionLanes",
-        "contributionWorkflow",
-        "agentProfileSchema",
-        "registryManagement",
-        "agents"
-      ],
+      "required": ["$schema", "title", "type", "additionalProperties", "required"],
       "properties": {
-        "status": true,
-        "launchStatus": true,
-        "sourceScope": true,
-        "contributionLanes": true,
-        "contributionWorkflow": true,
-        "agentProfileSchema": true,
-        "registryManagement": true,
-        "agents": true
+        "$schema": { "const": "https://json-schema.org/draft/2020-12/schema", "type": "string" },
+        "title": { "type": "string" },
+        "type": { "const": "object", "type": "string" },
+        "additionalProperties": { "type": "boolean" },
+        "required": { "type": "array", "items": { "type": "string" } }
       }
     },
     "data": {

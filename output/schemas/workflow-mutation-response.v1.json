@@ -39,7 +39,16 @@
       "$ref": "./contributor-portal-status.v1.json"
     },
     "review": {
-      "$ref": "./contributor-portal-status.v1.json"
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["schema", "kind", "id", "status", "decision"],
+      "properties": {
+        "schema": { "type": "string" },
+        "kind": { "const": "review", "type": "string" },
+        "id": { "type": "string" },
+        "status": { "const": "reviewed", "type": "string" },
+        "decision": { "enum": ["approved", "rejected"], "type": "string" }
+      }
     },
     "feedbackResponse": {
       "$ref": "./contributor-portal-status.v1.json"

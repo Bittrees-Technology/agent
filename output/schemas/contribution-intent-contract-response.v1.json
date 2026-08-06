@@ -44,19 +44,13 @@
     "schema": {
       "type": "object",
       "additionalProperties": true,
-      "required": [
-        "status",
-        "launchStatus",
-        "requestSchema",
-        "responseSchema",
-        "formSubmission"
-      ],
+      "required": ["$schema", "title", "type", "additionalProperties", "required"],
       "properties": {
-        "status": true,
-        "launchStatus": true,
-        "requestSchema": true,
-        "responseSchema": true,
-        "formSubmission": true
+        "$schema": { "const": "https://json-schema.org/draft/2020-12/schema", "type": "string" },
+        "title": { "type": "string" },
+        "type": { "const": "object", "type": "string" },
+        "additionalProperties": { "type": "boolean" },
+        "required": { "type": "array", "items": { "type": "string" } }
       }
     },
     "data": {
