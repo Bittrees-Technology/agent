@@ -190,6 +190,20 @@ The default launch posture is read-only. Browser/form submissions receive an HTM
 
 Form fields use the v1 schema field names, including `contributor.*`, `targetLane`, `summary`, `proposedTemplate`, `handoff.*`, and `safety.*`. Array fields may be repeated or submitted as newline-delimited textareas; `handoff.sourceIds` also accepts comma-delimited values.
 
+## Release commands
+
+Two consolidated, fail-closed commands cover a production release (full detail in
+[docs/production-operations-runbook.md](docs/production-operations-runbook.md)):
+
+```bash
+npm run preflight   # check + test + build + schema + security -> evidence JSON + launch-readiness
+npm run rollout -- --action=publish --target=<url> [--confirm]   # dry-run unless --confirm
+```
+
+Two launch capabilities stay behind default-off gates (`src/feature-gates.mjs`):
+`PUBLIC_INDEXING_ENABLED` (off = `noindex,nofollow` + robots disallow) and
+`CONTRIBUTION_INTENTS_WRITE_ENABLED` (off = submissions never persisted).
+
 ## Monitoring
 
 `/monitoring.json` defines the daily smoke-check contract for route status, structured error paths, stale IDACC release snapshots, schema validity, noindex/nofollow retention, and accidental claim drift. Run it against a deployed or local build with:

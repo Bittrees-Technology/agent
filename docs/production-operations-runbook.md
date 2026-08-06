@@ -9,6 +9,35 @@ mutations on its own.
 Use this together with
 [production-observability-backups.md](./production-observability-backups.md).
 
+## Shortest operator path
+
+Two consolidated commands cover a release. Both are fail-closed.
+
+```bash
+# 1. Preflight — one command runs check → test → build → schema → security and
+#    writes machine-readable evidence + the launch-readiness checklist.
+npm run preflight
+#    -> output/production-readiness/preflight-evidence.json  (overallStatus)
+#    -> output/production-readiness/launch-readiness.json     (go / no-go)
+
+# 2. Rollout — one command plans, runs preview smoke, and (only with --confirm)
+#    promotes the alias, re-verifies health + smoke, records a rollback target,
+#    and writes the immutable release manifest. Without --confirm it is a
+#    dry-run and never moves the alias.
+npm run rollout -- --action=publish --target=<deployment-url>            # dry-run
+npm run rollout -- --action=publish --target=<deployment-url> --confirm  # promote
+npm run rollout -- --action=rollback --confirm                           # roll back
+```
+
+Two launch capabilities stay behind explicit, default-off gates
+(`src/feature-gates.mjs`); the portal is fail-closed until each is enabled:
+
+- `PUBLIC_INDEXING_ENABLED` — off keeps `noindex,nofollow` + `robots.txt` disallow.
+- `CONTRIBUTION_INTENTS_WRITE_ENABLED` — off means submissions are never persisted.
+
+Do not enable either gate without the named legal/security/ops decisions in the
+launch-readiness checklist reaching `accepted`.
+
 ## Scope and live inventory
 
 - Repo root:
