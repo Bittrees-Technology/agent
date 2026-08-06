@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
-import { rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +17,9 @@ const SVG_FIXTURE = '__serve-dist-mime-fixture__.svg';
 const XML_FIXTURE = '__serve-dist-mime-fixture__.xml';
 const MIXED_CASE_SVG_FIXTURE = '__serve-dist-mime-fixture__.SVG';
 const MIXED_CASE_XML_FIXTURE = '__serve-dist-mime-fixture__.XML';
+const HTML_FIXTURE = '__serve-dist-mime-fixture__.html';
+const JSON_FIXTURE = '__serve-dist-mime-fixture__.json';
+const TEXT_FIXTURE = '__serve-dist-mime-fixture__.txt';
 const SVG_BODY = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
 const XML_BODY = '<?xml version="1.0" encoding="UTF-8"?><urlset></urlset>';
 
@@ -53,10 +56,17 @@ async function withDistServer(run) {
   const xmlPath = join(distDir, XML_FIXTURE);
   const mixedCaseSvgPath = join(distDir, MIXED_CASE_SVG_FIXTURE);
   const mixedCaseXmlPath = join(distDir, MIXED_CASE_XML_FIXTURE);
+  const htmlPath = join(distDir, HTML_FIXTURE);
+  const jsonPath = join(distDir, JSON_FIXTURE);
+  const textPath = join(distDir, TEXT_FIXTURE);
+  await mkdir(distDir, { recursive: true });
   await writeFile(svgPath, SVG_BODY);
   await writeFile(xmlPath, XML_BODY);
   await writeFile(mixedCaseSvgPath, SVG_BODY);
   await writeFile(mixedCaseXmlPath, XML_BODY);
+  await writeFile(htmlPath, '<!doctype html><title>fixture</title>');
+  await writeFile(jsonPath, '{}');
+  await writeFile(textPath, 'fixture');
 
   const stderrRef = { value: '' };
   const child = spawn(process.execPath, [scriptPath], {
@@ -80,6 +90,9 @@ async function withDistServer(run) {
     await rm(xmlPath, { force: true });
     await rm(mixedCaseSvgPath, { force: true });
     await rm(mixedCaseXmlPath, { force: true });
+    await rm(htmlPath, { force: true });
+    await rm(jsonPath, { force: true });
+    await rm(textPath, { force: true });
   }
 }
 
@@ -123,9 +136,9 @@ test('dist server never falls back to octet-stream under nosniff for known stati
     // octet-stream fallback silently breaks rendering. Assert the served kinds
     // all carry a concrete, renderable content type.
     const cases = [
-      { path: '/index.html', type: 'text/html; charset=utf-8' },
-      { path: '/agents.json', type: 'application/json; charset=utf-8' },
-      { path: '/llms.txt', type: 'text/plain; charset=utf-8' },
+      { path: `/${HTML_FIXTURE}`, type: 'text/html; charset=utf-8' },
+      { path: `/${JSON_FIXTURE}`, type: 'application/json; charset=utf-8' },
+      { path: `/${TEXT_FIXTURE}`, type: 'text/plain; charset=utf-8' },
       { path: `/${SVG_FIXTURE}`, type: 'image/svg+xml; charset=utf-8' },
       { path: `/${XML_FIXTURE}`, type: 'application/xml; charset=utf-8' },
       { path: `/${MIXED_CASE_SVG_FIXTURE}`, type: 'image/svg+xml; charset=utf-8' },
