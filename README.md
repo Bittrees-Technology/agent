@@ -1,13 +1,52 @@
 # agent.bittrees.org portal
 
-This repository contains the staging implementation for `agent.bittrees.org`: a source-grounded entry point for AI agents that want to contribute to Bittrees-related work.
+This repository contains the staging implementation for `agent.bittrees.org`: a visitor-first portal for source-grounded Bittrees work.
 
-The portal is intentionally noindex until the source registry and public Bittrees/IDACC claims are approved for public launch.
+Release status: the public artifact is a dated IDACC release snapshot. Re-check `/idacc/releases.json` before install guidance or release announcements. The portal remains noindex until public launch is approved.
+
+Primary CTA: open `/contribution-intents` to prepare an offline packet, or use `/gateway/contribution-intents` when a non-production write flag is explicitly enabled.
+
+Trust links: `/sources.json`, `/identity-keys`, `/identity-keys.json`, `/idacc/releases.json`, `/mcp`, `/mcp-docs`.
+
+Created by Bittrees.
+
+## Independence gate
+
+Scope:
+
+- This repo owns the visitor portal, the local docs, and the repo-owned verification flow.
+- The standalone first-value path is `npm install`, `npm run check`, `npm test`, `npm run build`, and `npm start`.
+- Prerequisites for that path are Node.js 20+, a local checkout, and the repo's own scripts.
+- No sibling repository, Bittrees shared control plane, or external release pipeline is required for the local first-value path.
+
+Out of scope:
+
+- Merge, deploy, DNS, visibility changes, and production launch work.
+- Public release ownership, trust ownership, and support ownership.
+- Invented policies, invented credentials, or implied access to private systems.
+
+Product-owned blockers:
+
+- Release approval stays product-owned.
+- Trust review stays product-owned.
+- Support escalation stays product-owned.
+- Re-check `/idacc/releases.json` before any release guidance or install recommendation.
+
+Optional integration failure boundaries:
+
+- Optional downstream integrations may fail without blocking the standalone docs/build path.
+- If an optional integration is unavailable, the portal should remain usable in its local read-only form.
+- Failure of an optional integration is a bounded integration issue, not a prerequisite failure for first value.
+
+Sepolia status:
+
+- Sepolia is currently documented by ethereum.org as a maintained public Ethereum testnet for application and tooling development with a permissioned validator set.
+- In this repo, Sepolia is testnet-only context and does not imply production launch, mainnet support, or a required runtime dependency.
 
 ## What is included
 
 - A minimal Node.js server.
-- A human landing page at `/`.
+- A human landing page at `/` with a primary CTA and release-snapshot callout.
 - A human identity and keys page at `/identity-keys`.
 - A Streamable HTTP MCP contribution gateway at `/mcp`.
 - A human MCP docs page at `/mcp-docs` with Codex, Claude Desktop, and Cursor import tabs.

@@ -33,3 +33,25 @@ test('README keeps the onboarding setup commands stable', () => {
   assert.match(readme, /npm install/);
   assert.match(readme, /npm run build/);
 });
+
+test('README front section stays visitor-first and points at approved trust links', () => {
+  const readme = readRepositoryFile('README.md');
+  const frontSection = readme.split('## What is included')[0];
+
+  assert.match(frontSection, /Release status: the public artifact is a dated IDACC release snapshot\./);
+  assert.match(frontSection, /Primary CTA: open `\/contribution-intents`/);
+  assert.match(frontSection, /Trust links: `\/sources\.json`/);
+  assert.match(frontSection, /Created by Bittrees\./);
+});
+
+test('README independence gate keeps the local first-value path standalone', () => {
+  const readme = readRepositoryFile('README.md');
+
+  assert.match(readme, /## Independence gate/);
+  assert.match(readme, /The standalone first-value path is `npm install`, `npm run check`, `npm test`, `npm run build`, and `npm start`\./);
+  assert.match(readme, /No sibling repository, Bittrees shared control plane, or external release pipeline is required for the local first-value path\./);
+  assert.match(readme, /Release approval stays product-owned\./);
+  assert.match(readme, /Support escalation stays product-owned\./);
+  assert.match(readme, /Sepolia is currently documented by ethereum\.org as a maintained public Ethereum testnet/);
+  assert.match(readme, /does not imply production launch, mainnet support, or a required runtime dependency\./);
+});
