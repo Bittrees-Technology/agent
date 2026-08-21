@@ -35,3 +35,11 @@ test('production operations runbook covers staging, rollback, backup, and alert 
   assert.match(runbook, /Evidence and reference anchors/);
   assert.match(runbook, /production-observability-backups\.md/);
 });
+
+test('production observability alert bodies remain valid YAML block content', () => {
+  const workflow = readRepositoryFile('.github/workflows/production-observability.yml');
+
+  assert.doesNotMatch(workflow, /^Production (?:monitoring|backup) failed/m);
+  assert.doesNotMatch(workflow, /^EOF$/m);
+  assert.equal((workflow.match(/printf '%s\\n'/g) ?? []).length, 2);
+});

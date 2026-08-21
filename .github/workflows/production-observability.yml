@@ -67,17 +67,17 @@ jobs:
         run: |
           set -euo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          body="$(cat <<EOF
-Production monitoring failed for ${PRODUCTION_BASE_URL}.
-
-- Workflow run: ${run_url}
-- Commit: ${GITHUB_SHA}
-- Trigger: ${GITHUB_EVENT_NAME}
-- Artifact: production-observability-${GITHUB_RUN_ID}
-
-Check the uploaded health summary and smoke log before changing deployment, DNS, TLS, or secrets.
-EOF
-)"
+          body="$(
+            printf '%s\n' \
+              "Production monitoring failed for ${PRODUCTION_BASE_URL}." \
+              "" \
+              "- Workflow run: ${run_url}" \
+              "- Commit: ${GITHUB_SHA}" \
+              "- Trigger: ${GITHUB_EVENT_NAME}" \
+              "- Artifact: production-observability-${GITHUB_RUN_ID}" \
+              "" \
+              "Check the uploaded health summary and smoke log before changing deployment, DNS, TLS, or secrets."
+          )"
           existing="$(gh issue list --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
           if [[ -n "${existing}" ]]; then
             gh issue comment "${existing}" --body "${body}"
@@ -126,17 +126,17 @@ EOF
         run: |
           set -euo pipefail
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          body="$(cat <<EOF
-Production backup failed for ${PRODUCTION_BASE_URL}.
-
-- Workflow run: ${run_url}
-- Commit: ${GITHUB_SHA}
-- Trigger: ${GITHUB_EVENT_NAME}
-- Artifact name attempted: production-backup-${GITHUB_RUN_ID}
-
-Do not change deployment, DNS, TLS, or secrets from this alert; restore or rerun the backup procedure from the runbook.
-EOF
-)"
+          body="$(
+            printf '%s\n' \
+              "Production backup failed for ${PRODUCTION_BASE_URL}." \
+              "" \
+              "- Workflow run: ${run_url}" \
+              "- Commit: ${GITHUB_SHA}" \
+              "- Trigger: ${GITHUB_EVENT_NAME}" \
+              "- Artifact name attempted: production-backup-${GITHUB_RUN_ID}" \
+              "" \
+              "Do not change deployment, DNS, TLS, or secrets from this alert; restore or rerun the backup procedure from the runbook."
+          )"
           existing="$(gh issue list --state open --search "${TITLE} in:title" --json number --jq '.[0].number // empty')"
           if [[ -n "${existing}" ]]; then
             gh issue comment "${existing}" --body "${body}"
