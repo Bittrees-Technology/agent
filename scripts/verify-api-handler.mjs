@@ -127,6 +127,8 @@ const CHECKS = [
   { method: 'GET', path: '/sitemap.xml' },
   { method: 'GET', path: '/sitemap.xml/', expectedStatus: 301 },
   { method: 'GET', path: '/social-preview.png' },
+  { method: 'GET', path: '/favicon.svg' },
+  { method: 'GET', path: '/projects' },
   { method: 'GET', path: '/identity-keys' },
   { method: 'GET', path: '/identity-keys/', expectedStatus: 301 },
   { method: 'GET', path: '/submission-status' },
@@ -137,8 +139,12 @@ const CHECKS = [
   { method: 'GET', path: '/identity-keys.json/', expectedStatus: 301 },
   { method: 'GET', path: '/llms.txt' },
   { method: 'GET', path: '/llms.txt/', expectedStatus: 301 },
+  { method: 'GET', path: '/llms-full.txt' },
+  { method: 'GET', path: '/.well-known/ai-catalog.json' },
+  { method: 'GET', path: '/mcp/server-card' },
   { method: 'GET', path: '/agents.json' },
   { method: 'GET', path: '/projects.json' },
+  { method: 'GET', path: '/v1/projects/agent' },
   { method: 'GET', path: '/templates.json' },
   { method: 'GET', path: '/onboarding.json' },
   { method: 'GET', path: '/v1/workflow/opportunities' },
@@ -338,10 +344,17 @@ for (const check of CHECKS) {
     }
   }
 
-  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/mcp-docs') {
-    if (!res.body.includes('Harness imports') || !res.body.includes('Claude Desktop')) {
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/mcp') {
+    if (!res.body.includes('Start with the contract, not a crawl.') || !res.body.includes('server/discover')) {
       failed += 1;
-      console.error('  FAIL: /mcp-docs did not render the MCP harness import docs.');
+      console.error('  FAIL: /mcp did not render the gateway discovery overview.');
+    }
+  }
+
+  if (res.statusCode === 200 && check.method === 'GET' && check.path === '/mcp-docs') {
+    if (!res.body.includes('Connect your client') || !res.body.includes('Claude Desktop')) {
+      failed += 1;
+      console.error('  FAIL: /mcp-docs did not render the MCP client setup docs.');
     }
   }
 
