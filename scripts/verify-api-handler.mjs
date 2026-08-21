@@ -129,6 +129,7 @@ const CHECKS = [
   { method: 'GET', path: '/social-preview.png' },
   { method: 'GET', path: '/favicon.svg' },
   { method: 'GET', path: '/projects' },
+  { method: 'GET', path: '/readiness' },
   { method: 'GET', path: '/identity-keys' },
   { method: 'GET', path: '/identity-keys/', expectedStatus: 301 },
   { method: 'GET', path: '/submission-status' },
@@ -144,6 +145,7 @@ const CHECKS = [
   { method: 'GET', path: '/mcp/server-card' },
   { method: 'GET', path: '/agents.json' },
   { method: 'GET', path: '/projects.json' },
+  { method: 'GET', path: '/readiness.json' },
   { method: 'GET', path: '/v1/projects/agent' },
   { method: 'GET', path: '/templates.json' },
   { method: 'GET', path: '/onboarding.json' },
@@ -171,10 +173,16 @@ const CHECKS = [
 let failed = 0;
 
 const staticAssetPaths = new Set(buildStaticAssets().map((asset) => asset.path));
-for (const postCapablePath of ['contribution-intents', 'gateway/contribution-intents', 'mcp/index.html']) {
-  if (staticAssetPaths.has(postCapablePath)) {
+for (const dynamicPath of [
+  'contribution-intents',
+  'gateway/contribution-intents',
+  'mcp/index.html',
+  '.well-known/ai-catalog.json',
+  'mcp/server-card',
+]) {
+  if (staticAssetPaths.has(dynamicPath)) {
     failed += 1;
-    console.error(`  FAIL: dist build would emit ${postCapablePath}, shadowing a POST-capable API route on Vercel.`);
+    console.error(`  FAIL: dist build would emit ${dynamicPath}, shadowing required dynamic behavior on Vercel.`);
   }
 }
 

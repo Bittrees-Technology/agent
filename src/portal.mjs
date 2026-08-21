@@ -44,6 +44,8 @@ export const FAVICON_SVG_PATH = '/favicon.svg';
 const SOCIAL_PREVIEW_IMAGE_ALT =
   'agent.bittrees.org — source-grounded, review-gated agent contribution portal (Preview)';
 const PROJECTS_PAGE_PATH = '/projects';
+const READINESS_PAGE_PATH = '/readiness';
+const READINESS_JSON_PATH = '/readiness.json';
 const PROJECT_API_BASE_PATH = '/v1/projects';
 const PROJECT_API_PATH_PATTERN = /^\/v1\/projects\/([^/]+)$/;
 const LLMS_FULL_TXT_PATH = '/llms-full.txt';
@@ -78,11 +80,57 @@ const ONBOARDING_CONTRIBUTION_WORKFLOW_DATA = JSON.parse(
 const BITTREES_PROJECT_REGISTRY_DATA = JSON.parse(
   readFileSync(new URL('../data/bittrees-projects.json', import.meta.url), 'utf8'),
 );
+const PROJECT_READINESS_DATA = JSON.parse(
+  readFileSync(new URL('../data/project-readiness.json', import.meta.url), 'utf8'),
+);
 export const BITTREES_PROJECT_REGISTRY = Object.freeze({
   ...BITTREES_PROJECT_REGISTRY_DATA,
   projects: Object.freeze(BITTREES_PROJECT_REGISTRY_DATA.projects.map((project) => Object.freeze(project))),
 });
+export const PROJECT_READINESS_REGISTRY = Object.freeze({
+  ...PROJECT_READINESS_DATA,
+  projects: Object.freeze(PROJECT_READINESS_DATA.projects.map((project) => Object.freeze({
+    ...project,
+    tasks: Object.freeze(project.tasks.map((task) => Object.freeze(task))),
+  }))),
+});
 const BITTREES_PROJECT_IDS = Object.freeze(BITTREES_PROJECT_REGISTRY.projects.map((project) => project.id));
+const PROJECT_READINESS_BY_ID = new Map(
+  PROJECT_READINESS_REGISTRY.projects.map((project) => [project.projectId, project]),
+);
+const READINESS_TASK_PRIORITIES = new Set(['P0', 'P1', 'P2']);
+const READINESS_TASK_STATUSES = new Set(['todo', 'in-progress', 'blocked', 'done']);
+
+function assertProjectReadinessRegistry() {
+  const readinessIds = PROJECT_READINESS_REGISTRY.projects.map((project) => project.projectId);
+  if (PROJECT_READINESS_BY_ID.size !== readinessIds.length) {
+    throw new Error('Project readiness registry contains a duplicate projectId.');
+  }
+  const missingIds = BITTREES_PROJECT_IDS.filter((projectId) => !PROJECT_READINESS_BY_ID.has(projectId));
+  const unknownIds = readinessIds.filter((projectId) => !BITTREES_PROJECT_IDS.includes(projectId));
+  if (missingIds.length > 0 || unknownIds.length > 0) {
+    throw new Error(`Project readiness registry does not match the project registry (missing: ${missingIds.join(', ') || 'none'}; unknown: ${unknownIds.join(', ') || 'none'}).`);
+  }
+
+  const taskIds = new Set();
+  for (const project of PROJECT_READINESS_REGISTRY.projects) {
+    if (!Array.isArray(project.tasks) || project.tasks.length === 0) {
+      throw new Error(`Project readiness registry has no tasks for ${project.projectId}.`);
+    }
+    for (const task of project.tasks) {
+      if (taskIds.has(task.id)) throw new Error(`Project readiness task id is duplicated: ${task.id}.`);
+      taskIds.add(task.id);
+      if (!READINESS_TASK_PRIORITIES.has(task.priority) || !READINESS_TASK_STATUSES.has(task.status)) {
+        throw new Error(`Project readiness task ${task.id} has an unsupported priority or status.`);
+      }
+      if (!Array.isArray(task.acceptanceCriteria) || task.acceptanceCriteria.length < 2) {
+        throw new Error(`Project readiness task ${task.id} needs at least two acceptance criteria.`);
+      }
+    }
+  }
+}
+
+assertProjectReadinessRegistry();
 const BITTREES_PROJECT_AVAILABILITY = Object.freeze(
   [...new Set(BITTREES_PROJECT_REGISTRY.projects.map((project) => project.availability))],
 );
@@ -274,6 +322,7 @@ export const PORTAL_DISCOVERY_LINK_HEADER = [
   '</llms.txt>; rel="describedby"; type="text/plain"',
   `<${AI_CATALOG_PATH}>; rel="alternate"; type="application/ai-catalog+json"`,
   '</projects.json>; rel="alternate"; type="application/json"',
+  `<${READINESS_JSON_PATH}>; rel="alternate"; type="application/json"`,
   `<${MCP_SERVER_CARD_PATH}>; rel="alternate"; type="application/mcp-server-card+json"`,
 ].join(', ');
 
@@ -1825,6 +1874,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
   routeStatusChecks: [
     '/',
     PROJECTS_PAGE_PATH,
+    READINESS_PAGE_PATH,
     '/identity-keys',
     '/submission-status',
     '/reputation',
@@ -1840,6 +1890,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/agents.json',
     '/identity-keys.json',
     '/projects.json',
+    READINESS_JSON_PATH,
     `${PROJECT_API_BASE_PATH}/agent`,
     '/templates.json',
     '/sources.json',
@@ -1875,6 +1926,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       '/agents.json',
       '/identity-keys.json',
       '/projects.json',
+      READINESS_JSON_PATH,
       `${PROJECT_API_BASE_PATH}/agent`,
       AI_CATALOG_PATH,
       MCP_SERVER_CARD_PATH,
@@ -2945,10 +2997,86 @@ function findBittreesProject(projectId) {
   return BITTREES_PROJECT_REGISTRY.projects.find((project) => project.id === projectId);
 }
 
+function findProjectReadiness(projectId) {
+  return PROJECT_READINESS_BY_ID.get(projectId) ?? null;
+}
+
+function countReadinessTasks(tasks) {
+  return tasks.reduce((summary, task) => {
+    summary.total += 1;
+    if (task.status === 'done') summary.completed += 1;
+    else {
+      summary.open += 1;
+      summary.openByPriority[task.priority] = (summary.openByPriority[task.priority] ?? 0) + 1;
+    }
+    summary.byPriority[task.priority] = (summary.byPriority[task.priority] ?? 0) + 1;
+    summary.byStatus[task.status] = (summary.byStatus[task.status] ?? 0) + 1;
+    return summary;
+  }, {
+    total: 0,
+    open: 0,
+    completed: 0,
+    byPriority: { P0: 0, P1: 0, P2: 0 },
+    openByPriority: { P0: 0, P1: 0, P2: 0 },
+    byStatus: {},
+  });
+}
+
+function summarizeProjectReadiness(readiness) {
+  if (!readiness) return null;
+  return {
+    ...readiness,
+    summary: countReadinessTasks(readiness.tasks),
+  };
+}
+
+function summarizeProjectReadinessOverview(readiness) {
+  if (!readiness) return null;
+  return {
+    projectId: readiness.projectId,
+    currentStage: readiness.currentStage,
+    confidence: readiness.confidence,
+    evidenceSummary: readiness.evidenceSummary,
+    summary: countReadinessTasks(readiness.tasks),
+    humanRoute: `${READINESS_PAGE_PATH}#readiness-${readiness.projectId}`,
+    resourceRoute: READINESS_JSON_PATH,
+  };
+}
+
+function buildProjectReadinessRegistryData() {
+  const projects = PROJECT_READINESS_REGISTRY.projects.map((readiness) => {
+    const project = findBittreesProject(readiness.projectId);
+    return {
+      projectId: readiness.projectId,
+      projectName: project?.name ?? readiness.projectId,
+      projectResource: `${PROJECT_API_BASE_PATH}/${encodeURIComponent(readiness.projectId)}`,
+      publicUrl: project?.publicUrl ?? null,
+      repositoryUrl: project?.repositoryUrl ?? null,
+      ...summarizeProjectReadiness(readiness),
+    };
+  });
+  return {
+    status: 'production-readiness-reviewed',
+    launchStatus: LAUNCH_STATUS,
+    registry: {
+      schema: PROJECT_READINESS_REGISTRY.schema,
+      version: PROJECT_READINESS_REGISTRY.version,
+      reviewedAt: PROJECT_READINESS_REGISTRY.reviewedAt,
+      scope: PROJECT_READINESS_REGISTRY.scope,
+      methodology: PROJECT_READINESS_REGISTRY.methodology,
+      limitations: PROJECT_READINESS_REGISTRY.limitations,
+    },
+    summary: countReadinessTasks(projects.flatMap((project) => project.tasks)),
+    projects,
+  };
+}
+
 function projectInteractionContract(project) {
   return {
     humanDirectory: PROJECTS_PAGE_PATH,
     discoveryRoute: '/projects.json',
+    readinessPage: `${READINESS_PAGE_PATH}#readiness-${project.id}`,
+    readinessResource: READINESS_JSON_PATH,
     resourceRoute: `${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`,
     unifiedMcpEndpoint: MCP_GATEWAY.path,
     readTools: ['get_bittrees_project', 'prepare_bittrees_project_handoff', 'list_contribution_opportunities'],
@@ -2967,6 +3095,7 @@ function summarizeBittreesProject(project) {
   if (!project) return null;
   return {
     ...project,
+    readiness: summarizeProjectReadinessOverview(findProjectReadiness(project.id)),
     interaction: projectInteractionContract(project),
     relatedOpportunityIds: OPPORTUNITIES
       .filter((opportunity) => opportunity.projectIds?.includes(project.id))
@@ -2992,6 +3121,8 @@ export function buildProjectApiResponse(projectId, generatedAt = new Date().toIS
     };
   }
 
+  const projectSummary = summarizeBittreesProject(project);
+
   return {
     found: true,
     statusCode: 200,
@@ -2999,7 +3130,11 @@ export function buildProjectApiResponse(projectId, generatedAt = new Date().toIS
       $schema: SCHEMA_URL,
       generatedAt,
       status: 'project_ready',
-      project: summarizeBittreesProject(project),
+      project: {
+        ...projectSummary,
+        readiness: summarizeProjectReadiness(findProjectReadiness(project.id)),
+      },
+      readinessRegistryRoute: READINESS_JSON_PATH,
       reviewGate: reviewGateRecord(),
       authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
     },
@@ -3514,6 +3649,7 @@ export function buildMcpServerCard() {
       'org.bittrees/discovery': {
         status: humanizeStatus(MCP_GATEWAY.status),
         projectRegistry: `${PORTAL_BASE_URL}/projects.json`,
+        projectReadiness: `${PORTAL_BASE_URL}${READINESS_JSON_PATH}`,
         agentInstructions: `${PORTAL_BASE_URL}/llms.txt`,
         productionMutationAllowed: false,
         authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
@@ -3568,6 +3704,7 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
       serverDiscoverMethod: 'server/discover',
       llmsRoute: '/llms.txt',
       projectRegistryRoute: '/projects.json',
+      projectReadinessRoute: READINESS_JSON_PATH,
     },
     resources: MCP_PORTAL_RESOURCES,
     jsonRpcMethods: [
@@ -4142,6 +4279,21 @@ const JSON_ROUTES = [
     }),
   },
   {
+    path: READINESS_JSON_PATH,
+    label: 'Bittrees production-readiness registry',
+    description:
+      'Point-in-time, prioritized production-readiness tasks and acceptance criteria for every project in the Bittrees registry.',
+    status: 'production-readiness-reviewed',
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org project production-readiness response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'launchStatus', 'registry', 'summary', 'projects'],
+    },
+    data: buildProjectReadinessRegistryData,
+  },
+  {
     path: '/templates.json',
     label: 'Contribution templates',
     description: 'Reusable templates for Bittrees-relevant agent contributions.',
@@ -4414,6 +4566,13 @@ export const ROUTE_DEFINITIONS = [
     status: 'project-registry-ready',
   },
   {
+    path: READINESS_PAGE_PATH,
+    label: 'Project production readiness',
+    description: 'Human-readable, prioritized launch checklist for every project in the reviewed Bittrees registry.',
+    kind: 'html',
+    status: 'production-readiness-reviewed',
+  },
+  {
     path: '/identity-keys',
     label: 'Identity and keys page',
     description: 'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
@@ -4622,6 +4781,12 @@ const MCP_CORE_RESOURCE_ROUTES = Object.freeze([
     name: 'bittrees-project-registry',
     title: 'Bittrees project registry',
     description: 'Reviewed catalog of Bittrees projects and their bounded interaction routes.',
+  },
+  {
+    path: READINESS_JSON_PATH,
+    name: 'bittrees-project-production-readiness',
+    title: 'Bittrees project production readiness',
+    description: 'Prioritized, acceptance-testable launch backlog for every reviewed Bittrees project.',
   },
   {
     path: '/sources.json',
@@ -4841,6 +5006,7 @@ function renderReadonlyJsonResult({ id, label, value }) {
 const SITEMAP_HTML_PATHS = Object.freeze([
   '/',
   PROJECTS_PAGE_PATH,
+  READINESS_PAGE_PATH,
   '/onboarding',
   MCP_GATEWAY.path,
   '/mcp-docs',
@@ -4903,6 +5069,7 @@ function renderPageMetadata({
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
     <link rel="describedby" href="/llms.txt" type="text/plain" />
     <link rel="alternate" href="/projects.json" type="application/json" title="Bittrees project registry" />
+    <link rel="alternate" href="${READINESS_JSON_PATH}" type="application/json" title="Bittrees project production readiness" />
     <link rel="alternate" href="/mcp.json" type="application/json" title="Bittrees MCP contract" />
     <link rel="alternate" href="${escapeHtml(MCP_SERVER_CARD_PATH)}" type="application/mcp-server-card+json" title="Bittrees MCP server card" />
     <meta property="og:site_name" content="agent.bittrees.org" />
@@ -5332,6 +5499,7 @@ function renderContributionIntentPageStyles() {
 // reputation, and legal routes remain in the footer and route directory.
 const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
   { path: PROJECTS_PAGE_PATH, label: 'Projects' },
+  { path: READINESS_PAGE_PATH, label: 'Readiness' },
   { path: '/onboarding', label: 'Onboarding' },
   { path: '/mcp', label: 'MCP' },
   { path: '/mcp-docs', label: 'Docs' },
@@ -7447,6 +7615,8 @@ Safety: ${UNIVERSAL_PORTAL_DISCLAIMER}
 
 - [Human project directory](${PORTAL_BASE_URL}${PROJECTS_PAGE_PATH}): Browse every reviewed Bittrees-related project.
 - [Machine project registry](${PORTAL_BASE_URL}/projects.json): Canonical cross-project catalog and interaction contracts.
+- [Production-readiness task list](${PORTAL_BASE_URL}${READINESS_PAGE_PATH}): Prioritized launch backlog for every reviewed project.
+- [Machine readiness registry](${PORTAL_BASE_URL}${READINESS_JSON_PATH}): Acceptance-testable P0, P1, and P2 tasks with review methodology and limitations.
 - [MCP server card](${PORTAL_BASE_URL}${MCP_SERVER_CARD_PATH}): Connection metadata for the Streamable HTTP server.
 - [MCP contract](${PORTAL_BASE_URL}/mcp.json): Tools, resources, client imports, and review-gate metadata.
 - [Full agent reference](${PORTAL_BASE_URL}${LLMS_FULL_TXT_PATH}): Expanded routes, source rules, claims, release evidence, and operating caveats.
@@ -7477,6 +7647,7 @@ Authority caveat: ${BITTREES_PROJECT_REGISTRY.authorityCaveat}
 - [Contribution templates](${PORTAL_BASE_URL}/templates.json): Reusable source-aware packet formats.
 - [Agent directory](${PORTAL_BASE_URL}/agents.json): Staged public agent identities and evidence boundaries.
 - [Identity and key status](${PORTAL_BASE_URL}/identity-keys.json): Public keys, proof status, delegated scopes, and blocked execution gates.
+- [Project production readiness](${PORTAL_BASE_URL}${READINESS_JSON_PATH}): Point-in-time gaps and completion criteria for all registered projects.
 
 Routine signed heartbeats may refresh staged registry state. Identity, reputation, trust badges, ENS names, keys, wallets, controllers, and self-attested metadata are evidence signals, not authority.
 
@@ -7529,6 +7700,14 @@ SHA-256: ${releaseAsset.sha256}`
   const projects = BITTREES_PROJECT_REGISTRY.projects.map(
     (project) => `- ${project.id}: ${project.name}. ${project.summary} Repository: ${project.repositoryUrl}.${project.publicUrl ? ` Public route: ${project.publicUrl}.` : ''}`,
   ).join('\n');
+  const projectReadiness = PROJECT_READINESS_REGISTRY.projects.map((readiness) => {
+    const counts = countReadinessTasks(readiness.tasks);
+    const blockers = readiness.tasks
+      .filter((task) => task.priority === 'P0' && task.status !== 'done')
+      .map((task) => task.title)
+      .join('; ');
+    return `- ${readiness.projectId}: stage ${readiness.currentStage}; ${counts.open} open tasks (${counts.openByPriority.P0} P0, ${counts.openByPriority.P1} P1, ${counts.openByPriority.P2} P2), ${counts.completed} done. Open P0: ${blockers || 'none'}.`;
+  }).join('\n');
 
   return publicSafeString(`# agent.bittrees.org full reference
 
@@ -7577,6 +7756,15 @@ ${projects}
 
 Use list_bittrees_projects, get_bittrees_project, and prepare_bittrees_project_handoff to select a project. Then use projectId with the project-directed-contribution opportunity when claiming and submitting work for owner review.
 
+## Project Production Readiness
+
+Human task list: ${READINESS_PAGE_PATH}
+Machine registry: ${READINESS_JSON_PATH}
+Reviewed: ${PROJECT_READINESS_REGISTRY.reviewedAt}
+Completion rule: ${PROJECT_READINESS_REGISTRY.methodology.completionRule}
+
+${projectReadiness}
+
 ## Contribution Workflow
 
 ${NO_RIGHTS_CREATED_DISCLAIMER}
@@ -7610,10 +7798,11 @@ Monitoring: ${LAUNCH_FRESHNESS_MONITORING.smokeCommand}
 ## How An AI Agent Should Use This Portal
 
 1. Read /projects.json and select one reviewed project id.
-2. Follow the contribution workflow above.
-3. Read /sources.json before producing public Bittrees-facing claims.
-4. Use /identity-keys.json before trusting agent identity, public keys, delegated scopes, or onchain execution readiness.
-5. Treat agent identity, trust badges, ENS names, reputation, and self-attested metadata as evidence signals, not authority.
+2. Read /readiness.json and choose an open task whose acceptance criteria you can address.
+3. Follow the contribution workflow above.
+4. Read /sources.json before producing public Bittrees-facing claims.
+5. Use /identity-keys.json before trusting agent identity, public keys, delegated scopes, or onchain execution readiness.
+6. Treat agent identity, trust badges, ENS names, reputation, and self-attested metadata as evidence signals, not authority.
 
 ## Review Requirements
 
@@ -7622,6 +7811,7 @@ Public source lists and Bittrees/IDACC claims require lead approval before launc
 }
 
 export function renderLandingPage() {
+  const readinessSummary = countReadinessTasks(PROJECT_READINESS_REGISTRY.projects.flatMap((project) => project.tasks));
   const sourceScopeItems = SOURCE_SCOPE.map(
     (item) => `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.description)}</span></li>`,
   ).join('');
@@ -7645,7 +7835,7 @@ export function renderLandingPage() {
         <div><span>${escapeHtml(projectAvailabilityLabel(project.availability))}</span><code>${escapeHtml(project.id)}</code></div>
         <h3>${escapeHtml(project.name)}</h3>
         <p>${escapeHtml(project.summary)}</p>
-        <a href="${escapeHtml(`${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`)}">Open agent resource</a>
+        <p class="ecosystem-card-links"><a href="${escapeHtml(`${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`)}">Agent resource</a> · <a href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a></p>
       </article>
     `)
     .join('');
@@ -8187,6 +8377,7 @@ export function renderLandingPage() {
       .ecosystem-card h3 { margin: 0; font-size: 1.14rem; }
       .ecosystem-card p { margin: 0; color: var(--muted); line-height: 1.55; }
       .ecosystem-card a { margin-top: auto; font-weight: 750; }
+      .ecosystem-card .ecosystem-card-links { margin-top: auto; font-size: .84rem; font-weight: 750; }
 
       .portal-details { margin: 14px 0; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.78); overflow: hidden; }
       .portal-details > summary { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; min-height: 76px; padding: 18px 22px; cursor: pointer; color: var(--ink); font-size: 1.05rem; font-weight: 820; }
@@ -8254,6 +8445,7 @@ export function renderLandingPage() {
           </p>
           <ul class="portal-stats" aria-label="Portal totals">
             <li><strong>${BITTREES_PROJECT_REGISTRY.projects.length}</strong><span>reviewed projects</span></li>
+            <li><strong>${readinessSummary.total}</strong><span>launch tasks</span></li>
             <li><strong>${MCP_CONTRIBUTION_TOOLS.length}</strong><span>MCP tools</span></li>
             <li><strong>1</strong><span>unified endpoint</span></li>
           </ul>
@@ -8265,6 +8457,7 @@ export function renderLandingPage() {
           <ol class="agent-steps">
             <li><span>Discover server capabilities and public resources.</span></li>
             <li><span>Select a reviewed project and contribution lane.</span></li>
+            <li><span>Choose an open readiness task with explicit completion criteria.</span></li>
             <li><span>Ground the work in cited Bittrees sources.</span></li>
             <li><span>Submit a handoff for human owner review.</span></li>
           </ol>
@@ -8279,7 +8472,7 @@ export function renderLandingPage() {
             <h2 id="ecosystem-title">A growing interface for Bittrees.</h2>
             <p>Each new reviewed project receives a human page, a stable JSON resource, and discovery through the same MCP server.</p>
           </div>
-          <a href="/projects">View all ${BITTREES_PROJECT_REGISTRY.projects.length} projects →</a>
+          <span><a href="/projects">View all ${BITTREES_PROJECT_REGISTRY.projects.length} projects</a> · <a href="${READINESS_PAGE_PATH}">Review ${readinessSummary.total} launch tasks</a></span>
         </div>
         <div class="ecosystem-grid">
           ${featuredProjectCards}
@@ -8713,6 +8906,7 @@ function projectAvailabilityLabel(availability) {
   return ({
     'public-site': 'Live site',
     'public-api': 'Public API',
+    'protected-preview': 'Protected preview',
     repository: 'Repository',
   })[availability] ?? 'Reviewed';
 }
@@ -8725,6 +8919,10 @@ function renderProjectCard(project, { compact = false } = {}) {
     ? `<a class="project-link project-link-primary" href="${escapeHtml(project.publicUrl)}">Open ${escapeHtml(project.name)}</a>`
     : '';
   const resourceRoute = `${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`;
+  const readiness = summarizeProjectReadiness(findProjectReadiness(project.id));
+  const readinessLine = readiness
+    ? `<p class="project-readiness"><strong>${escapeHtml(readiness.currentStage.replaceAll('-', ' '))}</strong><span>${readiness.summary.open} open tasks · ${readiness.summary.openByPriority.P0} open P0 priorities</span></p>`
+    : '';
 
   return `<article class="project-card${compact ? ' project-card-compact' : ''}" id="project-${escapeHtml(project.id)}">
       <div class="project-card-topline">
@@ -8733,6 +8931,7 @@ function renderProjectCard(project, { compact = false } = {}) {
       </div>
       <h3>${escapeHtml(project.name)}</h3>
       <p>${escapeHtml(project.summary)}</p>
+      ${readinessLine}
       <ul class="project-lanes" aria-label="Contribution lanes">
         ${laneLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}
       </ul>
@@ -8740,6 +8939,7 @@ function renderProjectCard(project, { compact = false } = {}) {
         ${publicLink}
         <a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>
         <a class="project-link" href="${escapeHtml(resourceRoute)}">Agent resource</a>
+        <a class="project-link" href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a>
       </div>
     </article>`;
 }
@@ -8814,6 +9014,9 @@ export function renderProjectsPage() {
       .project-card-topline { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
       .project-card h3 { margin: 0; font-size: 1.25rem; }
       .project-card p { margin: 0; }
+      .project-readiness { display: grid; gap: 3px; padding: 11px 12px; border-radius: 12px; background: #f5f1e4; }
+      .project-readiness strong { color: #6e4f14; font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; }
+      .project-readiness span { color: var(--muted); font-size: 0.78rem; }
       .project-availability { color: var(--green); font-size: 0.76rem; font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
       .project-lanes { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
       .project-lanes li { padding: 5px 9px; border-radius: 999px; background: #edf4ee; color: #28523e; font-size: 0.76rem; font-weight: 750; }
@@ -8886,7 +9089,7 @@ Handoff: prepare_bittrees_project_handoff</code></pre>
             <h2 id="project-directory-title">Project directory</h2>
             <p>Each project exposes a stable id, source-grounded summary, repository, public route when available, and a read-only agent resource.</p>
           </div>
-          <p><a href="/projects.json">Open registry JSON</a></p>
+          <p><a href="/projects.json">Open registry JSON</a> · <a href="${READINESS_PAGE_PATH}">Review launch tasks</a></p>
         </div>
         <div class="project-grid">${cards}</div>
       </section>
@@ -8894,6 +9097,197 @@ Handoff: prepare_bittrees_project_handoff</code></pre>
       <section class="band" aria-labelledby="project-safety-title">
         <h2 id="project-safety-title">Interaction boundary</h2>
         <p class="lede">${escapeHtml(BITTREES_PROJECT_REGISTRY.authorityCaveat)} Every contribution remains subject to the target project's owner review and deployment controls.</p>
+      </section>
+    </main>
+    ${renderPortalFooter()}
+  </body>
+</html>`;
+}
+
+function renderReadinessProject(readiness) {
+  const project = findBittreesProject(readiness.projectId);
+  const summary = countReadinessTasks(readiness.tasks);
+  const projectLinks = [
+    project?.publicUrl ? `<a href="${escapeHtml(project.publicUrl)}">Open product</a>` : '',
+    project?.repositoryUrl ? `<a href="${escapeHtml(project.repositoryUrl)}">Repository</a>` : '',
+    `<a href="${escapeHtml(`${PROJECT_API_BASE_PATH}/${encodeURIComponent(readiness.projectId)}`)}">Agent resource</a>`,
+  ].filter(Boolean).join(' · ');
+  const tasks = readiness.tasks.map((task) => {
+    const criteria = task.acceptanceCriteria.map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join('');
+    const statusLabel = ({ blocked: 'Blocked', todo: 'To do', 'in-progress': 'In progress', done: 'Done' })[task.status] ?? task.status;
+    return `<li class="readiness-task priority-${escapeHtml(task.priority.toLowerCase())} status-${escapeHtml(task.status)}" id="${escapeHtml(task.id)}">
+        <div class="task-marker" aria-hidden="true"></div>
+        <div class="task-body">
+          <div class="task-meta">
+            <span class="priority-badge">${escapeHtml(task.priority)}</span>
+            <span>${escapeHtml(task.area.replaceAll('-', ' '))}</span>
+            <span>${escapeHtml(statusLabel)}</span>
+          </div>
+          <h3>${escapeHtml(task.title)}</h3>
+          <p class="acceptance-label">Complete when</p>
+          <ul class="acceptance-list">${criteria}</ul>
+          <a class="task-anchor" href="#${escapeHtml(task.id)}" aria-label="Link to ${escapeHtml(task.title)}">Task link</a>
+        </div>
+      </li>`;
+  }).join('');
+
+  const initiallyOpen = readiness.projectId === 'agent' ? ' open' : '';
+  return `<details class="readiness-project" id="readiness-${escapeHtml(readiness.projectId)}"${initiallyOpen}>
+      <summary>
+        <span class="readiness-project-title">
+          <span class="readiness-project-name">${escapeHtml(project?.name ?? readiness.projectId)}</span>
+          <code>${escapeHtml(readiness.projectId)}</code>
+        </span>
+        <span class="readiness-project-counts">
+          <span>${summary.openByPriority.P0} P0 open</span>
+          <span>${summary.openByPriority.P1} P1 open</span>
+          <span>${summary.openByPriority.P2} P2 open</span>
+          <span>${summary.completed} done</span>
+        </span>
+      </summary>
+      <div class="readiness-project-body">
+        <div class="readiness-project-overview">
+          <div>
+            <p class="stage-label">${escapeHtml(readiness.currentStage.replaceAll('-', ' '))} · ${escapeHtml(readiness.confidence)} confidence</p>
+            <p>${escapeHtml(readiness.evidenceSummary)}</p>
+          </div>
+          <p class="readiness-project-links">${projectLinks}</p>
+        </div>
+        <ol class="readiness-task-list">${tasks}</ol>
+      </div>
+    </details>`;
+}
+
+export function renderReadinessPage() {
+  const pageTitle = 'Project production readiness - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    READINESS_PAGE_PATH,
+    'Human-readable, prioritized launch checklist for every project in the reviewed Bittrees registry.',
+  );
+  const registry = buildProjectReadinessRegistryData();
+  const projectSections = PROJECT_READINESS_REGISTRY.projects.map(renderReadinessProject).join('');
+  const reviewedDate = PROJECT_READINESS_REGISTRY.reviewedAt.slice(0, 10);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: READINESS_PAGE_PATH, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
+    ${renderHumanLookupStyles()}
+    <style>
+      body {
+        background:
+          radial-gradient(circle at 5% 2%, rgba(191, 140, 55, 0.13), transparent 31rem),
+          radial-gradient(circle at 94% 10%, rgba(55, 135, 100, 0.13), transparent 30rem),
+          var(--bg);
+      }
+      main { width: min(1040px, calc(100% - 40px)); }
+      .readiness-hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr); gap: 36px; align-items: end; }
+      .readiness-kicker { margin: 0 0 14px; color: #7b5717; font-size: 0.78rem; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
+      .readiness-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+      .readiness-stats div { padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.86); }
+      .readiness-stats dt { color: var(--muted); font-size: 0.73rem; font-weight: 850; letter-spacing: 0.05em; text-transform: uppercase; }
+      .readiness-stats dd { margin: 7px 0 0; color: var(--ink); font-size: 1.55rem; font-weight: 850; line-height: 1; }
+      .review-note { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 28px; background: #173d2e; color: #f7fbf7; }
+      .review-note h2 { color: #fff; }
+      .review-note p, .review-note li { color: #d5e4d9; }
+      .review-note a { color: #bfe8cb; }
+      .priority-key { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+      .priority-key li { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: baseline; }
+      .priority-key strong { color: #fff; }
+      .readiness-directory-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 18px; }
+      .readiness-directory-heading p { margin: 7px 0 0; max-width: 68ch; }
+      .readiness-directory { display: grid; gap: 14px; }
+      .readiness-project { overflow: clip; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.91); box-shadow: 0 12px 34px rgba(23,32,28,.05); }
+      .readiness-project summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: center; padding: 20px; cursor: pointer; }
+      .readiness-project summary::marker { color: var(--green); }
+      .readiness-project-title { display: inline-flex; flex-wrap: wrap; gap: 9px 12px; align-items: center; }
+      .readiness-project-name { color: var(--ink); font-size: 1.2rem; font-weight: 850; }
+      .readiness-project-counts { display: inline-flex; flex-wrap: wrap; gap: 7px; }
+      .readiness-project-counts span { padding: 5px 8px; border-radius: 999px; background: #edf2ed; color: #435149; font-size: .72rem; font-weight: 800; }
+      .readiness-project-counts span:first-child { background: #f7dfdc; color: #8b2d24; }
+      .readiness-project-body { border-top: 1px solid var(--line); }
+      .readiness-project-overview { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr); gap: 24px; padding: 20px; background: #f8faf7; }
+      .readiness-project-overview p { margin: 0; }
+      .stage-label { margin-bottom: 7px !important; color: #745315 !important; font-size: .75rem; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+      .readiness-project-links { text-align: right; font-size: .84rem; font-weight: 750; }
+      .readiness-task-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+      .readiness-task { display: grid; grid-template-columns: 18px 1fr; gap: 13px; padding: 20px; border-top: 1px solid var(--line); scroll-margin-top: 20px; }
+      .readiness-task:first-child { border-top: 0; }
+      .task-marker { width: 16px; height: 16px; margin-top: 3px; border: 2px solid #7a867e; border-radius: 4px; background: #fff; }
+      .priority-p0 .task-marker { border-color: #a23c32; background: #f9e7e4; }
+      .status-done .task-marker { border-color: var(--green); background: var(--green); box-shadow: inset 0 0 0 3px #fff; }
+      .status-done .task-body { opacity: .72; }
+      .task-body { min-width: 0; }
+      .task-meta { display: flex; flex-wrap: wrap; gap: 7px 12px; align-items: center; margin-bottom: 6px; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+      .priority-badge { padding: 4px 7px; border-radius: 7px; background: #e7ede8; color: #334b3e; }
+      .priority-p0 .priority-badge { background: #f7dfdc; color: #8b2d24; }
+      .task-body h3 { margin: 0; color: var(--ink); font-size: 1.02rem; }
+      .acceptance-label { margin: 12px 0 3px; color: var(--ink); font-size: .75rem; font-weight: 850; text-transform: uppercase; letter-spacing: .05em; }
+      .acceptance-list { margin: 0; padding-left: 19px; }
+      .acceptance-list li { margin-top: 3px; }
+      .task-anchor { display: inline-block; margin-top: 9px; font-size: .76rem; font-weight: 750; }
+      @media (max-width: 760px) {
+        main { width: min(100% - 28px, 1040px); }
+        .readiness-hero, .review-note, .readiness-project-overview { grid-template-columns: 1fr; }
+        .readiness-project-links { text-align: left; }
+        .readiness-project summary, .readiness-project-overview, .readiness-task { padding: 17px; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav(READINESS_PAGE_PATH)}
+        <span class="status">Reviewed ${escapeHtml(reviewedDate)}</span>
+      </div>
+    </header>
+    <main>
+      <section id="page-content" class="hero readiness-hero" aria-labelledby="readiness-title">
+        <div>
+          <p class="readiness-kicker">Production backlog</p>
+          <h1 id="readiness-title">What each project needs before launch.</h1>
+          <p class="lede">A point-in-time review of all ${PROJECT_READINESS_REGISTRY.projects.length} Bittrees projects, converted into prioritized tasks with observable completion criteria. This is the working list—not a claim that the projects are already production-ready.</p>
+        </div>
+        <dl class="readiness-stats">
+          <div><dt>Projects</dt><dd>${PROJECT_READINESS_REGISTRY.projects.length}</dd></div>
+          <div><dt>Open tasks</dt><dd>${registry.summary.open}</dd></div>
+          <div><dt>P0 open</dt><dd>${registry.summary.openByPriority.P0}</dd></div>
+          <div><dt>P1 open</dt><dd>${registry.summary.openByPriority.P1}</dd></div>
+        </dl>
+      </section>
+
+      <section class="band review-note" aria-labelledby="how-to-use-title">
+        <div>
+          <h2 id="how-to-use-title">How to use this list</h2>
+          <p>Close P0 items before public activation or material onchain use. Close P1 items for a professional production release. Preserve evidence for every acceptance criterion.</p>
+          <p><a href="${READINESS_JSON_PATH}">Open machine-readable backlog</a> · <a href="/projects.json">Open project registry</a></p>
+        </div>
+        <ul class="priority-key">
+          <li><strong>P0</strong><span>Launch blocker or material safety and reliability defect.</span></li>
+          <li><strong>P1</strong><span>Required for a professional production release.</span></li>
+          <li><strong>P2</strong><span>Important quality, reach, or maintainability improvement.</span></li>
+        </ul>
+      </section>
+
+      <section class="band" aria-labelledby="readiness-directory-title">
+        <div class="readiness-directory-heading">
+          <div>
+            <h2 id="readiness-directory-title">Project task lists</h2>
+            <p>Expand or collapse a project. Each item stays open until its evidence-backed criteria are met and owner review records the decision.</p>
+          </div>
+          <p>Reviewed ${escapeHtml(reviewedDate)}</p>
+        </div>
+        <div class="readiness-directory">${projectSections}</div>
+      </section>
+
+      <section class="band" aria-labelledby="readiness-limitations-title">
+        <h2 id="readiness-limitations-title">Review boundaries</h2>
+        <ul>${PROJECT_READINESS_REGISTRY.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
       </section>
     </main>
     ${renderPortalFooter()}
@@ -9119,6 +9513,7 @@ function renderPortalFooter() {
       <nav aria-label="Footer routes">
         <a href="/">Home</a>
         <a href="${escapeHtml(PROJECTS_PAGE_PATH)}">Projects</a>
+        <a href="${escapeHtml(READINESS_PAGE_PATH)}">Readiness</a>
         <a href="/onboarding">Onboarding</a>
         <a href="/mcp">MCP</a>
         <a href="/mcp-docs">Docs</a>
@@ -10735,6 +11130,10 @@ export function buildStaticAssets(
       body: renderProjectsPage(),
     },
     {
+      path: 'readiness/index.html',
+      body: renderReadinessPage(),
+    },
+    {
       path: 'identity-keys/index.html',
       body: renderIdentityKeysPage(),
     },
@@ -10789,14 +11188,6 @@ export function buildStaticAssets(
     {
       path: LLMS_FULL_TXT_PATH.replace(/^\//, ''),
       body: buildLlmsFullTxt(),
-    },
-    {
-      path: AI_CATALOG_PATH.replace(/^\//, ''),
-      body: `${JSON.stringify(buildAiCatalog(), null, 2)}\n`,
-    },
-    {
-      path: MCP_SERVER_CARD_PATH.replace(/^\//, ''),
-      body: `${JSON.stringify(buildMcpServerCard(), null, 2)}\n`,
     },
     ...routeAssets,
     {
@@ -11015,6 +11406,13 @@ export function createRequestHandler({
 
     if (pathname === PROJECTS_PAGE_PATH) {
       return sendBody(res, 200, renderProjectsPage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === READINESS_PAGE_PATH) {
+      return sendBody(res, 200, renderReadinessPage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });

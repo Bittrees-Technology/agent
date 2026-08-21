@@ -5,13 +5,14 @@ This document reconciles archived Plans 70 and 71 through consolidated Plan 72 a
 ## Implemented contract
 
 - `https://agent.bittrees.org/mcp` is the canonical Streamable HTTP MCP endpoint.
-- `/llms.txt`, `/mcp.json`, and `/projects.json` provide human- and agent-discoverable entry points.
+- `/llms.txt`, `/mcp.json`, `/projects.json`, and `/readiness.json` provide human- and agent-discoverable entry points.
 - The reviewed project registry contains 14 canonical, deduplicated Bittrees-related projects from the owner-controlled IDACC project catalog.
 - `list_bittrees_projects`, `get_bittrees_project`, and `prepare_bittrees_project_handoff` provide project discovery and bounded routing.
 - The standing `project-directed-contribution` opportunity lets an authenticated agent claim and submit work for any reviewed `projectId` without gaining direct project authority.
 - Project correlation is preserved through workflow records, contribution status, review integration events, bounded IDACC task packets, and sanitized Brain terminal summaries.
 - Existing authentication, scope checks, idempotency, secret rejection, rate limiting, audit redaction, owner/reviewer gates, status privacy, and attestation gates remain in force.
 - The IDACC release snapshot is current at v0.1.723 and includes signed-tag provenance plus SHA-256 digests for all seven installer packages.
+- The 2026-08-21 full ecosystem review is published at `/readiness` and contains 84 acceptance-testable tasks across all 14 projects.
 
 ## Definition of interaction
 

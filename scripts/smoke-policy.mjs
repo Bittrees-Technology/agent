@@ -13,6 +13,7 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
 export const SMOKE_ROUTES = Object.freeze([
   { path: '/', kind: 'html' },
   { path: '/projects', kind: 'html' },
+  { path: '/readiness', kind: 'html' },
   { path: '/identity-keys', kind: 'html' },
   { path: '/submission-status', kind: 'html' },
   { path: '/reputation', kind: 'html' },
@@ -29,6 +30,7 @@ export const SMOKE_ROUTES = Object.freeze([
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },
   { path: '/projects.json', kind: 'json' },
+  { path: '/readiness.json', kind: 'json' },
   { path: '/v1/projects/agent', kind: 'api-json' },
   { path: '/templates.json', kind: 'json' },
   { path: '/sources.json', kind: 'json' },
