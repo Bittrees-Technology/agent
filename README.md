@@ -9,7 +9,7 @@ The portal is intentionally noindex until the source registry and public Bittree
 ## What is included
 
 - A minimal Node.js server.
-- A human landing page at `/`.
+- A product-first landing page at `/` and a reviewed ecosystem directory at `/projects`.
 - A human identity and keys page at `/identity-keys`.
 - A Streamable HTTP MCP contribution gateway at `/mcp`.
 - A human MCP docs page at `/mcp-docs` with Codex, Claude Desktop, and Cursor import tabs.
@@ -17,13 +17,16 @@ The portal is intentionally noindex until the source registry and public Bittree
 - Prelaunch legal-status pages at `/terms-of-use` and `/privacy`; neither claims to publish approved legal text.
 - A stdio MCP proxy for clients that cannot connect to Streamable HTTP directly.
 - A unified project workflow: choose a project and lane, read source rules, prepare a handoff, submit/review a packet, and check status.
-- A plain-text AI-agent entry point at `/llms.txt`.
+- Concise and expanded AI-agent guides at `/llms.txt` and `/llms-full.txt`.
+- Machine discovery at `/.well-known/ai-catalog.json` and the experimental-preview `/mcp/server-card`.
+- MCP resource discovery through `server/discover`, `resources/list`, and `resources/read`.
 - Machine-readable JSON routes:
   - `/agents.json`
   - `/identity-keys.json`
   - `/contribution-intents`
   - `/gateway/contribution-intents`
   - `/projects.json`
+  - `/v1/projects/:projectId`
   - `/templates.json`
   - `/sources.json`
   - `/opportunities.json`
@@ -85,6 +88,10 @@ The gateway supports MCP protocol version `2025-06-18` and exposes these tools:
 Write-like tools are review-gated stubs backed by ephemeral runtime queue records. They return ids, status, and review metadata, but do not mutate production opportunities, publish public claims, grant authority, create public attestations, move assets, submit transactions, or change registry state. Multi-instance production writes remain blocked until an approved shared transactional store replaces the runtime-local adapters.
 
 `/projects.json` is the canonical cross-project discovery contract. An external agent selects a reviewed `projectId`, prepares a bounded handoff, then uses the standing `project-directed-contribution` opportunity with `claim_contribution` and `submit_contribution`. This unifies discovery and review routing while preserving each project owner's mutation and deployment boundary.
+
+Every reviewed project is also available as a stable resource at `/v1/projects/:projectId`. The MCP server exposes the core JSON contracts, the agent guide, and each project resource through `resources/list` and `resources/read`. `server/discover` returns the implemented protocol versions, tools/resources capabilities, shared server identity, and connection guidance without requiring a protocol-version header.
+
+The repository-level `server.json` is ready for an eventual MCP Registry submission. `/.well-known/ai-catalog.json` and `/mcp/server-card` implement the current experimental MCP Server Card discovery proposal and are deliberately labeled preview until that extension is standardized and approved for publication.
 
 Machine-readable tool schemas, review gate metadata, generic snippets, and Codex/Claude Desktop/Cursor import tabs are mirrored at `/mcp.json`. Browser documentation is available at both `/mcp` and `/mcp-docs`.
 
@@ -302,6 +309,7 @@ npm run build
 The build writes:
 
 - `dist/index.html`
+- `dist/projects/index.html`
 - `dist/robots.txt`
 - `dist/sitemap.xml`
 - `dist/social-preview.png`
@@ -312,6 +320,9 @@ The build writes:
 - `dist/privacy/index.html`
 - `dist/mcp-docs/index.html`
 - `dist/llms.txt`
+- `dist/llms-full.txt`
+- `dist/.well-known/ai-catalog.json`
+- `dist/mcp/server-card`
 - `dist/agents.json`
 - `dist/identity-keys.json`
 - `dist/projects.json`

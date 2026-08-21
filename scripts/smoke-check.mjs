@@ -142,13 +142,30 @@ async function checkRoute(path, kind) {
     }
   }
 
+  if (kind === 'document-json') {
+    try {
+      const json = JSON.parse(text);
+      jsonResponses.set(path, json);
+      check(json && typeof json === 'object' && !Array.isArray(json), `${path} did not return a JSON object`);
+    } catch (error) {
+      check(false, `${path} did not parse as JSON: ${error.message}`);
+    }
+  }
+
   if (path === '/') {
     check(text.includes('Contribution workflow'), '/ missing contribution workflow');
     check(!text.includes('staging-ready'), '/ still contains staging-ready');
   }
 
-  if (path === '/mcp' || path === '/mcp-docs') {
-    check(text.includes('Harness imports'), `${path} missing harness import tabs`);
+  if (path === '/mcp') {
+    check(text.includes('Start with the contract, not a crawl.'), '/mcp missing discovery overview');
+    check(text.includes('server/discover'), '/mcp missing capability discovery method');
+    check(text.includes('public resources'), '/mcp missing resource catalog');
+    check(text.includes('/mcp-docs'), '/mcp missing setup documentation link');
+  }
+
+  if (path === '/mcp-docs') {
+    check(text.includes('Connect your client'), '/mcp-docs missing client setup section');
     check(text.includes('Codex'), `${path} missing Codex import tab`);
     check(text.includes('Claude Desktop'), `${path} missing Claude Desktop import tab`);
     check(text.includes('Cursor'), `${path} missing Cursor import tab`);
