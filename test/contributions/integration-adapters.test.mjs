@@ -41,7 +41,7 @@ test('Brain client posts one sanitized keyed memory and omits raw source ids/pri
     },
   });
   const result = await client.publishTerminalSummary({
-    submissionId: 'sub-1', reviewOutcome: 'approved', managerStatus: 'done', title: 'Reviewed packet',
+    submissionId: 'sub-1', projectId: 'skillmesh', reviewOutcome: 'approved', managerStatus: 'done', title: 'Reviewed packet',
     summary: 'private reviewer reason: do not retain; payout is not part of this workflow',
     artifacts: ['secret.md'], evidence: ['memory:3595'],
     citationAliases: ['bittrees-citation/sub-1', 'memory:3595'],
@@ -53,6 +53,7 @@ test('Brain client posts one sanitized keyed memory and omits raw source ids/pri
   assert.equal(calls[0].body.shared, true);
   assert.match(calls[0].body.key, /^bittrees:submission:sub-1:terminal:v1$/);
   assert.match(calls[0].body.content, /bittrees-citation\/sub-1/);
+  assert.match(calls[0].body.content, /Project ID: skillmesh/);
   assert.doesNotMatch(calls[0].body.content, /memory:3595|private reviewer|payout|secret\.md/);
   assert.equal(calls[0].body.memoryId, undefined);
 });
@@ -86,14 +87,24 @@ test('outbox timeout reconciles by GET before any retry POST', async () => {
   assert.equal(store.rows()[0].status, 'sent');
 });
 
-test('outbox retries a genuinely absent manager task and maps status values', async () => {
+test('outbox retries a genuinely absent manager task, preserves project correlation, and maps status values', async () => {
   const store = new InMemoryIntegrationOutboxStore();
-  store.enqueue('idacc_task_create', { submissionId: 'sub-absent', title: 'Contribution' }, { id: 'create-2' });
+  store.enqueue('idacc_task_create', {
+    submissionId: 'sub-absent',
+    projectId: 'skillmesh',
+    reviewOutcome: 'approved',
+    title: 'Contribution',
+  }, { id: 'create-2' });
   let posts = 0;
+  let createdRequest;
   const worker = new ContributionOutboxWorker({
     store,
     managerClient: {
-      createBoundedTask: async ({ name }) => { posts += 1; return { name, uuid: 'uuid-2', status: 'done' }; },
+      createBoundedTask: async (request) => {
+        posts += 1;
+        createdRequest = request;
+        return { name: request.name, uuid: 'uuid-2', status: 'done' };
+      },
       getTask: async () => null,
     },
     brainClient: { publishTerminalSummary: async () => ({ ok: true }) },
@@ -102,6 +113,9 @@ test('outbox retries a genuinely absent manager task and maps status values', as
   const result = await worker.processOnce();
   assert.equal(result.sent, 1);
   assert.equal(posts, 1);
+  assert.equal(createdRequest.submissionId, 'sub-absent');
+  assert.equal(createdRequest.projectId, 'skillmesh');
+  assert.equal(createdRequest.reviewDecision, 'approved');
   assert.equal(result.results[0].result.status, 'idacc_done');
 });
 

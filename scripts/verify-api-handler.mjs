@@ -138,6 +138,7 @@ const CHECKS = [
   { method: 'GET', path: '/llms.txt' },
   { method: 'GET', path: '/llms.txt/', expectedStatus: 301 },
   { method: 'GET', path: '/agents.json' },
+  { method: 'GET', path: '/projects.json' },
   { method: 'GET', path: '/templates.json' },
   { method: 'GET', path: '/onboarding.json' },
   { method: 'GET', path: '/v1/workflow/opportunities' },
@@ -525,6 +526,9 @@ for (const check of [
     assertBody(parsedBody) {
       const toolNames = new Set((parsedBody?.result?.tools ?? []).map((tool) => tool.name));
       for (const toolName of [
+        'list_bittrees_projects',
+        'get_bittrees_project',
+        'prepare_bittrees_project_handoff',
         'list_contribution_opportunities',
         'get_contribution_brief',
         'get_bittrees_context',

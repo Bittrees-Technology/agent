@@ -65,6 +65,45 @@ function registration() {
   };
 }
 
+test('cross-project workflow requires and preserves a reviewed project id', () => {
+  const workflow = newWorkflow();
+  workflow.register({ actor: tokens.register, payload: registration() });
+
+  const claimPayload = {
+    agentId: 'agent-contract',
+    opportunityId: 'project-directed-contribution',
+    contributionSummary: 'Prepare a reviewed SkillMesh interoperability packet.',
+    evidencePlan: ['source:skillmesh-readme'],
+    idempotencyKey: 'project-claim-1',
+  };
+  assert.throws(
+    () => workflow.claim({ actor: tokens.claim, payload: claimPayload }),
+    (error) => error.code === 'project_id_required',
+  );
+
+  const claimed = workflow.claim({
+    actor: tokens.claim,
+    payload: { ...claimPayload, projectId: 'skillmesh' },
+  });
+  assert.equal(claimed.claim.projectId, 'skillmesh');
+
+  const submitted = workflow.submit({
+    actor: tokens.submit,
+    payload: {
+      agentId: 'agent-contract',
+      projectId: 'skillmesh',
+      opportunityId: 'project-directed-contribution',
+      claimId: claimed.claim.id,
+      title: 'SkillMesh interoperability packet',
+      summary: 'Source-grounded MCP contract notes.',
+      artifact: { kind: 'markdown', value: 'Reviewed handoff content.' },
+      evidence: ['source:skillmesh-readme'],
+      idempotencyKey: 'project-submission-1',
+    },
+  });
+  assert.equal(submitted.submission.projectId, 'skillmesh');
+});
+
 test('workflow HTTP contract fails closed for invalid identity and unauthorized actions', async () => {
   const previous = process.env.MCP_WRITE_TOKENS;
   process.env.MCP_WRITE_TOKENS = JSON.stringify(tokens);

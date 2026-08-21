@@ -24,6 +24,7 @@ export const SMOKE_ROUTES = Object.freeze([
   { path: '/llms.txt', kind: 'text' },
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },
+  { path: '/projects.json', kind: 'json' },
   { path: '/templates.json', kind: 'json' },
   { path: '/sources.json', kind: 'json' },
   { path: '/opportunities.json', kind: 'json' },

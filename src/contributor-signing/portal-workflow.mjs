@@ -235,9 +235,10 @@ function normalizeState(value, opportunities) {
     ...state,
     schema: PORTAL_WORKFLOW_SCHEMA,
     version: 1,
-    opportunities: Array.isArray(state.opportunities) && state.opportunities.length
-      ? state.opportunities
-      : clone(opportunities),
+    // Opportunity definitions are source-controlled catalog data. Always
+    // refresh them from the current release so a durable workflow store cannot
+    // pin an older project or routing catalog after deployment.
+    opportunities: clone(opportunities),
     registrations: state.registrations && typeof state.registrations === 'object' ? state.registrations : {},
     claims: state.claims && typeof state.claims === 'object' ? state.claims : {},
     submissions: state.submissions && typeof state.submissions === 'object' ? state.submissions : {},
@@ -336,6 +337,20 @@ function publicOpportunity(opportunity) {
   return result;
 }
 
+function projectIdForOpportunity(payload, opportunity) {
+  const requested = payload.projectId ?? payload.project_id;
+  const projectId = requested ? assertId(requested, 'projectId') : '';
+  const projectIds = Array.isArray(opportunity.projectIds) ? opportunity.projectIds : [];
+  if (!projectId && opportunity.id === 'project-directed-contribution') {
+    workflowError('projectId is required for the project-directed-contribution opportunity', 'project_id_required', 422);
+  }
+  if (projectId && projectIds.length && !projectIds.includes(projectId)) {
+    workflowError('project is not in the reviewed scope for this opportunity', 'project_not_in_opportunity_scope', 422);
+  }
+  if (projectId) return projectId;
+  return projectIds.length === 1 ? projectIds[0] : '';
+}
+
 function publicRecord(record, { kind, includeFeedback = false } = {}) {
   if (!record) return null;
   const projection = {
@@ -349,6 +364,7 @@ function publicRecord(record, { kind, includeFeedback = false } = {}) {
     updatedAt: record.updatedAt,
     ...(record.agentId ? { agentId: record.agentId } : {}),
     ...(record.opportunityId ? { opportunityId: record.opportunityId } : {}),
+    ...(record.projectId ? { projectId: record.projectId } : {}),
     ...(record.claimId ? { claimId: record.claimId } : {}),
     ...(kind === 'submission' ? { submissionId: record.id } : record.submissionId ? { submissionId: record.submissionId } : {}),
     ...(record.terminalOutcome ? { terminalOutcome: record.terminalOutcome } : {}),
@@ -606,9 +622,14 @@ export class ContributorPortalWorkflow {
     }).attestation;
   }
 
-  listOpportunities({ lane = '', priority = '', status = '' } = {}) {
+  listOpportunities({ lane = '', priority = '', status = '', projectId = '' } = {}) {
     return this.#state.opportunities
-      .filter((item) => (!lane || item.lane === lane) && (!priority || item.priority === priority) && (!status || item.status === status))
+      .filter((item) => (
+        (!lane || item.lane === lane)
+        && (!priority || item.priority === priority)
+        && (!status || item.status === status)
+        && (!projectId || item.projectIds?.includes(projectId))
+      ))
       .map(publicOpportunity);
   }
 
@@ -712,11 +733,13 @@ export class ContributorPortalWorkflow {
     const opportunityId = assertId(payload.opportunityId ?? payload.opportunity_id, 'opportunityId');
     const opportunity = this.getOpportunity(opportunityId);
     if (!opportunity) workflowError('opportunity not found', 'opportunity_not_found', 404);
+    const projectId = projectIdForOpportunity(payload, opportunity);
     const registration = this.#findRegistration(agentId);
     if (!registration) workflowError('agent registration is required before claiming an opportunity', 'registration_required', 409);
     const normalized = {
       agentId,
       opportunityId,
+      ...(projectId ? { projectId } : {}),
       contributionSummary: bounded(payload.contributionSummary ?? payload.summary, 1600),
       evidencePlan: normalizeList(payload.evidencePlan ?? payload.evidence_plan, 30, 400),
       expectedOutput: bounded(payload.expectedOutput ?? payload.expected_output, 1200),
@@ -762,12 +785,15 @@ export class ContributorPortalWorkflow {
     const opportunityId = assertId(payload.opportunityId ?? payload.opportunity_id, 'opportunityId');
     const opportunity = this.getOpportunity(opportunityId);
     if (!opportunity) workflowError('opportunity not found', 'opportunity_not_found', 404);
+    const projectId = projectIdForOpportunity(payload, opportunity);
     const claimId = assertId(payload.claimId ?? payload.claim_id, 'claimId');
     const claim = this.#findClaim(claimId);
     if (!claim || claim.agentId !== agentId || claim.opportunityId !== opportunityId) workflowError('claim not found for this agent and opportunity', 'claim_not_found', 404);
+    if ((claim.projectId ?? '') !== projectId) workflowError('claim project does not match submission project', 'project_claim_mismatch', 409);
     const normalized = {
       agentId,
       opportunityId,
+      ...(projectId ? { projectId } : {}),
       claimId,
       title: bounded(payload.title, 240),
       summary: bounded(payload.summary ?? payload.description, 2200),
@@ -944,6 +970,7 @@ export class ContributorPortalWorkflow {
       sourceIds: submission.evidence,
       artifactCount: 1,
       opportunityId: submission.opportunityId,
+      projectId: submission.projectId,
       claimId: submission.claimId,
       occurredAt: timestamp,
     };

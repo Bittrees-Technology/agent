@@ -122,6 +122,7 @@ function managerTaskPayload(input, { taskName, team, from, goalId }) {
   const title = boundedText(input.title, MAX_TITLE_LENGTH, 'Reviewed Bittrees contribution');
   const summary = boundedText(redactText(input.summary ?? input.description), MAX_SUMMARY_LENGTH);
   const lane = boundedText(input.lane ?? input.opportunityId ?? input.opportunity_id, 100, 'contribution');
+  const projectId = boundedText(input.projectId ?? input.project_id, 120, 'unassigned');
   const artifacts = normalizeArtifacts(input.artifacts ?? input.artifactRefs ?? input.artifact_refs);
   const sources = normalizeSources(input.sourceIds ?? input.source_ids ?? input.brainSourceIds);
   const expectedOutput = boundedText(input.expectedOutput ?? input.expected_output, 600, 'Owner-reviewed contribution implementation packet');
@@ -137,6 +138,7 @@ function managerTaskPayload(input, { taskName, team, from, goalId }) {
     'Backlog policy: optional infrastructure remains backlog until separately approved.',
     'Bittrees relevance: high: review-gated contributor workflow routing.',
     `Submission digest: ${hash(submissionId)}`,
+    `Project ID: ${projectId}`,
     `Lane: ${lane}`,
     summary ? `Reviewed summary: ${summary}` : '',
     `Artifact count: ${artifacts.length}`,

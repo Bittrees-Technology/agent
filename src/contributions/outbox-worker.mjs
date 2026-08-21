@@ -256,9 +256,16 @@ export class ContributionOutboxWorker {
     }
     const request = {
       name,
+      submissionId: id,
       title: payload.title ?? payload.task?.title ?? 'Bittrees contribution',
       description: payload.description ?? payload.task?.description,
       team: payload.team ?? 'engineering-team',
+      projectId: payload.projectId ?? payload.project_id,
+      opportunityId: payload.opportunityId ?? payload.opportunity_id,
+      reviewDecision: payload.reviewDecision ?? payload.review_decision ?? payload.reviewOutcome ?? payload.review_outcome,
+      summary: payload.summary,
+      sourceIds: payload.sourceIds ?? payload.source_ids,
+      artifactCount: payload.artifactCount ?? payload.artifact_count,
     };
     try {
       const task = await this.#manager.createBoundedTask(request);

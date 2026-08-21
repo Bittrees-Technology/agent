@@ -108,6 +108,7 @@ function normalizeSubmissionPayload(payload = {}) {
   if (!title) throwServiceError('title is required', 'invalid_submission', 422);
   const summary = bounded(payload.summary ?? payload.description, 2200);
   const opportunityId = bounded(payload.opportunityId ?? payload.opportunity_id, 180, 'contribution');
+  const projectId = bounded(payload.projectId ?? payload.project_id, 180);
   const sourceIds = Array.isArray(payload.sourceIds ?? payload.source_ids)
     ? [...new Set((payload.sourceIds ?? payload.source_ids).filter((source) => typeof source === 'string').map((source) => bounded(source, 160)).filter(Boolean))].slice(0, 40)
     : [];
@@ -115,6 +116,7 @@ function normalizeSubmissionPayload(payload = {}) {
     title,
     summary,
     opportunityId,
+    projectId,
     sourceIds,
     artifactCount: Array.isArray(payload.artifacts) ? Math.min(20, payload.artifacts.length) : 0,
     metadata: {
@@ -231,6 +233,7 @@ function publicProjection(row) {
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    ...(row.payload?.projectId ? { projectId: row.payload.projectId } : {}),
     reviewVersion: row.reviewVersion,
     reviewGate: reviewGate(),
     privacy: {
@@ -348,6 +351,7 @@ export class ContributionService {
       submissionId: updated.id,
       title: updated.payload.title,
       summary: updated.payload.summary,
+      projectId: updated.payload.projectId,
       reviewOutcome: normalizedDecision,
       managerStatus: 'not_created',
       sourceIds: updated.payload.sourceIds,

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { once } from 'node:events';
+import { realpathSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -172,7 +173,13 @@ export async function runStdioProxy({
 }
 
 function isMainModule() {
-  return resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url);
+  const invokedPath = resolve(process.argv[1] ?? '');
+  const modulePath = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(invokedPath) === realpathSync(modulePath);
+  } catch {
+    return invokedPath === modulePath;
+  }
 }
 
 if (isMainModule()) {
