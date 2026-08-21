@@ -34,15 +34,15 @@ The review also covered route metadata, response headers, `robots.txt`, `sitemap
 
 - Reframed the home page around one universal Bittrees agent interface, featured projects, a clear MCP endpoint, and progressive disclosure for operational detail.
 - Added `/projects` with the full reviewed ecosystem registry and a stable `/v1/projects/:projectId` JSON resource for each project.
-- Reduced primary navigation to five high-frequency destinations and moved governance, legal, reputation, and key-management routes to the footer.
+- Reduced primary navigation to six high-frequency destinations, including the project readiness backlog, and moved governance, legal, reputation, and key-management routes to the footer.
 - Fixed signing-form min-width constraints and responsive table/form behavior.
 - Separated the live MCP gateway page from client setup documentation.
 - Added MCP `server/discover`, `resources/list`, and `resources/read` support.
 - Published core portal resources plus one resource per reviewed project through the MCP endpoint.
 - Reworked `/llms.txt` into a concise first-hop guide and retained the expanded material at `/llms-full.txt`.
 - Added HTML and HTTP `Link` discovery for the agent guide, project registry, MCP metadata, and preview Server Card.
-- Added `/.well-known/ai-catalog.json`, `/mcp/server-card`, caching, ETags, CORS, and a repository-level `server.json` for registry readiness.
-- Added `/projects` to the sitemap and all new documents to the static build and smoke policy.
+- Added `/.well-known/ai-catalog.json`, `/mcp/server-card`, caching, ETags, CORS, and a repository-level `server.json` for registry readiness. The two custom-media discovery documents remain dynamic so static hosting cannot replace their content types.
+- Added `/projects` and `/readiness` to the sitemap, and added the static-safe documents to the build and smoke policy.
 - Updated shared page styling with a calmer ecosystem visual system, rounded controls, better header wrapping, and responsive layouts.
 
 ## Production gates that remain intentionally closed
@@ -55,4 +55,4 @@ The review also covered route metadata, response headers, `robots.txt`, `sitemap
 
 ## Growth rule
 
-A new Bittrees product or data source should be added once to `data/bittrees-projects.json`. The portal should then expose it through the human `/projects` directory, `/projects.json`, a stable `/v1/projects/:projectId` route, and MCP `resources/list`/`resources/read` without introducing another top-level gateway.
+A new Bittrees product or data source should be added to `data/bittrees-projects.json` and receive an initial launch checklist in `data/project-readiness.json`. The portal then exposes it through the human `/projects` and `/readiness` pages, the corresponding JSON registries, a stable `/v1/projects/:projectId` route, and MCP `resources/list`/`resources/read` without introducing another top-level gateway.

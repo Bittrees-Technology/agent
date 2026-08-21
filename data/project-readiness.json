@@ -1,0 +1,1077 @@
+{
+  "schema": "agent.bittrees.project-readiness.v1",
+  "version": 1,
+  "reviewedAt": "2026-08-21T18:00:00Z",
+  "scope": "Production-readiness review of every project in the canonical Bittrees project registry.",
+  "methodology": {
+    "dimensions": [
+      "product and user experience",
+      "AI-agent discovery and interoperability",
+      "engineering quality and release automation",
+      "security and transaction safety",
+      "legal, privacy, and governance",
+      "operations, observability, recovery, and support"
+    ],
+    "priorityDefinitions": {
+      "P0": "Launch blocker or material safety/reliability defect.",
+      "P1": "Required for a professional production release.",
+      "P2": "Important post-launch quality, reach, or maintainability improvement."
+    },
+    "statusDefinitions": {
+      "todo": "Accepted into the backlog but not yet started.",
+      "in-progress": "Implementation or evidence collection is active.",
+      "blocked": "Cannot complete until a named decision, approval, dependency, or authority is available.",
+      "done": "Every acceptance criterion has durable evidence and owner review recorded completion."
+    },
+    "completionRule": "A task is complete only when every acceptance criterion has durable evidence in the project repository, deployment, or approved operating record. Self-attestation alone is insufficient for security, legal, financial, or authority claims.",
+    "evidenceReviewed": [
+      "canonical and locally available repositories",
+      "README files, package scripts, tests, CI and release metadata",
+      "live public routes, HTTP metadata, security headers, discovery artifacts, and responsive layouts",
+      "IDACC project catalog and project planning context"
+    ]
+  },
+  "limitations": [
+    "This is a point-in-time technical and product review, not a legal opinion, financial audit, or independent smart-contract audit.",
+    "Private infrastructure, secrets, off-repository operating procedures, and third-party dashboards were not treated as complete without public-safe durable evidence.",
+    "Live deployments may lag their repositories; deployed smoke tests remain required after each release."
+  ],
+  "projects": [
+    {
+      "projectId": "agent",
+      "currentStage": "prelaunch-platform",
+      "confidence": "high",
+      "evidenceSummary": "The portal has a strong tested MCP and discovery foundation, but public indexing and write workflows intentionally remain gated while durable storage, approvals, and production operations are incomplete.",
+      "tasks": [
+        {
+          "id": "agent-p0-durable-control-plane",
+          "priority": "P0",
+          "area": "platform",
+          "title": "Move review workflows to an approved durable control plane",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Registrations, claims, submissions, reviews, feedback, idempotency records, rate limits, audit events, and outbox delivery survive restarts and concurrent instances.",
+            "Migration, backup, restore, retention, and failure-recovery tests run against the production-class store."
+          ]
+        },
+        {
+          "id": "agent-p0-launch-approvals",
+          "priority": "P0",
+          "area": "governance",
+          "title": "Record source, security, legal, and operations launch approvals",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Named owners approve the public source set, supported claims, threat model, incident plan, and indexing switch in a durable record.",
+            "The launch gate and robots policy are changed only by the reviewed release containing those approvals."
+          ]
+        },
+        {
+          "id": "agent-p0-legal-publication",
+          "priority": "P0",
+          "area": "legal-privacy",
+          "title": "Publish approved Terms, privacy policy, and contact routes",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Legal-approved Terms and privacy text identify the responsible entity, jurisdiction, data handling, retention, and user rights.",
+            "A monitored security, privacy, and support contact is linked from every page and machine contract."
+          ]
+        },
+        {
+          "id": "agent-p1-workflow-e2e",
+          "priority": "P1",
+          "area": "quality",
+          "title": "Prove the complete agent contribution lifecycle",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Automated tests cover registration through reviewed completion, rejection, feedback, duplicate requests, timeouts, and recovery.",
+            "At least two external MCP clients pass the same production smoke suite without gaining downstream mutation authority."
+          ]
+        },
+        {
+          "id": "agent-p1-mcp-conformance",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Complete MCP interoperability and discovery publication",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "MCP initialization, resources, tools, errors, CORS, conditional requests, and advertised MIME types pass conformance tests from the deployed origin.",
+            "The server package is submitted to appropriate registries only after experimental metadata and ownership are reviewed."
+          ]
+        },
+        {
+          "id": "agent-p1-production-operations",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Establish production monitoring, SLOs, backups, and incident response",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Dashboards and alerts cover availability, latency, error rate, queue depth, stale sources, failed delivery, and security events.",
+            "An on-call owner completes a documented restore and incident-response exercise."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bitlogic",
+      "currentStage": "testnet-validation",
+      "confidence": "high",
+      "evidenceSummary": "The accounting application is polished and has substantial contract testing, but its own milestone remains pre-mainnet and its live discovery, security headers, and operational evidence are incomplete.",
+      "tasks": [
+        {
+          "id": "bitlogic-p0-testnet-acceptance",
+          "priority": "P0",
+          "area": "release",
+          "title": "Finish and refresh the Sepolia acceptance milestone",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Deployer configuration, hosted validation, production role assignments, and the browser checklist are completed with evidence.",
+            "The overdue readiness status and projected launch date are replaced by a current owner-approved decision."
+          ]
+        },
+        {
+          "id": "bitlogic-p0-security-review",
+          "priority": "P0",
+          "area": "security",
+          "title": "Independently review contracts, upgrades, and privileged roles",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "An independent review covers accounting invariants, role boundaries, upgrade authority, pause and recovery paths.",
+            "All critical and high findings are closed, retested, and linked from the release record."
+          ]
+        },
+        {
+          "id": "bitlogic-p1-ledger-e2e",
+          "priority": "P1",
+          "area": "quality",
+          "title": "Add deployed ledger write/readback acceptance tests",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Hosted tests create, authorize, record, reconcile, and read back representative ledger events on the approved network.",
+            "Failure, retry, duplicate, wrong-chain, and revoked-role cases are verified."
+          ]
+        },
+        {
+          "id": "bitlogic-p1-mainnet-runbook",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Approve a mainnet rollout and rollback runbook",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The runbook pins addresses, owners, role grants, verification steps, monitoring, pause conditions, and rollback decisions.",
+            "A second operator rehearses and signs off on the procedure."
+          ]
+        },
+        {
+          "id": "bitlogic-p1-web-hardening",
+          "priority": "P1",
+          "area": "web-quality",
+          "title": "Harden the public application and discovery surface",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The deployed origin has a restrictive CSP, nosniff, clickjacking, referrer, and permissions policies.",
+            "Canonical, robots, sitemap, health, llms.txt, and an agent-readable product/API description return correct content types."
+          ]
+        },
+        {
+          "id": "bitlogic-p2-onboarding",
+          "priority": "P2",
+          "area": "product",
+          "title": "Provide professional onboarding, demo data, support, and disclosures",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "A read-only demo explains core accounting workflows before wallet connection.",
+            "Support, privacy, terms, network, preview-state, and financial-risk disclosures are visible and accessible."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bittrees-capital",
+      "currentStage": "public-preview",
+      "confidence": "high",
+      "evidenceSummary": "A live mainnet-facing product exists, but mobile overflow, absent CI evidence, transaction-risk validation, operational freshness, discovery, and policy surfaces keep it below production quality.",
+      "tasks": [
+        {
+          "id": "capital-p0-mobile-layout",
+          "priority": "P0",
+          "area": "user-experience",
+          "title": "Remove mobile horizontal overflow and clipped financial data",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Every route fits 320–430px viewports without horizontal scrolling or truncated balances, controls, charts, and transaction details.",
+            "Automated responsive screenshots and overflow assertions run in CI."
+          ]
+        },
+        {
+          "id": "capital-p0-transaction-safety",
+          "priority": "P0",
+          "area": "security",
+          "title": "Prove transaction safety for swaps, approvals, liquidity, and lending",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Simulation and E2E tests cover chain selection, token/address verification, allowance scope, slippage, min-out, reverts, and stale quotes.",
+            "High-risk actions show a human-readable preview and require an explicit final confirmation."
+          ]
+        },
+        {
+          "id": "capital-p1-ci-release",
+          "priority": "P1",
+          "area": "release",
+          "title": "Create a protected main release pipeline",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Pull requests and main run build, typecheck, tests, dependency checks, and deployed smoke tests.",
+            "Production releases are traceable to an immutable commit with rollback instructions."
+          ]
+        },
+        {
+          "id": "capital-p1-data-operations",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Monitor portfolio snapshot freshness and provider health",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Health output exposes last successful snapshot, source/network coverage, degradation, and safe-to-display state without secrets.",
+            "Alerts and recovery tests cover cron failure, RPC exhaustion, stale pricing, and provider failover."
+          ]
+        },
+        {
+          "id": "capital-p1-web-discovery",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Publish secure web metadata and agent-readable contracts",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The root response includes production security headers, canonical metadata, robots, and a real sitemap.",
+            "llms.txt and a versioned read-only data/API contract distinguish observations from transaction actions."
+          ]
+        },
+        {
+          "id": "capital-p1-legal-disclosures",
+          "priority": "P1",
+          "area": "legal-privacy",
+          "title": "Approve wallet, financial-risk, privacy, and preview-state disclosures",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Reviewed terms identify entity, jurisdiction, non-custodial behavior, data handling, financial risk, and support contacts.",
+            "Every action accurately labels network, asset, contract, fees, and whether the feature is preview or production."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bittrees-gov",
+      "currentStage": "public-preview",
+      "confidence": "high",
+      "evidenceSummary": "The governance application exposes its mission and integrations, but the public page has weak hierarchy and lacks CI evidence, security headers, integration E2E coverage, discovery artifacts, and clear privacy controls.",
+      "tasks": [
+        {
+          "id": "gov-p1-information-architecture",
+          "priority": "P1",
+          "area": "user-experience",
+          "title": "Rebuild the landing hierarchy around governance tasks",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Every page has one descriptive H1, concise task-first sections, and clear proposal, vote, forum, and contributor calls to action.",
+            "Mobile users can reach core actions without navigating a wall of mission copy."
+          ]
+        },
+        {
+          "id": "gov-p1-ci-release",
+          "priority": "P1",
+          "area": "release",
+          "title": "Enforce the existing release gate in CI",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Protected pull requests run build, typecheck, unit tests, dependency checks, and deployed smoke tests.",
+            "A production release records commit, environment, integration versions, approver, and rollback steps."
+          ]
+        },
+        {
+          "id": "gov-p0-integration-e2e",
+          "priority": "P0",
+          "area": "quality",
+          "title": "Test wallet, Snapshot, EAS, XMTP, and Push flows end to end",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Tests cover successful and failed connection, signing, voting, attestation, message delivery, network mismatch, and provider outage.",
+            "No signature prompt or governance action is ambiguous about payload, network, or consequence."
+          ]
+        },
+        {
+          "id": "gov-p0-contributor-privacy",
+          "priority": "P0",
+          "area": "security",
+          "title": "Complete the contributor-application privacy and threat model",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The review documents encryption, access control, key recovery, retention, deletion, logging, and abuse cases.",
+            "Negative tests prove unauthorized users and operators cannot read or alter protected applications."
+          ]
+        },
+        {
+          "id": "gov-p1-web-hardening",
+          "priority": "P1",
+          "area": "web-quality",
+          "title": "Add production headers, metadata, and discovery",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "CSP, nosniff, clickjacking, referrer, permissions, canonical, robots, and a real sitemap are verified on the deployed origin.",
+            "llms.txt describes proposals, data sources, freshness, and which interactions require wallets or review."
+          ]
+        },
+        {
+          "id": "gov-p1-operations-legal",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Add integration monitoring, recovery, governance disclaimers, and support",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Health and alerts cover Snapshot, RPC, messaging, attestation, and stale governance data with a rollback owner.",
+            "Approved privacy, terms, governance-effect, accessibility, and support information is linked from the application."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bittrees-org",
+      "currentStage": "legacy-public-site",
+      "confidence": "high",
+      "evidenceSummary": "The root Bittrees domain is live but functions as a very sparse three-link page. It does not yet present the full ecosystem or meet modern semantic, discovery, testing, and operational standards.",
+      "tasks": [
+        {
+          "id": "org-p0-universal-hub",
+          "priority": "P0",
+          "area": "product",
+          "title": "Replace the three-link page with the canonical Bittrees ecosystem hub",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The site explains Bittrees clearly and lists every active product, data source, project stage, owner-approved description, and primary action.",
+            "agent.bittrees.org is the prominent AI-agent entry point and the directory is generated from shared registry data."
+          ]
+        },
+        {
+          "id": "org-p1-semantic-design",
+          "priority": "P1",
+          "area": "user-experience",
+          "title": "Deliver a professional responsive and accessible design system",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Pages use main landmarks, a descriptive H1, keyboard-visible navigation, sufficient contrast, and useful mobile layouts.",
+            "Automated accessibility and responsive visual checks guard the shared layout."
+          ]
+        },
+        {
+          "id": "org-p1-modernize-build",
+          "priority": "P1",
+          "area": "engineering",
+          "title": "Modernize the legacy frontend and establish CI",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The supported toolchain passes lint, build, tests, dependency audit, and link validation on protected pull requests.",
+            "Deployments are immutable, observable, and reversible."
+          ]
+        },
+        {
+          "id": "org-p1-security-metadata",
+          "priority": "P1",
+          "area": "web-quality",
+          "title": "Publish complete security, canonical, and social metadata",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Production headers include a restrictive CSP, nosniff, clickjacking, referrer, and permissions policies.",
+            "Canonical, favicon, descriptions, Open Graph, and structured organization/product metadata validate on every page."
+          ]
+        },
+        {
+          "id": "org-p1-agent-discovery",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Publish real crawl and AI discovery artifacts",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "robots.txt, sitemap.xml, llms.txt, and an ecosystem JSON feed return correct non-SPA content.",
+            "The feed points to canonical project resources and the unified MCP endpoint."
+          ]
+        },
+        {
+          "id": "org-p2-content-operations",
+          "priority": "P2",
+          "area": "operations",
+          "title": "Assign content ownership, freshness checks, analytics, and support",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Every ecosystem record has an owner, last-reviewed date, and automated broken-link/staleness check.",
+            "Privacy-respecting analytics, performance budgets, uptime monitoring, and a monitored contact route are documented."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bittrees-research",
+      "currentStage": "member-preview",
+      "confidence": "high",
+      "evidenceSummary": "The member application is functional and tested locally, but its gate experience, CI/release evidence, privacy model, integration freshness, discovery boundaries, and production operations need completion.",
+      "tasks": [
+        {
+          "id": "research-p0-membership-gate",
+          "priority": "P0",
+          "area": "security",
+          "title": "Prove the membership NFT gate and authorization lifecycle",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "E2E tests cover eligible, ineligible, transferred, revoked, wrong-network, stale-cache, provider-failure, and reconnect cases.",
+            "Protected content and APIs fail closed without leaking member data or private metadata."
+          ]
+        },
+        {
+          "id": "research-p1-gate-experience",
+          "priority": "P1",
+          "area": "user-experience",
+          "title": "Improve the pre-auth verification and recovery experience",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Verification states explain what is checked, why, how long it may take, and how to retry or get support.",
+            "Slow wallet and provider paths never leave users on an indefinite uninformative screen."
+          ]
+        },
+        {
+          "id": "research-p1-ci-release",
+          "priority": "P1",
+          "area": "release",
+          "title": "Run the release gate and deployed member smoke suite in CI",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Protected pull requests run lint, typecheck, unit tests, build, dependency checks, and gate negative tests.",
+            "Release metadata, environment, approver, deployed smoke evidence, and rollback instructions stay current."
+          ]
+        },
+        {
+          "id": "research-p0-member-privacy",
+          "priority": "P0",
+          "area": "legal-privacy",
+          "title": "Approve member-content privacy, retention, and access controls",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "A reviewed policy covers member identifiers, research content, messages, analytics, encryption, retention, deletion, and legal basis.",
+            "Access logs and negative authorization tests are available without exposing sensitive member content."
+          ]
+        },
+        {
+          "id": "research-p1-data-operations",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Monitor governance, token, messaging, and research-data freshness",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Health output and alerts distinguish fresh, stale, degraded, and unavailable sources.",
+            "Operators have tested retry, cache invalidation, provider failover, and rollback procedures."
+          ]
+        },
+        {
+          "id": "research-p1-discovery-boundary",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Publish public discovery without exposing member-only content",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Canonical, robots, sitemap, security headers, and llms.txt describe only approved public capabilities and data boundaries.",
+            "The public agent manifest sends protected interactions through explicit authentication and review gates."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bittrees-vault",
+      "currentStage": "uncommitted-prototype",
+      "confidence": "medium",
+      "evidenceSummary": "The available canonical checkout has no committed history and the repository has no active deployment or CI evidence. Mainnet transaction intent raises a high safety bar before any relaunch.",
+      "tasks": [
+        {
+          "id": "vault-p0-product-decision",
+          "priority": "P0",
+          "area": "governance",
+          "title": "Decide whether to archive or relaunch Bittrees Vault",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "An accountable owner records the supported product scope, network, integrations, users, maintenance commitment, and archive/relaunch decision.",
+            "The portal and repository communicate the decision consistently."
+          ]
+        },
+        {
+          "id": "vault-p0-source-history",
+          "priority": "P0",
+          "area": "engineering",
+          "title": "Establish a canonical committed and protected source history",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Reviewed source is committed to the canonical repository with authorship, license, branch protection, and secret scanning.",
+            "A clean checkout builds reproducibly from documented prerequisites."
+          ]
+        },
+        {
+          "id": "vault-p0-mainnet-verification",
+          "priority": "P0",
+          "area": "security",
+          "title": "Verify all mainnet contracts, assets, authorities, and economic assumptions",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Pinned addresses, bytecode, owners, upgradeability, fee tiers, decimals, liquidity assumptions, and supported chains are independently verified.",
+            "Unsupported or removed routes cannot be invoked from UI or code."
+          ]
+        },
+        {
+          "id": "vault-p0-transaction-tests",
+          "priority": "P0",
+          "area": "quality",
+          "title": "Add transaction simulation and adversarial E2E tests",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Tests cover swaps, pool creation, allowances, slippage, price impact, wrong chain, token ordering, reverts, stale quotes, and partial failures.",
+            "Every write shows a verified human-readable preview before wallet confirmation."
+          ]
+        },
+        {
+          "id": "vault-p1-release-operations",
+          "priority": "P1",
+          "area": "release",
+          "title": "Create CI, deployment, monitoring, and incident controls",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "CI runs lint, build, unit, integration, dependency, contract, and deployed smoke checks.",
+            "A public deployment, health check, alerts, pause owner, and rollback procedure are documented and exercised."
+          ]
+        },
+        {
+          "id": "vault-p1-publication",
+          "priority": "P1",
+          "area": "legal-privacy",
+          "title": "Complete disclosures, support, and agent discovery",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Approved terms explain non-custodial behavior, transaction and liquidity risk, privacy, fees, networks, and support.",
+            "Canonical metadata, robots, sitemap, llms.txt, and read-only agent resources are published only after relaunch approval."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "bounties",
+      "currentStage": "launch-gated",
+      "confidence": "high",
+      "evidenceSummary": "The product and CI are comparatively mature, but its own release documentation keeps mainnet activation fail-closed until legal, security, auditor, operator, and durable-production gates are approved.",
+      "tasks": [
+        {
+          "id": "bounties-p0-activation-decision",
+          "priority": "P0",
+          "area": "governance",
+          "title": "Record an explicit mainnet application activation decision",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Verified manifests, networks, contracts, owners, operators, and release commit are approved in one immutable activation record.",
+            "The application remains fail-closed until every named hard gate is satisfied."
+          ]
+        },
+        {
+          "id": "bounties-p0-independent-audit",
+          "priority": "P0",
+          "area": "security",
+          "title": "Complete independent escrow and marketplace security review",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "The audit covers escrow lifecycle, tokens, roles, settlement, disputes, upgrades, reentrancy, signatures, and abuse paths.",
+            "Critical and high findings are closed and the deployment operator signs the reviewed testnet acceptance record."
+          ]
+        },
+        {
+          "id": "bounties-p0-durable-production-data",
+          "priority": "P0",
+          "area": "platform",
+          "title": "Prove durable marketplace persistence and recovery",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Bounties, bids, evidence, reviews, disputes, and chain reconciliation use production migrations, backups, retention, and access controls.",
+            "A restore and disaster-recovery exercise meets documented recovery objectives."
+          ]
+        },
+        {
+          "id": "bounties-p0-legal-approval",
+          "priority": "P0",
+          "area": "legal-privacy",
+          "title": "Approve marketplace Terms, AUP, privacy, entity, and jurisdiction",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Counsel-approved documents cover marketplace role, escrow, disputes, prohibited work, privacy, taxes, sanctions, and jurisdiction.",
+            "Versioned acceptance and policy-change records are retained."
+          ]
+        },
+        {
+          "id": "bounties-p1-auth-abuse-e2e",
+          "priority": "P1",
+          "area": "quality",
+          "title": "Test multichain settlement, wallet sessions, and moderator abuse cases",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "E2E tests cover create, fund, submit, accept, dispute, cancel, refund, settle, reorg, wrong chain, and provider failure.",
+            "Wallet auth, CSRF, replay, session expiry, role escalation, and moderator actions have negative tests and audit logs."
+          ]
+        },
+        {
+          "id": "bounties-p1-agent-operations",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Expose safe agent contracts and production telemetry",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "llms.txt and versioned APIs distinguish read-only discovery, review queues, and wallet/onchain actions, and connect to the universal portal.",
+            "Health, SLO, release, queue, indexer, and settlement metrics are monitored with an incident owner."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "chat",
+      "currentStage": "public-preview",
+      "confidence": "high",
+      "evidenceSummary": "Chirpy has a polished web experience and recurring protocol checks, but durable production services, signed desktop releases, final branding, privacy/moderation controls, metadata, and operational proof remain unfinished.",
+      "tasks": [
+        {
+          "id": "chat-p0-production-runtime",
+          "priority": "P0",
+          "area": "platform",
+          "title": "Provision and validate the production gate, environment, and durable services",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Production auth/gating, data stores, secrets, network providers, retention, backups, and access controls are configured and documented.",
+            "The deployment fails closed when required services or environment values are unavailable."
+          ]
+        },
+        {
+          "id": "chat-p1-desktop-release",
+          "priority": "P1",
+          "area": "release",
+          "title": "Cut the first signed and update-safe desktop release",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "macOS, Windows, and supported Linux artifacts are reproducible, signed where applicable, checksummed, malware-scanned, and linked to release notes.",
+            "Install, upgrade, downgrade/recovery, deep-link, and update-authority tests pass on supported platforms."
+          ]
+        },
+        {
+          "id": "chat-p1-brand-assets",
+          "priority": "P1",
+          "area": "user-experience",
+          "title": "Replace interim icons and finish the cross-platform brand system",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Final approved icons, app metadata, install screens, empty states, and social assets render crisply on every target.",
+            "Automated visual checks prevent placeholder assets from returning."
+          ]
+        },
+        {
+          "id": "chat-p0-privacy-moderation",
+          "priority": "P0",
+          "area": "legal-privacy",
+          "title": "Approve messaging privacy, encryption, retention, and moderation controls",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Documentation accurately explains protocol encryption, metadata visibility, local/server storage, retention, deletion, blocking, reporting, and operator access.",
+            "Terms, privacy, moderation, abuse response, and contact paths are reviewed and versioned."
+          ]
+        },
+        {
+          "id": "chat-p1-cross-platform-e2e",
+          "priority": "P1",
+          "area": "quality",
+          "title": "Test messaging and token-gate recovery across clients",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Web and desktop tests cover XMTP, Push, token gates, offline sync, reconnect, duplicate delivery, revoked access, wrong network, and provider outages.",
+            "A user can recover safely from partial initialization without losing locally controlled data."
+          ]
+        },
+        {
+          "id": "chat-p1-discovery-operations",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Complete web discovery, security headers, health, and support operations",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Description, canonical, robots, sitemap, CSP, nosniff, clickjacking, referrer, and permissions metadata validate on the live origin.",
+            "llms.txt documents safe read-only capabilities while health, SLOs, backups, provider degradation, and incident ownership are monitored."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "crypto-directory",
+      "currentStage": "repository-release-workflow",
+      "confidence": "high",
+      "evidenceSummary": "The source-maintained directory has solid static verification and publication scripts, but no canonical public product URL, continuous main release, freshness/moderation SLA, professional UI evidence, or agent-facing feed.",
+      "tasks": [
+        {
+          "id": "directory-p0-public-release",
+          "priority": "P0",
+          "area": "release",
+          "title": "Deploy a stable canonical public directory",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "A production domain serves an immutable verified build and the canonical registry points to it.",
+            "DNS, TLS, hosting ownership, rollback, uptime, and deployed smoke checks are documented."
+          ]
+        },
+        {
+          "id": "directory-p0-source-freshness",
+          "priority": "P0",
+          "area": "data-quality",
+          "title": "Define and enforce source verification and freshness SLAs",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Every entry records source URLs, verifier, verification date, status, and expiry/review deadline.",
+            "Automated checks quarantine stale, unreachable, conflicting, or unsupported records before publication."
+          ]
+        },
+        {
+          "id": "directory-p1-moderation",
+          "priority": "P1",
+          "area": "governance",
+          "title": "Publish contribution, moderation, correction, and takedown workflows",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Submission and change history identify reviewer, evidence, decision, conflicts, and appeal path.",
+            "Anti-spam, trademark, impersonation, correction, and takedown policies have accountable owners."
+          ]
+        },
+        {
+          "id": "directory-p1-release-automation",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Automate protected main and monthly IPFS/ENS releases",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Main CI runs schema, links, freshness, build, accessibility, dependency, and deployed smoke checks.",
+            "Monthly artifacts pin immutable content identifiers and prove ENS update, rollback, and signer review."
+          ]
+        },
+        {
+          "id": "directory-p1-professional-ui",
+          "priority": "P1",
+          "area": "user-experience",
+          "title": "Ship a searchable, accessible, and attributable directory interface",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Users can search, filter, sort, inspect verification evidence, report problems, and use the site by keyboard and mobile.",
+            "Performance and accessibility budgets are enforced in CI."
+          ]
+        },
+        {
+          "id": "directory-p1-agent-feed",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Publish versioned JSON, llms.txt, provenance, and usage terms",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "A stable machine feed exposes schema version, provenance, freshness, pagination, license, and correction routes.",
+            "Canonical metadata and llms.txt link the feed to the unified Bittrees MCP resource catalog."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "id-agent-control-center",
+      "currentStage": "released-desktop-product",
+      "confidence": "high",
+      "evidenceSummary": "IDACC is the most mature released product in the set, with signed artifacts and a security-conscious architecture, but version messaging, cross-platform release proof, recovery drills, runtime security, support, and discovery need tightening.",
+      "tasks": [
+        {
+          "id": "idacc-p0-version-reconciliation",
+          "priority": "P0",
+          "area": "release",
+          "title": "Reconcile README, installed, website, and latest release versions",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "The repository, site, in-app updater, release feed, and installed-app status identify current, supported, and latest versions from one source of truth.",
+            "Stale versions cannot be presented as current after a release."
+          ]
+        },
+        {
+          "id": "idacc-p1-cross-platform-release",
+          "priority": "P1",
+          "area": "quality",
+          "title": "Automate signed cross-platform install and update acceptance",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Supported macOS, Windows, and Linux artifacts pass clean install, launch, update, rollback/recovery, signature, checksum, and malware checks.",
+            "Release provenance is generated by protected CI from the tagged commit."
+          ]
+        },
+        {
+          "id": "idacc-p1-backup-migration",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Exercise workspace backup, restore, migration, and downgrade recovery",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Documented drills restore projects, agent state, settings, logs, and credentials with safe redaction and clear recovery objectives.",
+            "Interrupted upgrade and schema migration tests cannot silently corrupt user work."
+          ]
+        },
+        {
+          "id": "idacc-p0-runtime-security",
+          "priority": "P0",
+          "area": "security",
+          "title": "Audit Manager, IPC, plugins, model routing, and local execution boundaries",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Threat modeling and tests cover untrusted project content, prompt injection, shell/process execution, IPC, plugin permissions, path traversal, secrets, logs, and update authority.",
+            "Critical and high findings are fixed and independently retested."
+          ]
+        },
+        {
+          "id": "idacc-p1-support-privacy",
+          "priority": "P1",
+          "area": "legal-privacy",
+          "title": "Publish support, privacy, diagnostics, and lifecycle expectations",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Users can find supported platforms, data locations, telemetry behavior, diagnostic redaction, deletion, backup, and contact information.",
+            "Troubleshooting and safe-mode guidance covers failed agents, corrupted workspaces, update failures, and credential rotation."
+          ]
+        },
+        {
+          "id": "idacc-p2-agent-discovery-accessibility",
+          "priority": "P2",
+          "area": "agent-discovery",
+          "title": "Expose release metadata for agents and complete accessibility QA",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "llms.txt and a versioned release/support JSON feed link to checksums, compatibility, changelog, and the unified portal.",
+            "Keyboard, screen-reader, zoom, contrast, reduced-motion, and cross-platform UI checks are part of release acceptance."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "nftfactory",
+      "currentStage": "protected-prelaunch",
+      "confidence": "high",
+      "evidenceSummary": "The public origin is password-protected and the repository describes build-ready scaffolding rather than a production service. Backend, contracts, indexer, environment, audit, CI, recovery, legal, and public discovery gates remain.",
+      "tasks": [
+        {
+          "id": "nft-p0-access-decision",
+          "priority": "P0",
+          "area": "governance",
+          "title": "Decide and document the preview gate and public launch path",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "An owner records who may access the protected preview, what is safe to test, the exit criteria, and the public launch decision.",
+            "Health and discovery endpoints expose only approved public-safe status while the gate remains."
+          ]
+        },
+        {
+          "id": "nft-p0-production-platform",
+          "priority": "P0",
+          "area": "platform",
+          "title": "Provision production IPFS, database, indexer, contracts, and environment",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Pinned network and contract manifests, RPC/indexer configuration, admin roles, treasury destination, storage, migrations, and secrets are reviewed and reproducible.",
+            "The application fails closed when any authoritative dependency is absent or stale."
+          ]
+        },
+        {
+          "id": "nft-p0-testnet-acceptance",
+          "priority": "P0",
+          "area": "quality",
+          "title": "Complete populated Sepolia end-to-end acceptance",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Tests cover create, upload, mint, profile, collection, list, buy, offer, cancel, moderation, indexing, royalties, reorg, wrong chain, and provider failure.",
+            "The acceptance record includes verified artifacts, data population, browser/device results, operators, and unresolved risks."
+          ]
+        },
+        {
+          "id": "nft-p0-security-review",
+          "priority": "P0",
+          "area": "security",
+          "title": "Close dependency risk and complete contract, admin, upload, and marketplace review",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Independent review covers contracts, roles, upgrades, signatures, marketplace settlement, file handling, content abuse, authentication, and secrets.",
+            "Critical/high findings and launch-blocking dependency advisories are fixed and retested."
+          ]
+        },
+        {
+          "id": "nft-p1-release-operations",
+          "priority": "P1",
+          "area": "operations",
+          "title": "Establish a green protected release and recovery pipeline",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Main CI runs build, tests, schema/migrations, audit, contract checks, and deployed smoke tests from a clean source tree.",
+            "Database/IPFS backup, restore, indexer replay, monitoring, moderation escalation, and rollback exercises are documented."
+          ]
+        },
+        {
+          "id": "nft-p1-publication",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Publish professional metadata, agent contracts, policies, and support",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "After launch approval, the site exposes canonical metadata, robots, sitemap, llms.txt, versioned read APIs, health, and universal MCP links.",
+            "Approved Terms, privacy, creator rights, royalties, marketplace risk, moderation, takedown, and support policies are versioned and visible."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "skillmesh",
+      "currentStage": "testnet-public-preview",
+      "confidence": "high",
+      "evidenceSummary": "SkillMesh has the strongest project-level agent discovery surface, including MCP, OpenAPI, A2A, llms.txt, health, and a manifest. Production runtime, network decisions, contract/security evidence, external conformance, release operations, and mobile information density remain.",
+      "tasks": [
+        {
+          "id": "skillmesh-p1-link-discovery",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Link and complete the existing discovery surface",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Root HTML advertises MCP, OpenAPI, A2A, agent manifest, and llms.txt with correct types, canonical metadata, favicon, and a real sitemap.",
+            "All discovery documents share canonical version, environment, network, ownership, and capability identifiers."
+          ]
+        },
+        {
+          "id": "skillmesh-p0-protocol-conformance",
+          "priority": "P0",
+          "area": "quality",
+          "title": "Prove MCP, A2A, and OpenAPI interoperability externally",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "A client matrix validates authentication, discovery, schemas, errors, streaming, pagination, timeouts, retries, and version negotiation.",
+            "Conformance runs against the deployed origin and prevents contract drift between protocols."
+          ]
+        },
+        {
+          "id": "skillmesh-p0-provider-runtime",
+          "priority": "P0",
+          "area": "platform",
+          "title": "Provision and monitor the production provider runtime",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Provider execution, queues, storage, secrets, billing/settlement dependencies, rate limits, and fail-closed behavior are production configured.",
+            "SLOs, load tests, alerts, backups, recovery, and incident ownership meet the published service contract."
+          ]
+        },
+        {
+          "id": "skillmesh-p0-network-security",
+          "priority": "P0",
+          "area": "security",
+          "title": "Approve the testnet-to-production network and contract security plan",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Owners record whether launch remains Sepolia or moves networks, with verified contracts, roles, upgrades, pause, settlement, and migration steps.",
+            "Independent review closes critical/high contract, identity, payment, and authorization findings."
+          ]
+        },
+        {
+          "id": "skillmesh-p0-skill-sandbox",
+          "priority": "P0",
+          "area": "security",
+          "title": "Secure executable skills and content-addressed artifacts",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Sandboxing, permissions, network/file/process access, resource limits, signatures, IPFS integrity, malware checks, revocation, and audit logs are threat-modeled and tested.",
+            "Untrusted skill metadata or output cannot escalate provider, user, wallet, or host authority."
+          ]
+        },
+        {
+          "id": "skillmesh-p1-settlement-release-ux",
+          "priority": "P1",
+          "area": "release",
+          "title": "Complete settlement E2E, protected releases, and mobile information architecture",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Identity, publish, discover, execute, meter, pay, dispute, revoke, and recover flows pass deployed E2E tests with release provenance and rollback.",
+            "The long mobile page is reorganized into task-first progressive disclosure with performance and accessibility budgets."
+          ]
+        }
+      ]
+    },
+    {
+      "projectId": "tcp",
+      "currentStage": "commercial-preview",
+      "confidence": "high",
+      "evidenceSummary": "The public site is visually polished and content-rich, but it is extremely long on mobile and lacks CI evidence, robust lead capture, independently versioned methodology, legal/commercial review, service monitoring, and agent-readable data.",
+      "tasks": [
+        {
+          "id": "tcp-p1-ci-release",
+          "priority": "P1",
+          "area": "release",
+          "title": "Create a protected test, build, deploy, and smoke pipeline",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Pull requests and main run lint, tests, build, accessibility, links, dependency checks, performance budgets, and deployed smoke tests.",
+            "Production releases are immutable, approved, monitored, and reversible."
+          ]
+        },
+        {
+          "id": "tcp-p1-mobile-ia",
+          "priority": "P1",
+          "area": "user-experience",
+          "title": "Shorten and restructure the very long mobile experience",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "Priority audiences can reach site-screening, partner, investor, and contact actions through concise navigation and progressive disclosure.",
+            "Mobile performance, reading length, layout, keyboard use, contrast, and reduced motion meet documented budgets."
+          ]
+        },
+        {
+          "id": "tcp-p0-lead-capture",
+          "priority": "P0",
+          "area": "platform",
+          "title": "Replace browser-only email handoff with reliable consented lead intake",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "A server-backed workflow validates submissions, records consent, limits abuse, routes to an accountable owner, and sends auditable acknowledgements.",
+            "Privacy, retention, deletion, CRM access, failure recovery, and spam controls are documented and tested."
+          ]
+        },
+        {
+          "id": "tcp-p0-methodology-review",
+          "priority": "P0",
+          "area": "data-quality",
+          "title": "Independently validate and version energy and economic methodology",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Every material estimate states inputs, units, date, geography, source, assumptions, uncertainty, exclusions, and calculation version.",
+            "An independent reviewer signs the methodology and automated regression fixtures protect published calculations."
+          ]
+        },
+        {
+          "id": "tcp-p1-commercial-legal",
+          "priority": "P1",
+          "area": "legal-privacy",
+          "title": "Review commercial claims, LOI workflow, privacy, and jurisdiction",
+          "status": "blocked",
+          "acceptanceCriteria": [
+            "Approved copy distinguishes estimates, targets, offers, commitments, regulatory assumptions, and non-binding materials.",
+            "Terms, privacy, entity, jurisdiction, consent, contact, and LOI handling are versioned and visible."
+          ]
+        },
+        {
+          "id": "tcp-p1-agent-data-operations",
+          "priority": "P1",
+          "area": "agent-discovery",
+          "title": "Publish monitored agent-readable screening and offer data",
+          "status": "todo",
+          "acceptanceCriteria": [
+            "llms.txt and a versioned read-only schema expose approved site-screening inputs, methodology, provenance, freshness, and limitations through the unified portal.",
+            "Health, analytics, uptime, form delivery, stale data, and incident ownership are monitored without leaking submitted lead data."
+          ]
+        }
+      ]
+    }
+  ]
+}

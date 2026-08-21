@@ -4,12 +4,14 @@ This repository contains the staging implementation for `agent.bittrees.org`: a 
 
 The current cross-project implementation and remaining production gates are tracked in [Unified Bittrees MCP completion status](docs/unified-bittrees-mcp-completion.md).
 
+The evidence-backed checklist for all 14 registered projects is in [Bittrees project production-readiness review](docs/project-production-readiness-review-2026-08-21.md) and is published by the portal at `/readiness` and `/readiness.json`.
+
 The portal is intentionally noindex until the source registry and public Bittrees/IDACC claims are approved for public launch.
 
 ## What is included
 
 - A minimal Node.js server.
-- A product-first landing page at `/` and a reviewed ecosystem directory at `/projects`.
+- A product-first landing page at `/`, a reviewed ecosystem directory at `/projects`, and a prioritized production backlog at `/readiness`.
 - A human identity and keys page at `/identity-keys`.
 - A Streamable HTTP MCP contribution gateway at `/mcp`.
 - A human MCP docs page at `/mcp-docs` with Codex, Claude Desktop, and Cursor import tabs.
@@ -26,6 +28,7 @@ The portal is intentionally noindex until the source registry and public Bittree
   - `/contribution-intents`
   - `/gateway/contribution-intents`
   - `/projects.json`
+  - `/readiness.json`
   - `/v1/projects/:projectId`
   - `/templates.json`
   - `/sources.json`
@@ -89,9 +92,11 @@ Write-like tools are review-gated stubs backed by ephemeral runtime queue record
 
 `/projects.json` is the canonical cross-project discovery contract. An external agent selects a reviewed `projectId`, prepares a bounded handoff, then uses the standing `project-directed-contribution` opportunity with `claim_contribution` and `submit_contribution`. This unifies discovery and review routing while preserving each project owner's mutation and deployment boundary.
 
+`/readiness` and `/readiness.json` turn the full cross-project review into a human- and machine-readable backlog. Every project has prioritized P0/P1/P2 tasks, an evidence summary, and observable acceptance criteria. The readiness registry is point-in-time planning evidence, not a claim that a project is approved or safe for production.
+
 Every reviewed project is also available as a stable resource at `/v1/projects/:projectId`. The MCP server exposes the core JSON contracts, the agent guide, and each project resource through `resources/list` and `resources/read`. `server/discover` returns the implemented protocol versions, tools/resources capabilities, shared server identity, and connection guidance without requiring a protocol-version header.
 
-The repository-level `server.json` is ready for an eventual MCP Registry submission. `/.well-known/ai-catalog.json` and `/mcp/server-card` implement the current experimental MCP Server Card discovery proposal and are deliberately labeled preview until that extension is standardized and approved for publication.
+The repository-level `server.json` is ready for an eventual MCP Registry submission. `/.well-known/ai-catalog.json` and `/mcp/server-card` implement the current experimental MCP Server Card discovery proposal and are deliberately labeled preview until that extension is standardized and approved for publication. These two routes stay dynamic so their custom media types, CORS, ETags, and conditional requests cannot be shadowed by generic static-file responses.
 
 Machine-readable tool schemas, review gate metadata, generic snippets, and Codex/Claude Desktop/Cursor import tabs are mirrored at `/mcp.json`. Browser documentation is available at both `/mcp` and `/mcp-docs`.
 
@@ -310,22 +315,21 @@ The build writes:
 
 - `dist/index.html`
 - `dist/projects/index.html`
+- `dist/readiness/index.html`
 - `dist/robots.txt`
 - `dist/sitemap.xml`
 - `dist/social-preview.png`
 - `dist/identity-keys/index.html`
-- `dist/submission-status/index.html`
 - `dist/reputation/index.html`
 - `dist/terms-of-use/index.html`
 - `dist/privacy/index.html`
 - `dist/mcp-docs/index.html`
 - `dist/llms.txt`
 - `dist/llms-full.txt`
-- `dist/.well-known/ai-catalog.json`
-- `dist/mcp/server-card`
 - `dist/agents.json`
 - `dist/identity-keys.json`
 - `dist/projects.json`
+- `dist/readiness.json`
 - `dist/templates.json`
 - `dist/sources.json`
 - `dist/opportunities.json`

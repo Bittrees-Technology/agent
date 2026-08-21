@@ -33,6 +33,7 @@ import {
   NO_RIGHTS_CREATED_DISCLAIMER,
   PORTAL_SECURITY_HEADERS,
   PORTAL_DISCOVERY_LINK_HEADER,
+  PROJECT_READINESS_REGISTRY,
   PRIVACY_LEGAL_STATUS,
   REGISTRY_PROFILE_PUBLICATION_NOTICE,
   ROUTE_DEFINITIONS,
@@ -63,6 +64,7 @@ import {
   renderOnboardingPage,
   renderPrivacyPage,
   renderProjectsPage,
+  renderReadinessPage,
   renderReputationPage,
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
@@ -707,6 +709,7 @@ test('static build includes all advertised routes', () => {
 
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('projects/index.html'));
+  assert.ok(assetPaths.has('readiness/index.html'));
   assert.ok(assetPaths.has('identity-keys/index.html'));
   // This query-driven page must remain dynamic. A generated index.html shadows
   // the Vercel function route and can self-refresh instead of loading status.
@@ -720,8 +723,10 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('favicon.svg'));
   assert.ok(assetPaths.has('llms-full.txt'));
-  assert.ok(assetPaths.has('.well-known/ai-catalog.json'));
-  assert.ok(assetPaths.has('mcp/server-card'));
+  // These must remain dynamic so their experimental custom MIME types, CORS,
+  // ETag, and conditional-request behavior are not shadowed by static files.
+  assert.equal(assetPaths.has('.well-known/ai-catalog.json'), false);
+  assert.equal(assetPaths.has('mcp/server-card'), false);
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
   assert.ok(assetPaths.has('onboarding.json'));
@@ -736,6 +741,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('privacy.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
   assert.ok(assetPaths.has('projects.json'));
+  assert.ok(assetPaths.has('readiness.json'));
   assert.ok(assetPaths.has('monitoring.json'));
 });
 
@@ -743,6 +749,7 @@ test('html pages emit description and Open Graph metadata', () => {
   const htmlByRoute = new Map([
     ['/', renderLandingPage()],
     ['/projects', renderProjectsPage()],
+    ['/readiness', renderReadinessPage()],
     ['/identity-keys', renderIdentityKeysPage()],
     ['/submission-status', renderSubmissionStatusPage()],
     ['/reputation', renderReputationPage()],
@@ -2762,8 +2769,53 @@ test('project registry exposes one unified, review-gated route across reviewed B
     assert.equal(project.interaction.unifiedMcpEndpoint, '/mcp');
     assert.equal(project.interaction.directMutationAllowed, false);
     assert.ok(project.relatedOpportunityIds.includes('project-directed-contribution'));
+    assert.ok(project.readiness.summary.total > 0);
+    assert.equal(project.readiness.resourceRoute, '/readiness.json');
+    assert.equal(project.interaction.readinessResource, '/readiness.json');
     assert.doesNotMatch(JSON.stringify(project), /\/Users\//);
   }
+});
+
+test('production-readiness registry covers every project with unique acceptance-testable tasks', () => {
+  const route = JSON_ROUTE_MAP.get('/readiness.json');
+  const response = buildJsonResponse(route, '2026-08-21T18:00:00.000Z');
+  const projectIds = response.data.projects.map((project) => project.projectId);
+  const registryIds = BITTREES_PROJECT_REGISTRY.projects.map((project) => project.id);
+  const taskIds = response.data.projects.flatMap((project) => project.tasks.map((task) => task.id));
+
+  assert.equal(PROJECT_READINESS_REGISTRY.schema, 'agent.bittrees.project-readiness.v1');
+  assert.deepEqual(projectIds.sort(), registryIds.sort());
+  assert.equal(new Set(taskIds).size, taskIds.length);
+  assert.equal(response.data.summary.total, taskIds.length);
+  assert.equal(response.data.summary.open, taskIds.length);
+  assert.equal(response.data.summary.completed, 0);
+  assert.ok(response.data.summary.byPriority.P0 > 0);
+  assert.ok(response.data.summary.byPriority.P1 > 0);
+  assert.ok(MCP_PORTAL_RESOURCES.some((resource) => resource.uri === 'https://agent.bittrees.org/readiness.json'));
+
+  for (const project of response.data.projects) {
+    assert.ok(project.tasks.length >= 6, `${project.projectId} needs a substantial readiness list`);
+    assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
+    for (const task of project.tasks) {
+      assert.ok(['P0', 'P1', 'P2'].includes(task.priority));
+      assert.ok(['todo', 'in-progress', 'blocked', 'done'].includes(task.status));
+      assert.ok(task.acceptanceCriteria.length >= 2);
+      assert.ok(task.acceptanceCriteria.every((criterion) => criterion.length > 24));
+    }
+  }
+});
+
+test('readiness page renders every project and launch task without claiming completion', () => {
+  const html = renderReadinessPage();
+  const taskCount = PROJECT_READINESS_REGISTRY.projects.flatMap((project) => project.tasks).length;
+
+  assert.match(html, /What each project needs before launch\./);
+  assert.match(html, /This is the working list—not a claim that the projects are already production-ready\./);
+  assert.equal((html.match(/<details class="readiness-project"/g) ?? []).length, PROJECT_READINESS_REGISTRY.projects.length);
+  assert.equal((html.match(/class="readiness-task priority-/g) ?? []).length, taskCount);
+  assert.match(html, /href="\/readiness\.json"/);
+  assert.match(html, /id="agent-p0-durable-control-plane"/);
+  assert.match(html, /id="capital-p0-mobile-layout"/);
 });
 
 test('projects page and stable project resources grow from the reviewed registry', () => {
@@ -2778,6 +2830,8 @@ test('projects page and stable project resources grow from the reviewed registry
   assert.equal(found.body.project.id, 'agent');
   assert.equal(found.body.project.interaction.resourceRoute, '/v1/projects/agent');
   assert.equal(found.body.project.interaction.unifiedMcpEndpoint, '/mcp');
+  assert.ok(found.body.project.readiness.tasks.length > 0);
+  assert.equal(found.body.readinessRegistryRoute, '/readiness.json');
   assert.equal(missing.found, false);
   assert.equal(missing.statusCode, 404);
   assert.deepEqual(missing.body.availableProjectIds, BITTREES_PROJECT_REGISTRY.projects.map((project) => project.id));
@@ -2821,7 +2875,10 @@ test('web discovery documents are consistent, cacheable, and linked from respons
 
 test('project registry is covered by the published monitoring and schema inventories', () => {
   assert.ok(LAUNCH_FRESHNESS_MONITORING.routeStatusChecks.includes('/projects.json'));
+  assert.ok(LAUNCH_FRESHNESS_MONITORING.routeStatusChecks.includes('/readiness'));
+  assert.ok(LAUNCH_FRESHNESS_MONITORING.routeStatusChecks.includes('/readiness.json'));
   assert.ok(LAUNCH_FRESHNESS_MONITORING.schemaValidity.routes.includes('/projects.json'));
+  assert.ok(LAUNCH_FRESHNESS_MONITORING.schemaValidity.routes.includes('/readiness.json'));
 });
 
 test('project MCP tools discover, resolve, and prepare a cross-project handoff', () => {
@@ -3010,6 +3067,7 @@ test('html pages constrain wide tables and code blocks', () => {
     renderSubmissionStatusPage(),
     renderReputationPage(),
     renderIdentityKeysPage(),
+    renderReadinessPage(),
   ];
 
   for (const html of pages) {
@@ -3023,6 +3081,7 @@ test('human pages expose shared primary navigation and route metadata', () => {
   const pages = [
     { path: '/', html: renderLandingPage() },
     { path: '/projects', label: 'Projects', html: renderProjectsPage() },
+    { path: '/readiness', label: 'Readiness', html: renderReadinessPage() },
     { path: '/mcp', label: 'MCP', html: renderMcpGatewayPage() },
     { path: '/mcp-docs', label: 'Docs', html: renderMcpDocsPage() },
     { path: '/identity-keys', html: renderIdentityKeysPage() },

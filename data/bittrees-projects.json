@@ -1,7 +1,7 @@
 {
   "schema": "agent.bittrees.project-registry.v1",
   "version": 1,
-  "reviewedAt": "2026-08-21T16:00:00Z",
+  "reviewedAt": "2026-08-21T18:00:00Z",
   "scope": "Bittrees-related projects present in the owner-controlled IDACC project catalog, deduplicated by canonical repository.",
   "authorityCaveat": "Registry inclusion supports discovery and review routing only. It does not grant an agent authority to deploy, transact, spend, sign, govern, or mutate another project.",
   "projects": [
@@ -20,10 +20,10 @@
       "name": "Bitlogic",
       "summary": "EVM-compatible accounting and bookkeeping workspace with contracts, role-gated operations, and onchain finance workflows.",
       "lanes": ["inc-ops-governance", "capital-treasury"],
-      "availability": "repository",
+      "availability": "public-site",
       "repositoryUrl": "https://github.com/bobofbuilding/bitlogic",
-      "publicUrl": null,
-      "sourceEvidence": ["repository README", "IDACC project catalog"]
+      "publicUrl": "https://accounting.bittrees.org",
+      "sourceEvidence": ["repository README", "IDACC project catalog", "live public site"]
     },
     {
       "id": "bittrees-capital",
@@ -41,7 +41,7 @@
       "summary": "Governance application for Snapshot proposals and voting, BGOV flows, and wallet-signed forum activity.",
       "lanes": ["inc-ops-governance"],
       "availability": "public-site",
-      "repositoryUrl": "https://github.com/Bittrees-Technology/bittrees-gov-ui",
+      "repositoryUrl": "https://github.com/Bittrees-Technology/Bittrees-Inc",
       "publicUrl": "https://gov.bittrees.org",
       "sourceEvidence": ["repository README", "IDACC project catalog"]
     },
@@ -51,7 +51,7 @@
       "summary": "Public organization hub connecting Bittrees governance, research, and capital products.",
       "lanes": ["awareness", "discovery"],
       "availability": "public-site",
-      "repositoryUrl": "https://github.com/Bittrees-Technology/bittrees-org-ui",
+      "repositoryUrl": "https://github.com/Bittrees-Technology/Bittrees-Org",
       "publicUrl": "https://bittrees.org",
       "sourceEvidence": ["repository README", "IDACC project catalog"]
     },
@@ -61,7 +61,7 @@
       "summary": "Members research, governance, messaging, and token-flow application for the Bittrees Research community.",
       "lanes": ["research", "inc-ops-governance"],
       "availability": "public-site",
-      "repositoryUrl": "https://github.com/Bittrees-Technology/bittrees-research-ui",
+      "repositoryUrl": "https://github.com/Bittrees-Technology/Bittrees-Research",
       "publicUrl": "https://research.bittrees.org",
       "sourceEvidence": ["repository README", "IDACC project catalog"]
     },
@@ -110,17 +110,17 @@
       "name": "ID Agents Control Center",
       "summary": "Desktop workspace for running and coordinating private AI-agent teams with a bundled Manager and Brain runtime.",
       "lanes": ["discovery", "inc-ops-governance"],
-      "availability": "repository",
+      "availability": "public-site",
       "repositoryUrl": "https://github.com/bobofbuilding/idacc",
-      "publicUrl": "https://github.com/bobofbuilding/idacc/releases/latest",
-      "sourceEvidence": ["repository README", "official GitHub release", "IDACC project catalog"]
+      "publicUrl": "https://idacc.bittrees.org",
+      "sourceEvidence": ["repository README", "official GitHub release", "IDACC project catalog", "live public site"]
     },
     {
       "id": "nftfactory",
       "name": "NFTFactory",
       "summary": "Creator platform for NFT publishing, profiles, moderation, and marketplace workflows.",
       "lanes": ["awareness", "inc-ops-governance"],
-      "availability": "public-api",
+      "availability": "protected-preview",
       "repositoryUrl": "https://github.com/Bittrees-Technology/nftfactory",
       "publicUrl": "https://nftfactory.org",
       "sourceEvidence": ["repository README", "repository deployment health route", "IDACC project catalog"]
