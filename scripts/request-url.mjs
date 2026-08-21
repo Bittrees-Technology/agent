@@ -43,6 +43,53 @@ function asBuffer(value) {
   return Buffer.from(String(value ?? ''), 'utf8');
 }
 
+export function buildVercelCurlArgs({
+  requestPath,
+  deploymentTarget,
+  method,
+  headerPath,
+  bodyPath,
+  headers = {},
+  redirect = 'follow',
+  payloadPath = '',
+  hasBody = false,
+} = {}) {
+  const args = [
+    'curl',
+    requestPath,
+    '--deployment',
+    deploymentTarget,
+    // Current Vercel CLI versions require confirmation when a checkout needs
+    // linking. Keep this before `--` so it is handled by Vercel rather than
+    // forwarded to the underlying curl process.
+    '--yes',
+    '--',
+    '--silent',
+    '--show-error',
+    '--request',
+    method,
+    '--dump-header',
+    headerPath,
+    '--output',
+    bodyPath,
+  ];
+
+  if (redirect !== 'manual') {
+    args.push('--location');
+  }
+
+  for (const [name, value] of Object.entries(headers)) {
+    if (value === undefined || value === null) continue;
+    args.push('--header', `${name}: ${value}`);
+  }
+
+  if (hasBody) {
+    args.push('--data-binary', `@${payloadPath}`);
+  }
+
+  return args;
+}
+
 export async function requestUrl(url, {
   method = 'GET',
   headers = {},
@@ -69,35 +116,21 @@ export async function requestUrl(url, {
   const payloadPath = join(tempDir, 'payload.bin');
 
   try {
-    const args = [
-      'curl',
-      requestPath,
-      '--deployment',
-      deploymentTarget,
-      '--',
-      '--silent',
-      '--show-error',
-      '--request',
-      method,
-      '--dump-header',
-      headerPath,
-      '--output',
-      bodyPath,
-    ];
-
-    if (redirect !== 'manual') {
-      args.push('--location');
-    }
-
-    for (const [name, value] of Object.entries(headers)) {
-      if (value === undefined || value === null) continue;
-      args.push('--header', `${name}: ${value}`);
-    }
-
     if (body !== undefined) {
       await writeFile(payloadPath, asBuffer(body));
-      args.push('--data-binary', `@${payloadPath}`);
     }
+
+    const args = buildVercelCurlArgs({
+      requestPath,
+      deploymentTarget,
+      method,
+      headerPath,
+      bodyPath,
+      headers,
+      redirect,
+      payloadPath,
+      hasBody: body !== undefined,
+    });
 
     await execFileAsync('vercel', args, {
       cwd,
