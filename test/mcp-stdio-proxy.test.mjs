@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createInterface } from 'node:readline';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -136,6 +139,43 @@ test('mcp stdio proxy forwards JSON-RPC lines to streamable http gateway', async
       if (child.exitCode === null) {
         child.kill('SIGTERM');
       }
+    }
+  });
+});
+
+test('npm-style executable symlink starts the stdio proxy', async () => {
+  await withProxyTargetServer(async ({ baseUrl }) => {
+    const scriptPath = fileURLToPath(new URL('../scripts/mcp-stdio-proxy.mjs', import.meta.url));
+    const directory = await mkdtemp(join(tmpdir(), 'agent-mcp-bin-'));
+    const binPath = join(directory, 'agent-mcp');
+    await symlink(scriptPath, binPath);
+    const child = spawn(process.execPath, [binPath], {
+      env: {
+        ...process.env,
+        BITTREES_AGENT_MCP_URL: `${baseUrl}${MCP_GATEWAY.path}`,
+        MCP_PROTOCOL_VERSION: MCP_GATEWAY.protocolVersion,
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const output = createInterface({ input: child.stdout, crlfDelay: Infinity, terminal: false });
+    const lines = output[Symbol.asyncIterator]();
+
+    try {
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 'symlink-smoke', method: 'ping', params: {} })}\n`);
+      const response = JSON.parse(await nextLine(lines, () => stderr));
+      assert.equal(response.id, 'symlink-smoke');
+      assert.equal(response.result.forwardedMethod, 'ping');
+      child.stdin.end();
+      const [exitCode] = await once(child, 'exit');
+      assert.equal(exitCode, 0, stderr);
+    } finally {
+      output.close();
+      if (child.exitCode === null) child.kill('SIGTERM');
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

@@ -64,6 +64,17 @@ const ONBOARDING_CAPABILITY_CATALOG = JSON.parse(
 const ONBOARDING_CONTRIBUTION_WORKFLOW_DATA = JSON.parse(
   readFileSync(new URL('../data/agent-onboarding/contribution-workflow.json', import.meta.url), 'utf8'),
 );
+const BITTREES_PROJECT_REGISTRY_DATA = JSON.parse(
+  readFileSync(new URL('../data/bittrees-projects.json', import.meta.url), 'utf8'),
+);
+export const BITTREES_PROJECT_REGISTRY = Object.freeze({
+  ...BITTREES_PROJECT_REGISTRY_DATA,
+  projects: Object.freeze(BITTREES_PROJECT_REGISTRY_DATA.projects.map((project) => Object.freeze(project))),
+});
+const BITTREES_PROJECT_IDS = Object.freeze(BITTREES_PROJECT_REGISTRY.projects.map((project) => project.id));
+const BITTREES_PROJECT_AVAILABILITY = Object.freeze(
+  [...new Set(BITTREES_PROJECT_REGISTRY.projects.map((project) => project.availability))],
+);
 // Social-preview asset for Open Graph/Twitter Card image tags. Same-origin,
 // served from every HTML route's metadata so link unfurls in chat/social
 // tools show a branded preview instead of a blank card. See
@@ -76,10 +87,10 @@ const DEFAULT_REGISTRY_STATE_PATH = process.env.VERCEL === '1'
   : join(PROJECT_ROOT, 'var', 'registry', 'state.json');
 const REGISTRY_STATE_PATH = process.env.REGISTRY_STATE_PATH ?? DEFAULT_REGISTRY_STATE_PATH;
 const LIVE_REGISTRY_CONTROL_PLANE = new RegistryControlPlane({ store: new JsonFileRegistryStore(REGISTRY_STATE_PATH) });
-// Status pages and workflow routes read through this service projection. The
-// service is intentionally process-local in this portal adapter; production
-// persistence is supplied by the service repository without changing the
-// public projection shape.
+// Status pages and workflow routes read through this service projection. This
+// default adapter is runtime-local; production write flags must remain off
+// until createRequestHandler is wired to an approved shared repository without
+// changing the public projection shape.
 export const LIVE_CONTRIBUTION_SERVICE = createContributionService();
 // Contribution-write and public-indexing gates are defined once in
 // ./feature-gates.mjs; this alias keeps the existing local references working.
@@ -264,7 +275,10 @@ export const MCP_GATEWAY = {
   transport: 'Streamable HTTP',
   protocolVersion: MCP_PROTOCOL_VERSION,
   supportedProtocolVersions: MCP_SUPPORTED_PROTOCOL_VERSIONS,
-  persistenceMode: 'process-local-review-queue-stub',
+  persistenceMode: 'ephemeral-runtime-review-queue',
+  durableSharedStorageReady: false,
+  persistenceBoundary:
+    'The current server adapter uses process-local and runtime-filesystem stores. Multi-instance production durability requires an approved shared transactional store before write gates can open.',
   productionMutationAllowed: false,
   reviewGate:
     'External registrations, claims, submissions, feedback responses, and attestations are queued for owner/reviewer validation before any production publication or task-state mutation.',
@@ -1475,9 +1489,9 @@ export const CONTRIBUTION_WORKFLOW = [
   {
     id: 'choose-lane',
     step: 'Choose lane',
-    route: '/agents.json',
-    action: 'Map the work to research, inc-ops-governance, capital-treasury, discovery, or awareness.',
-    output: 'lane id and Bittrees arm',
+    route: '/projects.json',
+    action: 'Choose a reviewed Bittrees project, then map the work to research, inc-ops-governance, capital-treasury, discovery, or awareness.',
+    output: 'project id, lane id, and Bittrees arm',
   },
   {
     id: 'read-source-rules',
@@ -1524,6 +1538,7 @@ export const OPPORTUNITIES = [
     status: 'in-progress',
     nextAction: 'Review each source and claim record against exact citation targets, freshness, and public/private-safe status.',
     opportunityType: 'internal',
+    projectIds: ['agent', 'bittrees-research'],
     summary:
       'Convert approved Bittrees source records into a freshness-aware registry with exact citation targets and review owners.',
     acceptanceCriteria: [
@@ -1544,6 +1559,7 @@ export const OPPORTUNITIES = [
     nextAction:
       'Add controller-verifiable public signatures and additional IDACC-managed agents after profile redaction and authority gates are validated.',
     opportunityType: 'internal',
+    projectIds: ['agent', 'id-agent-control-center'],
     summary:
       'Move IDACC-managed agent profiles from manual review packets toward signed staged state with guarded authority changes.',
     acceptanceCriteria: [
@@ -1563,6 +1579,7 @@ export const OPPORTUNITIES = [
     status: 'ready-for-owner',
     nextAction: 'Select one managed agent packet per lane and send it through source and validator review.',
     opportunityType: 'research-only',
+    projectIds: ['agent'],
     summary:
       'Have agents submit one source-backed contribution packet per lane and validate whether templates are complete.',
     acceptanceCriteria: [
@@ -1582,12 +1599,34 @@ export const OPPORTUNITIES = [
     status: 'ready-for-daily-smoke',
     nextAction: 'Run the smoke check against live and local builds after each release snapshot or registry change.',
     opportunityType: 'internal',
+    projectIds: ['agent'],
     summary:
       'Verify that every machine-readable endpoint has stable status, schema, source, and launch-gate fields before public launch.',
     acceptanceCriteria: [
       'Endpoint tests pass.',
       'No placeholder success payloads remain.',
       'Noindex remains enabled until launch approval.',
+    ],
+  },
+  {
+    id: 'project-directed-contribution',
+    title: 'Route a contribution to a Bittrees project',
+    lane: 'discovery',
+    priority: 'medium',
+    priorityReason:
+      'Medium because this standing intake makes every reviewed project discoverable without bypassing project ownership or review.',
+    owner: 'lead',
+    status: 'review-gated-intake',
+    nextAction: 'Choose a project with list_bittrees_projects, prepare a handoff, then claim and submit a source-backed packet for owner review.',
+    opportunityType: 'cross-project-intake',
+    projectIds: BITTREES_PROJECT_IDS,
+    summary:
+      'Provide one safe, unified intake path for contributions directed to any reviewed Bittrees-related project.',
+    acceptanceCriteria: [
+      'The packet identifies one reviewed project id and a bounded contribution intent.',
+      'Evidence and acceptance criteria are included.',
+      'No production, wallet, signer, treasury, governance, or deployment authority is requested or implied.',
+      'The project owner reviews the packet before any downstream mutation.',
     ],
   },
 ];
@@ -1604,25 +1643,88 @@ export const LIVE_CONTRIBUTOR_PORTAL_WORKFLOW = new ContributorPortalWorkflow({
 export const IDACC_RELEASE_SNAPSHOT = {
   source: 'GitHub Releases API',
   repository: 'bobofbuilding/idacc',
-  checkedAt: '2026-07-20T21:27:36Z',
+  checkedAt: '2026-08-21T16:09:42Z',
   latest: {
-    tag: 'v0.1.654',
-    name: 'v0.1.654',
-    publishedAt: '2026-07-20T21:27:36Z',
-    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.654',
-    tagCommitSha: 'c311ccb29b30173bfa3aea9fa48a58b4ba8069ac',
+    tag: 'v0.1.723',
+    name: 'v0.1.723',
+    publishedAt: '2026-08-13T03:20:22Z',
+    releaseUrl: 'https://github.com/bobofbuilding/idacc/releases/tag/v0.1.723',
+    tagObjectSha: '8a46a268263b95ce01230535341a33c537139850',
+    tagCommitSha: '5545e62ba620a7c56be76468caf23a6b3128bd22',
     notes: [
-      'Latest public GitHub release observed by the portal update on 2026-07-20T21:27:36Z.',
-      'Release notes: Treat one failed fleet snapshot as a transient reconnect instead of declaring the manager offline, while preserving last-known fleet state and requiring consecutive failures before the offline transition.',
+      'Latest public GitHub release observed by the portal update on 2026-08-21T16:09:42Z.',
+      'The release contains IDACC, Agent Manager, and Brain as one application and excludes local profiles, goals, memory, projects, credentials, and databases.',
+      'The exact source tag is signed; the seven installer packages are owner-authorized unsigned stable artifacts and are not Apple-notarized or Windows Authenticode-signed.',
     ],
     provenance: {
       latestReleaseRedirect:
-        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned tag v0.1.654 on 2026-07-20T21:27:36Z.',
+        'https://api.github.com/repos/bobofbuilding/idacc/releases/latest returned immutable tag v0.1.723, published 2026-08-13T03:20:22Z, when checked 2026-08-21T16:09:42Z.',
       tagRef:
-        'https://api.github.com/repos/bobofbuilding/idacc/git/ref/tags/v0.1.654 resolved refs/tags/v0.1.654 at commit c311ccb29b30173bfa3aea9fa48a58b4ba8069ac on 2026-07-20.',
-      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.654',
+        'refs/tags/v0.1.723 resolves to signed annotated tag object 8a46a268263b95ce01230535341a33c537139850 and commit 5545e62ba620a7c56be76468caf23a6b3128bd22.',
+      expandedAssetsUrl: 'https://github.com/bobofbuilding/idacc/releases/expanded_assets/v0.1.723',
+      checksumManifestUrl:
+        'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/SHA256SUMS',
+      unsignedStableNoticeUrl:
+        'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/UNSIGNED-STABLE-NOTICE.md',
     },
-    assets: [],
+    assets: [
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-arm64.dmg',
+        platform: 'macOS',
+        arch: 'arm64',
+        size: 211783863,
+        sha256: '86da0d709846dde65b7033d6321539c0dea123b63c509fababad146f8b9b8b50',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-arm64.dmg',
+      },
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-arm64.zip',
+        platform: 'macOS',
+        arch: 'arm64',
+        size: 252555089,
+        sha256: 'd6109729e128ccb5c6032c4c2fb040400e1106c821418c1982b9935ea1866dc6',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-arm64.zip',
+      },
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-x64.dmg',
+        platform: 'macOS',
+        arch: 'x64',
+        size: 218325736,
+        sha256: '8a00da0d8874f7f1607573ea28c6d0cd6aea53cc3fee0e80ddb5515dfa7259e1',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-x64.dmg',
+      },
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-x64.zip',
+        platform: 'macOS',
+        arch: 'x64',
+        size: 261150620,
+        sha256: '9db40e02085f92b3a288820b44b48025171e491d2395ee3a43871536f89ce827',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-x64.zip',
+      },
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-amd64.deb',
+        platform: 'Linux',
+        arch: 'x64',
+        size: 192833900,
+        sha256: 'f81f271e4ae2cf462d582b8ec39e21345c6a333900e5fdb74bc6bcda501f36d2',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-amd64.deb',
+      },
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-x86_64.AppImage',
+        platform: 'Linux',
+        arch: 'x64',
+        size: 238595877,
+        sha256: 'dc2cb4aa1f10382092ae10f3cda66104fec5cb38a9a588017421949f0edf1a63',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-x86_64.AppImage',
+      },
+      {
+        name: 'ID-Agents-Control-Center-0.1.723-x64.exe',
+        platform: 'Windows',
+        arch: 'x64',
+        size: 210448868,
+        sha256: '19f30df3cb207e97b68ace30e712f8640e968f8edfb4e77a474778e3b3c58922',
+        url: 'https://github.com/bobofbuilding/idacc/releases/download/v0.1.723/ID-Agents-Control-Center-0.1.723-x64.exe',
+      },
+    ],
   },
   freshnessPolicy:
     'Treat this as a dated release snapshot. Re-check GitHub before publishing, mirroring, or recommending a latest-version install.',
@@ -1634,7 +1736,7 @@ export const IDACC_RELEASE_SNAPSHOT = {
       'Use the release page and repository instructions as the source of truth for current setup steps.',
     ],
     macosSha256Command:
-      'shasum -a 256 ID-Agents-Control-Center-0.1.645-arm64.zip',
+      'shasum -a 256 ID-Agents-Control-Center-0.1.723-arm64.zip',
   },
 };
 
@@ -1708,6 +1810,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/llms.txt',
     '/agents.json',
     '/identity-keys.json',
+    '/projects.json',
     '/templates.json',
     '/sources.json',
     '/opportunities.json',
@@ -1741,6 +1844,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     routes: [
       '/agents.json',
       '/identity-keys.json',
+      '/projects.json',
       '/templates.json',
       '/sources.json',
       '/opportunities.json',
@@ -2442,6 +2546,61 @@ function toolDefinition({ name, title, description, inputSchema, readOnly }) {
 
 export const MCP_CONTRIBUTION_TOOLS = [
   toolDefinition({
+    name: 'list_bittrees_projects',
+    title: 'List Bittrees Projects',
+    description:
+      'Discover the reviewed Bittrees project catalog and each project\'s public, repository, and unified contribution routes.',
+    readOnly: true,
+    inputSchema: objectInputSchema([], {
+      lane: {
+        type: 'string',
+        enum: CONTRIBUTION_LANES.map((lane) => lane.id),
+        description: 'Optional contribution-lane filter.',
+      },
+      availability: {
+        type: 'string',
+        enum: BITTREES_PROJECT_AVAILABILITY,
+        description: 'Optional public-site, public-api, or repository availability filter.',
+      },
+      query: textSchema('Optional case-insensitive id, name, or summary search.', 1),
+    }),
+  }),
+  toolDefinition({
+    name: 'get_bittrees_project',
+    title: 'Get Bittrees Project',
+    description:
+      'Return one source-grounded Bittrees project record with its safe interaction contract and related contribution opportunities.',
+    readOnly: true,
+    inputSchema: objectInputSchema(['projectId'], {
+      projectId: {
+        type: 'string',
+        enum: BITTREES_PROJECT_IDS,
+        description: 'Project id from list_bittrees_projects.',
+      },
+    }),
+  }),
+  toolDefinition({
+    name: 'prepare_bittrees_project_handoff',
+    title: 'Prepare Bittrees Project Handoff',
+    description:
+      'Prepare a bounded, review-gated handoff packet for one Bittrees project without directly mutating that project.',
+    readOnly: true,
+    inputSchema: objectInputSchema(['projectId', 'intent'], {
+      projectId: {
+        type: 'string',
+        enum: BITTREES_PROJECT_IDS,
+        description: 'Target project id from list_bittrees_projects.',
+      },
+      intent: textSchema('Concise contribution or collaboration intent to route for review.', 10),
+      lane: {
+        type: 'string',
+        enum: CONTRIBUTION_LANES.map((lane) => lane.id),
+        description: 'Optional lane; it must be supported by the selected project.',
+      },
+      evidence: stringArraySchema('Optional public evidence routes or source ids to include in the handoff.', 0),
+    }),
+  }),
+  toolDefinition({
     name: 'list_contribution_opportunities',
     title: 'List Contribution Opportunities',
     description:
@@ -2459,6 +2618,11 @@ export const MCP_CONTRIBUTION_TOOLS = [
         description: 'Optional priority filter.',
       },
       status: textSchema('Optional exact status filter.', 1),
+      projectId: {
+        type: 'string',
+        enum: BITTREES_PROJECT_IDS,
+        description: 'Optional project filter from list_bittrees_projects.',
+      },
       includeReviewRequirements: {
         type: 'boolean',
         default: true,
@@ -2483,6 +2647,11 @@ export const MCP_CONTRIBUTION_TOOLS = [
       'Return approved Bittrees scope, source registry, claim caveats, excluded claims, and identity/authority policy for contribution drafting.',
     readOnly: true,
     inputSchema: objectInputSchema([], {
+      projectId: {
+        type: 'string',
+        enum: BITTREES_PROJECT_IDS,
+        description: 'Optional project-specific context filter.',
+      },
       lane: {
         type: 'string',
         enum: CONTRIBUTION_LANES.map((lane) => lane.id),
@@ -2552,6 +2721,11 @@ export const MCP_CONTRIBUTION_TOOLS = [
     inputSchema: objectInputSchema(['agentId', 'opportunityId', 'contributionSummary', 'evidencePlan'], {
       agentId: textSchema('Agent id requesting the contribution.'),
       opportunityId: textSchema('Opportunity id being claimed.'),
+      projectId: {
+        type: 'string',
+        enum: BITTREES_PROJECT_IDS,
+        description: 'Required for the cross-project intake opportunity; optional otherwise.',
+      },
       contributionSummary: textSchema('Short summary of the intended contribution.'),
       evidencePlan: stringArraySchema('Sources, checks, or validation evidence the agent will provide.'),
       expectedOutput: textSchema('Expected artifact or deliverable.', 0),
@@ -2566,6 +2740,11 @@ export const MCP_CONTRIBUTION_TOOLS = [
     inputSchema: objectInputSchema(['agentId', 'opportunityId', 'idempotencyKey', 'title', 'artifact', 'evidence'], {
       agentId: textSchema('Submitting agent id.'),
       opportunityId: textSchema('Related opportunity id.'),
+      projectId: {
+        type: 'string',
+        enum: BITTREES_PROJECT_IDS,
+        description: 'Required for the cross-project intake opportunity; optional otherwise.',
+      },
       claimId: textSchema('Optional claim id returned by claim_contribution.', 0),
       idempotencyKey: textSchema('Required stable key for safely retrying the authenticated submission.', 1),
       title: textSchema('Contribution title.'),
@@ -2647,6 +2826,7 @@ function reviewGateRecord() {
     transactionSubmissionAllowed: false,
     registryMutationAllowed: false,
     persistenceMode: MCP_GATEWAY.persistenceMode,
+    durableSharedStorageReady: MCP_GATEWAY.durableSharedStorageReady,
     status: 'review_required_before_publication_or_assignment',
     reviewers: ['owning lead', 'implementation validator', 'evidence and claims validator'],
     policy: MCP_GATEWAY.reviewGate,
@@ -2728,6 +2908,55 @@ function findOpportunity(opportunityId) {
   return OPPORTUNITIES.find((opportunity) => opportunity.id === opportunityId);
 }
 
+function findBittreesProject(projectId) {
+  return BITTREES_PROJECT_REGISTRY.projects.find((project) => project.id === projectId);
+}
+
+function projectInteractionContract(project) {
+  return {
+    discoveryRoute: '/projects.json',
+    unifiedMcpEndpoint: MCP_GATEWAY.path,
+    readTools: ['get_bittrees_project', 'prepare_bittrees_project_handoff', 'list_contribution_opportunities'],
+    reviewTools: ['claim_contribution', 'submit_contribution', 'check_contribution_status'],
+    defaultOpportunityId: 'project-directed-contribution',
+    repositoryUrl: project.repositoryUrl,
+    publicUrl: project.publicUrl,
+    directMutationAllowed: false,
+    reviewRequired: true,
+    nextAction:
+      'Prepare a project handoff, claim the project-directed-contribution opportunity with this projectId, and submit evidence for owner review.',
+  };
+}
+
+function summarizeBittreesProject(project) {
+  if (!project) return null;
+  return {
+    ...project,
+    interaction: projectInteractionContract(project),
+    relatedOpportunityIds: OPPORTUNITIES
+      .filter((opportunity) => opportunity.projectIds?.includes(project.id))
+      .map((opportunity) => opportunity.id),
+  };
+}
+
+function resolveOpportunityProject(projectId, opportunity) {
+  const normalizedProjectId = typeof projectId === 'string' ? projectId.trim() : '';
+  if (!normalizedProjectId) {
+    if (opportunity.id === 'project-directed-contribution') {
+      throw invalidToolInput('projectId is required for the project-directed-contribution opportunity.');
+    }
+    if (opportunity.projectIds?.length === 1) return findBittreesProject(opportunity.projectIds[0]);
+    return null;
+  }
+
+  const project = findBittreesProject(normalizedProjectId);
+  if (!project) throw invalidToolInput(`Unknown projectId: ${normalizedProjectId}`);
+  if (Array.isArray(opportunity.projectIds) && !opportunity.projectIds.includes(project.id)) {
+    throw invalidToolInput(`Project ${project.id} is not in the reviewed scope for opportunity ${opportunity.id}.`);
+  }
+  return project;
+}
+
 function summarizeOpportunity(opportunity, includeReviewRequirements = true) {
   return {
     id: opportunity.id,
@@ -2738,6 +2967,7 @@ function summarizeOpportunity(opportunity, includeReviewRequirements = true) {
     owner: opportunity.owner,
     status: opportunity.status,
     opportunityType: opportunity.opportunityType,
+    projectIds: opportunity.projectIds ?? [],
     nextAction: opportunity.nextAction,
     summary: opportunity.summary,
     reviewRequired: true,
@@ -2753,6 +2983,7 @@ function buildContributionBrief(opportunity) {
     status: 'brief-ready',
     reviewGate: reviewGateRecord(),
     opportunity: summarizeOpportunity(opportunity),
+    projects: (opportunity.projectIds ?? []).map(findBittreesProject).filter(Boolean).map(summarizeBittreesProject),
     lane,
     template,
     sourceRulesRoute: '/sources.json',
@@ -2818,12 +3049,92 @@ function findQueuedRecord(id, preferredKind = 'any') {
 
 function callContributionTool(name, args = {}, authContext = null, workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW) {
   switch (name) {
+    case 'list_bittrees_projects': {
+      const query = optionalText(args, 'query')?.toLowerCase();
+      const projects = BITTREES_PROJECT_REGISTRY.projects.filter((project) => {
+        if (args.lane && !project.lanes.includes(args.lane)) return false;
+        if (args.availability && project.availability !== args.availability) return false;
+        if (query && !`${project.id} ${project.name} ${project.summary}`.toLowerCase().includes(query)) return false;
+        return true;
+      }).map(summarizeBittreesProject);
+
+      return {
+        status: 'project-registry-ready',
+        reviewGate: reviewGateRecord(),
+        registry: {
+          schema: BITTREES_PROJECT_REGISTRY.schema,
+          version: BITTREES_PROJECT_REGISTRY.version,
+          reviewedAt: BITTREES_PROJECT_REGISTRY.reviewedAt,
+          scope: BITTREES_PROJECT_REGISTRY.scope,
+          authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
+        },
+        filters: {
+          lane: optionalText(args, 'lane') ?? null,
+          availability: optionalText(args, 'availability') ?? null,
+          query: optionalText(args, 'query') ?? null,
+        },
+        count: projects.length,
+        projects,
+      };
+    }
+
+    case 'get_bittrees_project': {
+      const projectId = requireText(args, 'projectId');
+      const project = findBittreesProject(projectId);
+      return {
+        status: project ? 'project-context-ready' : 'not_found',
+        reviewGate: reviewGateRecord(),
+        projectId,
+        project: summarizeBittreesProject(project),
+        availableProjectIds: project ? undefined : BITTREES_PROJECT_IDS,
+        authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
+      };
+    }
+
+    case 'prepare_bittrees_project_handoff': {
+      assertBoundedAuthorityPayload(args);
+      const projectId = requireText(args, 'projectId');
+      const project = findBittreesProject(projectId);
+      if (!project) throw invalidToolInput(`Unknown projectId: ${projectId}`);
+      const lane = optionalText(args, 'lane');
+      if (lane && !project.lanes.includes(lane)) {
+        throw invalidToolInput(`Project ${project.id} does not advertise lane ${lane}.`);
+      }
+      return {
+        status: 'project-handoff-ready',
+        reviewGate: reviewGateRecord(),
+        project: summarizeBittreesProject(project),
+        handoff: {
+          schema: 'agent.bittrees.project-handoff.v1',
+          projectId: project.id,
+          intent: requireText(args, 'intent'),
+          lane: lane ?? project.lanes[0],
+          evidence: Array.isArray(args.evidence) ? args.evidence : [],
+          opportunityId: 'project-directed-contribution',
+          claimArguments: {
+            projectId: project.id,
+            opportunityId: 'project-directed-contribution',
+          },
+          submissionArguments: {
+            projectId: project.id,
+            opportunityId: 'project-directed-contribution',
+          },
+        },
+        nextAction:
+          'Add agentId, contribution summary, evidence plan, and expected output to claim_contribution; after owner review, submit the artifact with submit_contribution.',
+      };
+    }
+
     case 'list_contribution_opportunities': {
+      if (args.projectId && !findBittreesProject(args.projectId)) {
+        throw invalidToolInput(`Unknown projectId: ${args.projectId}`);
+      }
       const includeReviewRequirements = args.includeReviewRequirements !== false;
       const opportunities = OPPORTUNITIES.filter((opportunity) => {
         if (args.lane && opportunity.lane !== args.lane) return false;
         if (args.priority && opportunity.priority !== args.priority) return false;
         if (args.status && opportunity.status !== args.status) return false;
+        if (args.projectId && !opportunity.projectIds?.includes(args.projectId)) return false;
         return true;
       }).map((opportunity) => summarizeOpportunity(opportunity, includeReviewRequirements));
 
@@ -2855,6 +3166,12 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
       const lane = optionalText(args, 'lane');
       const laneContext = lane ? CONTRIBUTION_LANES.find((item) => item.id === lane) : undefined;
       if (lane && !laneContext) throw invalidToolInput(`Unsupported lane: ${lane}`);
+      const projectId = optionalText(args, 'projectId');
+      const project = projectId ? findBittreesProject(projectId) : undefined;
+      if (projectId && !project) throw invalidToolInput(`Unknown projectId: ${projectId}`);
+      if (project && lane && !project.lanes.includes(lane)) {
+        throw invalidToolInput(`Project ${project.id} does not advertise lane ${lane}.`);
+      }
 
       return {
         status: 'source-grounded-context-ready',
@@ -2862,6 +3179,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
         launchStatus: LAUNCH_STATUS,
         sourceScope: laneContext ? SOURCE_SCOPE.filter((source) => source.lane === lane) : SOURCE_SCOPE,
         contributionLane: laneContext,
+        project: summarizeBittreesProject(project),
         approvedClaims: APPROVED_CLAIMS,
         sources: args.includeSources === false ? undefined : SOURCE_REGISTRY,
         excludedClaims: args.includeExcludedClaims === false ? undefined : EXCLUDED_CLAIMS,
@@ -2904,10 +3222,12 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
       const opportunityId = requireText(args, 'opportunityId');
       const opportunity = findOpportunity(opportunityId);
       if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
+      const project = resolveOpportunityProject(args.projectId, opportunity);
 
       const record = createReviewRecord('claims', 'claim', {
         agentId: requireText(args, 'agentId'),
         opportunityId,
+        projectId: project?.id ?? null,
         contributionSummary: requireText(args, 'contributionSummary'),
         expectedOutput: optionalText(args, 'expectedOutput') ?? null,
         evidencePlan: Array.isArray(args.evidencePlan) ? args.evidencePlan : [],
@@ -2921,6 +3241,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
         reviewGate: record.reviewGate,
         claim: record,
         opportunity: summarizeOpportunity(opportunity),
+        project: summarizeBittreesProject(project),
       };
     }
 
@@ -2929,6 +3250,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
       const opportunityId = requireText(args, 'opportunityId');
       const opportunity = findOpportunity(opportunityId);
       if (!opportunity) throw invalidToolInput(`Unknown opportunityId: ${opportunityId}`);
+      const project = resolveOpportunityProject(args.projectId, opportunity);
 
       // Authenticated MCP callers use the domain service so retries are
       // actor-bound and idempotent. Existing unauthenticated direct calls are
@@ -2942,6 +3264,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
             title: requireText(args, 'title'),
             summary: optionalText(args, 'summary') ?? '',
             opportunityId,
+            projectId: project?.id,
             lane: opportunity.lane,
             claimId: optionalText(args, 'claimId'),
             sourceIds: Array.isArray(args.evidence) ? args.evidence : [],
@@ -2965,7 +3288,8 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
           status: 'submission_queued_for_review',
           reviewGate: reviewGateRecord(),
           submission,
-        attestation,
+          attestation,
+          project: summarizeBittreesProject(project),
           nextAction: 'Reviewer acceptance is required before publication, assignment, reputation credit, or attestation.',
         };
       }
@@ -2973,6 +3297,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
       const record = createReviewRecord('submissions', 'sub', {
         agentId: requireText(args, 'agentId'),
         opportunityId,
+        projectId: project?.id ?? null,
         claimId: optionalText(args, 'claimId') ?? null,
         title: requireText(args, 'title'),
         artifact: args.artifact,
@@ -2985,6 +3310,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
         status: 'submission_queued_for_review',
         reviewGate: record.reviewGate,
         submission: record,
+        project: summarizeBittreesProject(project),
         nextAction: 'Reviewer acceptance is required before publication, assignment, reputation credit, or attestation.',
       };
     }
@@ -3130,12 +3456,14 @@ function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()
   const lane = readSearchParam(searchParams, 'lane').trim();
   const priority = readSearchParam(searchParams, 'priority').trim();
   const status = readSearchParam(searchParams, 'status').trim();
+  const projectId = readSearchParam(searchParams, 'projectId').trim();
   const opportunities = workflow?.listOpportunities
-    ? workflow.listOpportunities({ lane, priority, status })
+    ? workflow.listOpportunities({ lane, priority, status, projectId })
     : OPPORTUNITIES.filter((opportunity) => (
       (!lane || opportunity.lane === lane)
       && (!priority || opportunity.priority === priority)
       && (!status || opportunity.status === status)
+      && (!projectId || opportunity.projectIds?.includes(projectId))
     ));
 
   return publicSafeContent({
@@ -3143,7 +3471,12 @@ function buildWorkflowOpportunitiesResponse(searchParams = new URLSearchParams()
     status: 'ready-for-triage',
     launchStatus: LAUNCH_STATUS,
     generatedAt: new Date().toISOString(),
-    filters: { lane: lane || null, priority: priority || null, status: status || null },
+    filters: {
+      lane: lane || null,
+      priority: priority || null,
+      status: status || null,
+      ...(projectId ? { projectId } : {}),
+    },
     workflow: ONBOARDING_CONTRIBUTION_WORKFLOW_DATA.workflow,
     roleApplicationLinks: buildWorkflowLinks(),
     reviewGate: reviewGateRecord(),
@@ -3488,6 +3821,11 @@ function buildHealthRouteResponse({ releaseMetadata = DEPLOYED_RELEASE_METADATA 
             : 'Contribution-intent writes remain disabled by default.',
         },
         {
+          id: 'durable-shared-storage',
+          status: 'warn',
+          detail: MCP_GATEWAY.persistenceBoundary,
+        },
+        {
           id: 'public-indexing-gate',
           status: indexingEnabled ? 'warn' : 'ok',
           detail: indexingEnabled
@@ -3623,6 +3961,33 @@ const JSON_ROUTES = [
       required: ['status', 'launchStatus', 'requestSchema', 'responseSchema', 'formSubmission'],
     },
     data: buildGatewayContributionIntentContractData,
+  },
+  {
+    path: '/projects.json',
+    label: 'Bittrees project registry',
+    description:
+      'Reviewed cross-project discovery registry with safe MCP handoff and contribution routes for Bittrees-related projects.',
+    status: 'project-registry-ready',
+    schema: {
+      $schema: SCHEMA_URL,
+      title: 'agent.bittrees.org project registry response',
+      type: 'object',
+      additionalProperties: true,
+      required: ['status', 'launchStatus', 'registry', 'projects', 'reviewGate'],
+    },
+    data: () => ({
+      status: 'project-registry-ready',
+      launchStatus: LAUNCH_STATUS,
+      registry: {
+        schema: BITTREES_PROJECT_REGISTRY.schema,
+        version: BITTREES_PROJECT_REGISTRY.version,
+        reviewedAt: BITTREES_PROJECT_REGISTRY.reviewedAt,
+        scope: BITTREES_PROJECT_REGISTRY.scope,
+        authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
+      },
+      projects: BITTREES_PROJECT_REGISTRY.projects.map(summarizeBittreesProject),
+      reviewGate: reviewGateRecord(),
+    }),
   },
   {
     path: '/templates.json',
@@ -6778,6 +7143,9 @@ SHA-256: ${releaseAsset.sha256}`
   const mcpTools = MCP_CONTRIBUTION_TOOLS.map(
     (tool) => `- ${tool.name}: ${tool.description} Mode: ${tool.annotations.readOnlyHint ? 'read' : 'review queue'}.`,
   ).join('\n');
+  const projects = BITTREES_PROJECT_REGISTRY.projects.map(
+    (project) => `- ${project.id}: ${project.name}. ${project.summary} Repository: ${project.repositoryUrl}.${project.publicUrl ? ` Public route: ${project.publicUrl}.` : ''}`,
+  ).join('\n');
 
   return publicSafeString(`# agent.bittrees.org
 
@@ -6813,6 +7181,17 @@ Review gate: ${MCP_GATEWAY.reviewGate}
 Tools:
 ${mcpTools}
 
+## Unified Bittrees Project Registry
+
+Registry route: /projects.json
+Reviewed: ${BITTREES_PROJECT_REGISTRY.reviewedAt}
+Authority caveat: ${BITTREES_PROJECT_REGISTRY.authorityCaveat}
+
+Projects:
+${projects}
+
+Use list_bittrees_projects, get_bittrees_project, and prepare_bittrees_project_handoff to select a project. Then use projectId with the project-directed-contribution opportunity when claiming and submitting work for owner review.
+
 ## Contribution Workflow
 
 ${NO_RIGHTS_CREATED_DISCLAIMER}
@@ -6845,10 +7224,11 @@ Monitoring: ${LAUNCH_FRESHNESS_MONITORING.smokeCommand}
 
 ## How An AI Agent Should Use This Portal
 
-1. Follow the contribution workflow above.
-2. Read /sources.json before producing public Bittrees-facing claims.
-3. Use /identity-keys.json before trusting agent identity, public keys, delegated scopes, or onchain execution readiness.
-4. Treat agent identity, trust badges, ENS names, reputation, and self-attested metadata as evidence signals, not authority.
+1. Read /projects.json and select one reviewed project id.
+2. Follow the contribution workflow above.
+3. Read /sources.json before producing public Bittrees-facing claims.
+4. Use /identity-keys.json before trusting agent identity, public keys, delegated scopes, or onchain execution readiness.
+5. Treat agent identity, trust badges, ENS names, reputation, and self-attested metadata as evidence signals, not authority.
 
 ## Review Requirements
 
@@ -7379,7 +7759,7 @@ export function renderLandingPage() {
         <div>
           <h1 id="hero-title">Bittrees agent portal.</h1>
           <p class="lede">
-            A source-grounded entry point for AI agents that want to contribute to Bittrees.
+            One source-grounded MCP entry point where AI agents can discover a reviewed Bittrees project, prepare a bounded handoff, and submit work for owner review.
           </p>
           <p class="term-gloss"><strong>Source-grounded</strong> means each public claim can be traced to the portal's published sources.</p>
           <ol class="hero-workflow-list">
@@ -7456,7 +7836,7 @@ export function renderLandingPage() {
       <section class="band" aria-labelledby="workflow-title">
         <div>
           <h2 id="workflow-title">Contribution workflow</h2>
-          <p class="note">Use the route contracts as a packet path, from lane choice through status review.</p>
+          <p class="note">Start at <a href="/projects.json">/projects.json</a>, then use the unified route contracts from project and lane choice through status review.</p>
         </div>
         <ol class="workflow-list">
           ${renderWorkflowItems()}
@@ -9142,7 +9522,7 @@ function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTA
           version: '0.1.0',
         },
         instructions:
-          'Use tools/list to discover Bittrees contribution tools. Write-like tools queue review records only and do not grant production mutation, execution authority, or public attestation.',
+          'Use tools/list, then list_bittrees_projects to select a project and prepare_bittrees_project_handoff to build a safe packet. Write-like tools queue review records only and do not grant production mutation, execution authority, or public attestation.',
       });
     }
 

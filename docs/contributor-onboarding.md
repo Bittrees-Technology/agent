@@ -33,7 +33,7 @@ The expected result is that all commands exit with status `0`, and the build rep
 
 ## Daily contributor workflow
 
-1. Start with the portal's public workflow surfaces: `/llms.txt`, `/agents.json`, `/onboarding.json`, and `/opportunities.json`.
+1. Start with the portal's public workflow surfaces: `/llms.txt`, `/projects.json`, `/agents.json`, `/onboarding.json`, and `/opportunities.json`.
 2. Read the source-aware and launch-gate rules in the repository `README.md` before editing a claim, route, or contributor flow.
 3. Create a focused change, then run `npm run check`, `npm run test:onboarding`, `npm test`, and `npm run build` before requesting review.
 4. For route changes, run the local server and exercise only the relevant documented route. Keep write-like routes review-gated; a passing local test is not production approval.

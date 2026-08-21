@@ -427,6 +427,21 @@ function checkAgents() {
   }
 }
 
+function checkProjects() {
+  const registry = jsonResponses.get('/projects.json');
+  if (!registry) return;
+
+  const projects = registry.data?.projects ?? [];
+  check(projects.length > 0, '/projects.json has no reviewed projects');
+  check(new Set(projects.map((project) => project.id)).size === projects.length, '/projects.json has duplicate project ids');
+  check(projects.some((project) => project.id === 'agent'), '/projects.json is missing agent');
+  for (const project of projects) {
+    check(/^https:\/\/github\.com\//.test(project.repositoryUrl ?? ''), `${project.id} missing canonical GitHub repository`);
+    check(project.interaction?.unifiedMcpEndpoint === '/mcp', `${project.id} missing unified MCP route`);
+    check(project.interaction?.directMutationAllowed === false, `${project.id} unexpectedly allows direct mutation`);
+  }
+}
+
 function checkOpportunities() {
   const opportunities = jsonResponses.get('/opportunities.json');
   if (!opportunities) return;
@@ -471,6 +486,9 @@ async function checkMcpGateway() {
   if (contract) {
     const toolNames = new Set((contract.data?.tools ?? []).map((tool) => tool.name));
     for (const toolName of [
+      'list_bittrees_projects',
+      'get_bittrees_project',
+      'prepare_bittrees_project_handoff',
       'list_contribution_opportunities',
       'get_contribution_brief',
       'get_bittrees_context',
@@ -513,6 +531,18 @@ async function checkMcpGateway() {
     params: {},
   });
   check((tools?.result?.tools ?? []).some((tool) => tool.name === 'submit_contribution'), '/mcp tools/list missing submit_contribution');
+  check((tools?.result?.tools ?? []).some((tool) => tool.name === 'list_bittrees_projects'), '/mcp tools/list missing list_bittrees_projects');
+
+  const projects = await postMcp({
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: {
+      name: 'list_bittrees_projects',
+      arguments: {},
+    },
+  });
+  check((projects?.result?.structuredContent?.projects ?? []).some((project) => project.id === 'agent'), '/mcp project registry is missing agent');
 
   const context = await postMcp({
     jsonrpc: '2.0',
@@ -646,6 +676,7 @@ await checkStaticStatusDelegation();
 await checkNotFoundContentNegotiation();
 checkSources();
 checkAgents();
+checkProjects();
 checkOpportunities();
   checkMonitoringRouteCoverage();
   checkMonitoringObservabilityCoverage();

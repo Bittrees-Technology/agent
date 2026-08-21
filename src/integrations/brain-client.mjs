@@ -49,6 +49,7 @@ export function sanitizeBrainTerminalSummary(input = {}) {
   if (!submissionId) throw new BrainClientError('submission id is required', { code: 'invalid_terminal_summary' });
   const outcome = safeOutcome(input.reviewOutcome ?? input.review_outcome ?? input.decision ?? input.status);
   const managerStatus = safeOutcome(input.managerStatus ?? input.manager_status);
+  const projectId = bounded(input.projectId ?? input.project_id, 120, 'unassigned');
   const rawTitle = bounded(input.title, 180, 'Bittrees contribution');
   const title = UNSAFE_SUMMARY_RE.test(rawTitle) ? 'Bittrees contribution' : rawTitle;
   const rawSummary = typeof (input.summary ?? input.publicSummary ?? input.public_summary) === 'string'
@@ -61,6 +62,7 @@ export function sanitizeBrainTerminalSummary(input = {}) {
     '# Bittrees contribution terminal summary',
     `Submission: ${submissionId}`,
     `Review outcome: ${outcome}`,
+    `Project ID: ${projectId}`,
     `Manager status: ${managerStatus}`,
     `Title: ${title}`,
     summary ? `Summary: ${summary}` : '',

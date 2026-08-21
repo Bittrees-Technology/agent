@@ -84,6 +84,7 @@ export function sanitizeTerminalSummary(input = {}) {
   const title = text(source.title, MAX_TITLE_LENGTH, 'Bittrees contribution');
   const summary = text(source.summary ?? source.description, MAX_SUMMARY_LENGTH);
   const lane = text(source.lane ?? source.opportunityId ?? source.opportunity_id, 100, 'contribution');
+  const projectId = text(source.projectId ?? source.project_id, 120, 'unassigned');
   const sources = sourceIds(source.sourceIds ?? source.source_ids ?? source.brainSourceIds);
   const managerTask = source.managerTask ?? source.manager_task ?? {};
   const managerState = text(managerTask.state ?? managerTask.status, 48, 'not_created').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
@@ -100,6 +101,7 @@ export function sanitizeTerminalSummary(input = {}) {
     title,
     summary,
     lane,
+    projectId,
     sourceIds: sources,
     artifactCount: Number.isFinite(Number(source.artifactCount ?? source.artifact_count))
       ? Math.max(0, Math.min(20, Number(source.artifactCount ?? source.artifact_count)))
@@ -186,6 +188,7 @@ export class BrainTerminalSummaryClient {
       `Decision: ${summary.decision}`,
       `Terminal state: ${summary.terminalState}`,
       `Contribution: ${summary.correlationKey}`,
+      `Project ID: ${summary.projectId}`,
       `Lane: ${summary.lane}`,
       `Title: ${summary.title}`,
       summary.summary ? `Summary: ${summary.summary}` : '',
@@ -203,7 +206,7 @@ export class BrainTerminalSummaryClient {
       durable_candidate: {
         subject: `contribution:${summary.correlationKey}`,
         predicate: 'terminal_state',
-        value: { decision: summary.decision, state: summary.terminalState },
+        value: { decision: summary.decision, state: summary.terminalState, projectId: summary.projectId },
         claim_type: 'reviewed_outcome',
         scope: 'bittrees contributor workflow',
         source_ids: summary.sourceIds,

@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { buildVercelCurlArgs } from '../scripts/request-url.mjs';
+
 const root = new URL('..', import.meta.url);
 
 function readRepositoryFile(path) {
@@ -34,4 +36,36 @@ test('production operations runbook covers staging, rollback, backup, and alert 
   assert.match(runbook, /First-response checklist:/);
   assert.match(runbook, /Evidence and reference anchors/);
   assert.match(runbook, /production-observability-backups\.md/);
+});
+
+test('production observability alert bodies remain valid YAML block content', () => {
+  const workflow = readRepositoryFile('.github/workflows/production-observability.yml');
+
+  assert.doesNotMatch(workflow, /^Production (?:monitoring|backup) failed/m);
+  assert.doesNotMatch(workflow, /^EOF$/m);
+  assert.equal((workflow.match(/printf '%s\\n'/g) ?? []).length, 2);
+});
+
+test('protected Vercel checks confirm linking without forwarding the flag to curl', () => {
+  const args = buildVercelCurlArgs({
+    requestPath: '/api/health',
+    deploymentTarget: 'https://preview.example.vercel.app',
+    method: 'GET',
+    headerPath: '/tmp/headers',
+    bodyPath: '/tmp/body',
+    headers: { Accept: 'application/json' },
+  });
+  const separator = args.indexOf('--');
+
+  assert.ok(separator > 0);
+  assert.ok(args.indexOf('--yes') > 0);
+  assert.ok(args.indexOf('--yes') < separator);
+  assert.deepEqual(args.slice(0, separator), [
+    'curl',
+    '/api/health',
+    '--deployment',
+    'https://preview.example.vercel.app',
+    '--yes',
+  ]);
+  assert.deepEqual(args.slice(-2), ['--header', 'Accept: application/json']);
 });

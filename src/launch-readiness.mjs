@@ -42,6 +42,13 @@ const DECISIONS = [
     gate: 'Secrets, keys, and bearer tokens are rejected/redacted from public payloads and logs.',
   },
   {
+    id: 'ops-durable-shared-storage',
+    domain: 'ops',
+    owner: 'engineering-team',
+    status: 'pending',
+    gate: 'Replace runtime-local workflow, idempotency, rate-limit, and audit stores with an approved shared transactional production store and prove multi-instance recovery.',
+  },
+  {
     id: 'ops-rollback-rehearsal',
     domain: 'ops',
     owner: 'engineering-team',

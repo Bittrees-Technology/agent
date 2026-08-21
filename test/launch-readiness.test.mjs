@@ -21,6 +21,7 @@ test('default posture is no-go with named legal, security, and ops decisions', (
   }
 
   assert.ok(readiness.blockers.length > 0);
+  assert.ok(readiness.blockers.some((blocker) => blocker.id === 'ops-durable-shared-storage'));
   assert.equal(readiness.summary.total, readiness.decisions.length);
 });
 

@@ -12,6 +12,7 @@ import {
   APPROVED_CONTENT_PACKAGE,
   APPROVED_CLAIMS,
   APPROVED_AGENT_PROFILES,
+  BITTREES_PROJECT_REGISTRY,
   CONTRIBUTION_PRIVACY_NOTICE,
   CONTRIBUTION_LANES,
   CONTRIBUTION_WORKFLOW,
@@ -519,6 +520,8 @@ test('llms.txt is a plain-text agent entry point', () => {
   assert.match(llms, /\/reputation/);
   assert.match(llms, /\/mcp/);
   assert.match(llms, /\/mcp-docs/);
+  assert.match(llms, /\/projects\.json/);
+  assert.match(llms, /list_bittrees_projects/);
   assert.match(llms, /list_contribution_opportunities/);
   assert.match(llms, /submit_contribution/);
   assert.match(llms, /Contribution Workflow/);
@@ -715,6 +718,7 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('terms-of-use.json'));
   assert.ok(assetPaths.has('privacy.json'));
   assert.ok(assetPaths.has('identity-keys.json'));
+  assert.ok(assetPaths.has('projects.json'));
   assert.ok(assetPaths.has('monitoring.json'));
 });
 
@@ -2085,7 +2089,7 @@ test('opportunities are actionable work items', () => {
     assert.ok(opportunity.status, `${opportunity.id} should have status`);
     assert.ok(opportunity.nextAction, `${opportunity.id} should have next action`);
     assert.ok(opportunity.priorityReason, `${opportunity.id} should have priority reason`);
-    assert.match(opportunity.opportunityType, /^(internal|public|paid|research-only)$/);
+    assert.match(opportunity.opportunityType, /^(internal|public|paid|research-only|cross-project-intake)$/);
   }
 });
 
@@ -2693,6 +2697,9 @@ test('mcp gateway contract exposes required contribution tools', () => {
   const toolNames = new Set(MCP_CONTRIBUTION_TOOLS.map((tool) => tool.name));
 
   for (const toolName of [
+    'list_bittrees_projects',
+    'get_bittrees_project',
+    'prepare_bittrees_project_handoff',
     'list_contribution_opportunities',
     'get_contribution_brief',
     'get_bittrees_context',
@@ -2723,6 +2730,79 @@ test('mcp gateway contract exposes required contribution tools', () => {
     assert.equal(entry.verdict, 'ALLOW read-only; GATE write-like; BLOCK production authority');
     assert.ok(entry.enforcement.some((control) => control.surface === 'gateway audit trail'));
   }
+});
+
+test('project registry exposes one unified, review-gated route across reviewed Bittrees projects', () => {
+  const route = JSON_ROUTE_MAP.get('/projects.json');
+  const response = buildJsonResponse(route, '2026-08-21T16:09:42.000Z');
+  const ids = response.data.projects.map((project) => project.id);
+
+  assert.equal(response.status, 'project-registry-ready');
+  assert.equal(BITTREES_PROJECT_REGISTRY.schema, 'agent.bittrees.project-registry.v1');
+  assert.equal(ids.length, 14);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.includes('agent'));
+  assert.ok(ids.includes('bittrees-research'));
+  assert.ok(ids.includes('skillmesh'));
+  assert.equal(response.data.reviewGate.productionMutationAllowed, false);
+  for (const project of response.data.projects) {
+    assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
+    assert.equal(project.interaction.unifiedMcpEndpoint, '/mcp');
+    assert.equal(project.interaction.directMutationAllowed, false);
+    assert.ok(project.relatedOpportunityIds.includes('project-directed-contribution'));
+    assert.doesNotMatch(JSON.stringify(project), /\/Users\//);
+  }
+});
+
+test('project registry is covered by the published monitoring and schema inventories', () => {
+  assert.ok(LAUNCH_FRESHNESS_MONITORING.routeStatusChecks.includes('/projects.json'));
+  assert.ok(LAUNCH_FRESHNESS_MONITORING.schemaValidity.routes.includes('/projects.json'));
+});
+
+test('project MCP tools discover, resolve, and prepare a cross-project handoff', () => {
+  const listed = callMcpTool('list_bittrees_projects', { lane: 'research' }).structuredContent;
+  assert.equal(listed.status, 'project-registry-ready');
+  assert.ok(listed.projects.some((project) => project.id === 'bittrees-research'));
+  assert.ok(listed.projects.every((project) => project.lanes.includes('research')));
+
+  const resolved = callMcpTool('get_bittrees_project', { projectId: 'tcp' }).structuredContent;
+  assert.equal(resolved.status, 'project-context-ready');
+  assert.equal(resolved.project.publicUrl, 'https://tcp.bittrees.org');
+
+  const handoff = callMcpTool('prepare_bittrees_project_handoff', {
+    projectId: 'skillmesh',
+    lane: 'discovery',
+    intent: 'Document the public MCP interoperability contract and its review boundary.',
+    evidence: ['https://github.com/bobofbuilding/skillmesh'],
+  }).structuredContent;
+  assert.equal(handoff.status, 'project-handoff-ready');
+  assert.equal(handoff.handoff.projectId, 'skillmesh');
+  assert.equal(handoff.handoff.opportunityId, 'project-directed-contribution');
+  assert.equal(handoff.reviewGate.productionMutationAllowed, false);
+
+  const opportunities = callMcpTool('list_contribution_opportunities', { projectId: 'skillmesh' }).structuredContent;
+  assert.deepEqual(opportunities.opportunities.map((item) => item.id), ['project-directed-contribution']);
+
+  assert.throws(
+    () => callMcpTool('claim_contribution', {
+      agentId: 'external-project-agent',
+      opportunityId: 'project-directed-contribution',
+      contributionSummary: 'Prepare an owner-review packet.',
+      evidencePlan: ['public repository evidence'],
+    }),
+    /projectId is required/,
+  );
+
+  const claim = callMcpTool('claim_contribution', {
+    agentId: 'external-project-agent',
+    projectId: 'skillmesh',
+    opportunityId: 'project-directed-contribution',
+    contributionSummary: 'Prepare an owner-review packet for SkillMesh interoperability.',
+    evidencePlan: ['public repository evidence'],
+  }).structuredContent;
+  assert.equal(claim.status, 'claim_pending_owner_review');
+  assert.equal(claim.claim.projectId, 'skillmesh');
+  assert.equal(claim.project.id, 'skillmesh');
 });
 
 test('public MCP review gates use role labels without internal reviewer routes', () => {
@@ -3825,9 +3905,15 @@ test('idacc release snapshot includes verifiable download metadata', () => {
   const response = buildJsonResponse(releaseRoute, '2026-07-06T00:00:00.000Z');
 
   assert.equal(response.status, 'release-snapshot-ready');
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.654');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tag, 'v0.1.723');
   assert.match(IDACC_RELEASE_SNAPSHOT.latest.releaseUrl, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/tag\//);
-  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, 'c311ccb29b30173bfa3aea9fa48a58b4ba8069ac');
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.tagCommitSha, '5545e62ba620a7c56be76468caf23a6b3128bd22');
   assert.ok(Array.isArray(IDACC_RELEASE_SNAPSHOT.latest.assets));
+  assert.equal(IDACC_RELEASE_SNAPSHOT.latest.assets.length, 7);
+  for (const asset of IDACC_RELEASE_SNAPSHOT.latest.assets) {
+    assert.match(asset.url, /^https:\/\/github\.com\/bobofbuilding\/idacc\/releases\/download\/v0\.1\.723\//);
+    assert.match(asset.sha256, /^[a-f0-9]{64}$/);
+    assert.ok(asset.size > 100_000_000);
+  }
   assert.equal(response.data.releases.length, 1);
 });

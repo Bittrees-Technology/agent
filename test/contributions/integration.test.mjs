@@ -27,6 +27,7 @@ const approved = {
   reviewDecision: 'approved',
   title: 'Implement a contributor workflow',
   summary: 'A reviewed implementation packet with tests.',
+  projectId: 'skillmesh',
   lane: 'engineering',
   sourceIds: ['memory:3595'],
   artifacts: ['./output/report.md'],
@@ -46,6 +47,7 @@ test('ManagerTaskClient creates one bounded task and never claims or completes i
   assert.equal(result.status, 'doing');
   assert.equal(requests.filter((request) => request.init.method === 'POST').length, 1);
   assert.match(requests.at(-1).body.description, /Out of scope: task claim\/done/);
+  assert.match(requests.at(-1).body.description, /Project ID: skillmesh/);
   assert.doesNotMatch(requests.at(-1).body.description, /memory:3595/);
   assert.equal(requests.some((request) => /claim|done/.test(request.url)), false);
   assert.equal(result.managerRef, '#private');
@@ -79,6 +81,7 @@ test('Brain terminal summary validates sources and writes a keyed, redacted memo
   assert.equal(requests[1].url, 'http://brain.test/memory/manager');
   assert.equal(requests[1].body.shared, true);
   assert.match(requests[1].body.content, /\[redacted\]/);
+  assert.match(requests[1].body.content, /Project ID: skillmesh/);
   assert.doesNotMatch(requests[1].body.content, /secret-value|private-manager-ref/);
   assert.match(requests[1].body.key, /^contribution-terminal:/);
   assert.equal(requests[1].body.durable_candidate.source_ids[0], 'memory:3595');
@@ -132,6 +135,7 @@ test('sanitizeTerminalSummary exposes only terminal, public-safe fields', () => 
   const summary = sanitizeTerminalSummary({ ...approved, decision: 'rejected', summary: 'password=hunter2' });
   assert.equal(summary.publicSafe, true);
   assert.equal(summary.decision, 'rejected');
+  assert.equal(summary.projectId, 'skillmesh');
   assert.match(summary.summary, /\[redacted\]/);
   assert.equal(summary.correlationKey.length, 64);
   assert.equal(summary.manager.taskKey, null);

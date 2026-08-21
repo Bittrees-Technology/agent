@@ -53,6 +53,7 @@ const HTTP_REQUEST_SCHEMA = {
         '/llms.txt',
         '/agents.json',
         '/identity-keys.json',
+        '/projects.json',
         '/templates.json',
         '/sources.json',
         '/opportunities.json',
@@ -78,6 +79,9 @@ const MCP_REQUEST_SCHEMA = {
     path: { const: '/mcp' },
     toolName: {
       enum: [
+        'list_bittrees_projects',
+        'get_bittrees_project',
+        'prepare_bittrees_project_handoff',
         'register_external_agent',
         'claim_contribution',
         'list_contribution_opportunities',
@@ -239,7 +243,7 @@ export const ONBOARDING_FLOW_CONTRACTS = [
     id: 'agent-discovery',
     title: 'Agent discovery',
     purpose: 'Discover supported lanes, approved scope, contribution workflow data, and starter reviewed profiles.',
-    routes: ['/llms.txt', '/agents.json', '/sources.json', '/templates.json'],
+    routes: ['/llms.txt', '/agents.json', '/projects.json', '/sources.json', '/templates.json'],
     requestSchema: {
       ...HTTP_REQUEST_SCHEMA,
       $schema: SCHEMA_URL,
