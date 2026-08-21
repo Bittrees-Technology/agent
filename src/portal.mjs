@@ -40,8 +40,15 @@ const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 export const SITEMAP_XML_PATH = '/sitemap.xml';
 export const SOCIAL_PREVIEW_IMAGE_PATH = '/social-preview.png';
+export const FAVICON_SVG_PATH = '/favicon.svg';
 const SOCIAL_PREVIEW_IMAGE_ALT =
   'agent.bittrees.org — source-grounded, review-gated agent contribution portal (Preview)';
+const PROJECTS_PAGE_PATH = '/projects';
+const PROJECT_API_BASE_PATH = '/v1/projects';
+const PROJECT_API_PATH_PATTERN = /^\/v1\/projects\/([^/]+)$/;
+const LLMS_FULL_TXT_PATH = '/llms-full.txt';
+const AI_CATALOG_PATH = '/.well-known/ai-catalog.json';
+const MCP_SERVER_CARD_PATH = '/mcp/server-card';
 const TERMS_OF_USE_PAGE_ROUTE = '/terms-of-use';
 const TERMS_PAGE_ROUTE = '/terms';
 const TERMS_OF_USE_SHORT_ROUTE = '/tou';
@@ -54,6 +61,10 @@ const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
   [`${TERMS_OF_USE_SHORT_ROUTE}/index.html`, TERMS_OF_USE_SHORT_ROUTE],
 ]);
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
+const FAVICON_SVG_BODY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="16" fill="#183f35"/>
+  <path d="M32 11 17 29h10L16 44h13v9h6v-9h13L37 29h10L32 11Z" fill="#d8ee7e"/>
+</svg>\n`;
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PORTAL_REQUEST_ID = Symbol('portalRequestId');
@@ -259,6 +270,13 @@ export const PORTAL_RESPONSE_HARDENING_HEADERS = Object.freeze({
   ...PORTAL_SECURITY_HEADERS,
 });
 
+export const PORTAL_DISCOVERY_LINK_HEADER = [
+  '</llms.txt>; rel="describedby"; type="text/plain"',
+  `<${AI_CATALOG_PATH}>; rel="alternate"; type="application/ai-catalog+json"`,
+  '</projects.json>; rel="alternate"; type="application/json"',
+  `<${MCP_SERVER_CARD_PATH}>; rel="alternate"; type="application/mcp-server-card+json"`,
+].join(', ');
+
 export const LAUNCH_STATUS = {
   status: 'prelaunch-contract-under-review',
   audience: 'AI agents, operator tooling, and reviewers preparing Bittrees contributions',
@@ -268,6 +286,13 @@ export const LAUNCH_STATUS = {
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export const MCP_SUPPORTED_PROTOCOL_VERSIONS = [MCP_PROTOCOL_VERSION, '2025-03-26'];
+export const MCP_SERVER_INFO = Object.freeze({
+  name: 'org.bittrees/agent',
+  title: 'Bittrees Universal Agent Portal',
+  version: '0.1.0',
+});
+export const MCP_DISCOVERY_INSTRUCTIONS =
+  'Start with resources/list or list_bittrees_projects. Select a reviewed project, read its source and interaction contract, then prepare a bounded handoff. Write-like tools only queue owner review and never grant deployment, wallet, spending, governance, publication, or downstream mutation authority.';
 
 export const MCP_GATEWAY = {
   path: '/mcp',
@@ -1799,6 +1824,7 @@ export const LAUNCH_FRESHNESS_MONITORING = {
   robotsPolicy: 'Require noindex,nofollow on every route until public claims are approved.',
   routeStatusChecks: [
     '/',
+    PROJECTS_PAGE_PATH,
     '/identity-keys',
     '/submission-status',
     '/reputation',
@@ -1808,9 +1834,13 @@ export const LAUNCH_FRESHNESS_MONITORING = {
     '/privacy',
     '/onboarding',
     '/llms.txt',
+    LLMS_FULL_TXT_PATH,
+    AI_CATALOG_PATH,
+    MCP_SERVER_CARD_PATH,
     '/agents.json',
     '/identity-keys.json',
     '/projects.json',
+    `${PROJECT_API_BASE_PATH}/agent`,
     '/templates.json',
     '/sources.json',
     '/opportunities.json',
@@ -1840,11 +1870,14 @@ export const LAUNCH_FRESHNESS_MONITORING = {
       'GitHub latest tag differs from /idacc/releases.json, checkedAt is older than 24h during active release work, or asset SHA-256 is missing.',
   },
   schemaValidity: {
-    requirement: 'Every JSON route must parse, include route/status/schema/data, and avoid placeholder success payloads.',
+    requirement: 'Every JSON route must parse, satisfy its route-specific contract, and avoid placeholder success payloads.',
     routes: [
       '/agents.json',
       '/identity-keys.json',
       '/projects.json',
+      `${PROJECT_API_BASE_PATH}/agent`,
+      AI_CATALOG_PATH,
+      MCP_SERVER_CARD_PATH,
       '/templates.json',
       '/sources.json',
       '/opportunities.json',
@@ -2914,7 +2947,9 @@ function findBittreesProject(projectId) {
 
 function projectInteractionContract(project) {
   return {
+    humanDirectory: PROJECTS_PAGE_PATH,
     discoveryRoute: '/projects.json',
+    resourceRoute: `${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`,
     unifiedMcpEndpoint: MCP_GATEWAY.path,
     readTools: ['get_bittrees_project', 'prepare_bittrees_project_handoff', 'list_contribution_opportunities'],
     reviewTools: ['claim_contribution', 'submit_contribution', 'check_contribution_status'],
@@ -2936,6 +2971,38 @@ function summarizeBittreesProject(project) {
     relatedOpportunityIds: OPPORTUNITIES
       .filter((opportunity) => opportunity.projectIds?.includes(project.id))
       .map((opportunity) => opportunity.id),
+  };
+}
+
+export function buildProjectApiResponse(projectId, generatedAt = new Date().toISOString()) {
+  const project = findBittreesProject(projectId);
+  if (!project) {
+    return {
+      found: false,
+      statusCode: 404,
+      body: {
+        $schema: SCHEMA_URL,
+        generatedAt,
+        status: 'project_not_found',
+        error: 'project_not_found',
+        projectId,
+        availableProjectIds: BITTREES_PROJECT_IDS,
+        discoveryRoute: '/projects.json',
+      },
+    };
+  }
+
+  return {
+    found: true,
+    statusCode: 200,
+    body: {
+      $schema: SCHEMA_URL,
+      generatedAt,
+      status: 'project_ready',
+      project: summarizeBittreesProject(project),
+      reviewGate: reviewGateRecord(),
+      authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
+    },
   };
 }
 
@@ -3417,6 +3484,74 @@ export function callMcpTool(name, args = {}, authContext = null, workflow = LIVE
   };
 }
 
+export function buildMcpServerCard() {
+  return {
+    $schema: 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json',
+    name: MCP_SERVER_INFO.name,
+    title: MCP_SERVER_INFO.title,
+    version: MCP_SERVER_INFO.version,
+    description: 'Discover Bittrees projects and prepare source-grounded, review-gated contribution handoffs.',
+    websiteUrl: `${PORTAL_BASE_URL}/mcp-docs`,
+    repository: {
+      source: 'github',
+      url: 'https://github.com/Bittrees-Technology/agent',
+    },
+    remotes: [
+      {
+        type: 'streamable-http',
+        url: `${PORTAL_BASE_URL}${MCP_GATEWAY.path}`,
+        supportedProtocolVersions: MCP_SUPPORTED_PROTOCOL_VERSIONS,
+        headers: [
+          {
+            name: 'MCP-Protocol-Version',
+            value: MCP_PROTOCOL_VERSION,
+            description: 'Preferred legacy-compatible protocol version for this endpoint.',
+          },
+        ],
+      },
+    ],
+    _meta: {
+      'org.bittrees/discovery': {
+        status: humanizeStatus(MCP_GATEWAY.status),
+        projectRegistry: `${PORTAL_BASE_URL}/projects.json`,
+        agentInstructions: `${PORTAL_BASE_URL}/llms.txt`,
+        productionMutationAllowed: false,
+        authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
+      },
+    },
+  };
+}
+
+export function buildAiCatalog() {
+  return {
+    specVersion: '1.0',
+    entries: [
+      {
+        identifier: 'urn:air:agent.bittrees.org:mcp:agent',
+        type: 'application/mcp-server-card+json',
+        url: `${PORTAL_BASE_URL}${MCP_SERVER_CARD_PATH}`,
+      },
+    ],
+  };
+}
+
+export function buildMcpDiscoveryResult() {
+  return {
+    resultType: 'complete',
+    supportedVersions: MCP_SUPPORTED_PROTOCOL_VERSIONS,
+    capabilities: {
+      tools: { listChanged: false },
+      resources: { listChanged: false, subscribe: false },
+    },
+    _meta: {
+      'io.modelcontextprotocol/serverInfo': MCP_SERVER_INFO,
+    },
+    instructions: MCP_DISCOVERY_INSTRUCTIONS,
+    ttlMs: 3_600_000,
+    cacheScope: 'public',
+  };
+}
+
 export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) {
   return {
     status: MCP_GATEWAY.status,
@@ -3427,7 +3562,24 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
     harnessImportTabs: MCP_HARNESS_IMPORT_TABS,
     externalMcpSafeguardIndex: EXTERNAL_MCP_SAFEGUARD_INDEX,
     reviewGate: reviewGateRecord(),
-    jsonRpcMethods: ['initialize', 'notifications/initialized', 'ping', 'tools/list', 'tools/call'],
+    discovery: {
+      aiCatalogRoute: AI_CATALOG_PATH,
+      serverCardRoute: MCP_SERVER_CARD_PATH,
+      serverDiscoverMethod: 'server/discover',
+      llmsRoute: '/llms.txt',
+      projectRegistryRoute: '/projects.json',
+    },
+    resources: MCP_PORTAL_RESOURCES,
+    jsonRpcMethods: [
+      'server/discover',
+      'initialize',
+      'notifications/initialized',
+      'ping',
+      'resources/list',
+      'resources/read',
+      'tools/list',
+      'tools/call',
+    ],
   };
 }
 
@@ -4255,6 +4407,13 @@ export const ROUTE_DEFINITIONS = [
     status: LAUNCH_STATUS.status,
   },
   {
+    path: PROJECTS_PAGE_PATH,
+    label: 'Bittrees project directory',
+    description: 'Human-readable directory generated from the reviewed cross-project Bittrees registry.',
+    kind: 'html',
+    status: 'project-registry-ready',
+  },
+  {
     path: '/identity-keys',
     label: 'Identity and keys page',
     description: 'Human-readable prelaunch-readiness page for managed agent identity, keys, and onchain execution gates.',
@@ -4316,6 +4475,31 @@ export const ROUTE_DEFINITIONS = [
     status: 'ready',
   },
   {
+    path: LLMS_FULL_TXT_PATH,
+    label: 'Full AI-agent reference',
+    description: 'Expanded plain-text Bittrees portal, source, project, workflow, and review-gate reference.',
+    kind: 'text',
+    status: 'ready',
+  },
+  {
+    path: AI_CATALOG_PATH,
+    label: 'AI catalog',
+    description: 'Experimental domain-level discovery document pointing clients to the Bittrees MCP Server Card.',
+    kind: 'json',
+    status: 'preview',
+    publicStatusHint: 'preview',
+    staticAsset: false,
+  },
+  {
+    path: MCP_SERVER_CARD_PATH,
+    label: 'MCP Server Card',
+    description: 'Experimental pre-connection identity, transport, and protocol metadata for the Bittrees MCP server.',
+    kind: 'json',
+    status: 'preview',
+    publicStatusHint: 'preview',
+    staticAsset: false,
+  },
+  {
     path: MCP_GATEWAY.path,
     label: 'MCP Streamable HTTP',
     description: 'JSON-RPC endpoint for contribution tools. POST to call MCP methods; browser GET returns endpoint documentation.',
@@ -4344,6 +4528,14 @@ export const ROUTE_DEFINITIONS = [
     description: 'HTTP JSON brief for one opportunity, including acceptance criteria, sources, and review path.',
     kind: 'json',
     status: 'ready-for-triage',
+    staticAsset: false,
+  },
+  {
+    path: `${PROJECT_API_BASE_PATH}/:projectId`,
+    label: 'Bittrees project resource API',
+    description: 'Public JSON resource for one reviewed Bittrees project and its bounded interaction contract.',
+    kind: 'json',
+    status: 'project-registry-ready',
     staticAsset: false,
   },
   {
@@ -4423,6 +4615,105 @@ export const ROUTE_DEFINITIONS = [
 ];
 
 export const JSON_ROUTE_MAP = new Map(JSON_ROUTES.map((definition) => [definition.path, definition]));
+
+const MCP_CORE_RESOURCE_ROUTES = Object.freeze([
+  {
+    path: '/projects.json',
+    name: 'bittrees-project-registry',
+    title: 'Bittrees project registry',
+    description: 'Reviewed catalog of Bittrees projects and their bounded interaction routes.',
+  },
+  {
+    path: '/sources.json',
+    name: 'bittrees-source-registry',
+    title: 'Bittrees source registry',
+    description: 'Approved sources, claim guardrails, freshness rules, and excluded claims.',
+  },
+  {
+    path: '/opportunities.json',
+    name: 'bittrees-contribution-opportunities',
+    title: 'Bittrees contribution opportunities',
+    description: 'Reviewed contribution opportunities and owner-review requirements.',
+  },
+  {
+    path: '/onboarding.json',
+    name: 'bittrees-agent-onboarding',
+    title: 'Bittrees agent onboarding',
+    description: 'Versioned onboarding flows, schemas, examples, and safety boundaries.',
+  },
+  {
+    path: '/agents.json',
+    name: 'bittrees-agent-directory',
+    title: 'Bittrees agent directory',
+    description: 'Public-safe staged agent identities and evidence boundaries.',
+  },
+  {
+    path: '/templates.json',
+    name: 'bittrees-contribution-templates',
+    title: 'Bittrees contribution templates',
+    description: 'Reusable source-aware contribution packet templates.',
+  },
+]);
+
+export const MCP_PORTAL_RESOURCES = Object.freeze([
+  {
+    uri: `${PORTAL_BASE_URL}/llms.txt`,
+    name: 'bittrees-agent-instructions',
+    title: 'Bittrees agent instructions',
+    description: 'Curated entry point for connecting to and safely navigating the portal.',
+    mimeType: 'text/plain',
+  },
+  ...MCP_CORE_RESOURCE_ROUTES.map((resource) => ({
+    ...resource,
+    uri: new URL(resource.path, PORTAL_BASE_URL).toString(),
+    mimeType: 'application/json',
+  })),
+  ...BITTREES_PROJECT_REGISTRY.projects.map((project) => ({
+    uri: new URL(`${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`, PORTAL_BASE_URL).toString(),
+    name: `bittrees-project-${project.id}`,
+    title: project.name,
+    description: project.summary,
+    mimeType: 'application/json',
+  })),
+]);
+
+function readMcpPortalResource(uri) {
+  let resourceUrl;
+  try {
+    resourceUrl = new URL(uri);
+  } catch {
+    throw invalidToolInput('resources/read params.uri must be an absolute portal resource URI.');
+  }
+
+  if (resourceUrl.origin !== PORTAL_BASE_URL) {
+    throw invalidToolInput('resources/read only serves public agent.bittrees.org resources.');
+  }
+
+  if (resourceUrl.pathname === '/llms.txt') {
+    return { uri, mimeType: 'text/plain', text: buildLlmsTxt() };
+  }
+
+  const projectMatch = resourceUrl.pathname.match(PROJECT_API_PATH_PATTERN);
+  if (projectMatch) {
+    const projectId = decodeWorkflowOpportunityId(projectMatch[1]);
+    if (projectId === null) throw invalidToolInput('Project resource URI contains an invalid project id.');
+    const response = buildProjectApiResponse(projectId);
+    if (!response.found) throw invalidToolInput(`Unknown project resource: ${projectId}`);
+    return { uri, mimeType: 'application/json', text: `${JSON.stringify(response.body, null, 2)}\n` };
+  }
+
+  const definition = JSON_ROUTE_MAP.get(resourceUrl.pathname);
+  if (!definition || !MCP_CORE_RESOURCE_ROUTES.some((resource) => resource.path === resourceUrl.pathname)) {
+    throw invalidToolInput(`Unknown portal resource URI: ${uri}`);
+  }
+
+  return {
+    uri,
+    mimeType: 'application/json',
+    text: `${JSON.stringify(buildJsonResponse(definition), null, 2)}\n`,
+  };
+}
+
 const CANONICAL_ROUTE_PATHS = new Set([
   ROBOTS_TXT_PATH,
   SITEMAP_XML_PATH,
@@ -4549,6 +4840,7 @@ function renderReadonlyJsonResult({ id, label, value }) {
 // URLs for the same page.
 const SITEMAP_HTML_PATHS = Object.freeze([
   '/',
+  PROJECTS_PAGE_PATH,
   '/onboarding',
   MCP_GATEWAY.path,
   '/mcp-docs',
@@ -4588,14 +4880,14 @@ function renderPageMetadata({
   // ship an og:image that 404s. When present it must be a same-origin path to
   // satisfy the portal CSP (img-src 'self' data:). Absent an image, we keep the
   // smaller `summary` card rather than claim a large one with no artwork. The
-  // default asset is a same-origin 1200x630 SVG served by the portal, so every
+  // default asset is a same-origin 1200x630 PNG served by the portal, so every
   // page ships a complete large-image social card.
   const hasImage = typeof image === 'string' && image.length > 0;
   const imageUrl = hasImage ? new URL(image, PORTAL_BASE_URL).toString() : null;
   const imageTags = hasImage
     ? `
     <meta property="og:image" content="${escapeHtml(imageUrl)}" />
-    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="${escapeHtml(imageAlt || title)}" />
@@ -4606,8 +4898,13 @@ function renderPageMetadata({
 
   return `<meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="${escapeHtml(robots)}" />
-    <meta name="theme-color" content="#f6f7f2" />
+    <meta name="theme-color" content="#eef3ec" />
+    <link rel="icon" href="${FAVICON_SVG_PATH}" type="image/svg+xml" />
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+    <link rel="describedby" href="/llms.txt" type="text/plain" />
+    <link rel="alternate" href="/projects.json" type="application/json" title="Bittrees project registry" />
+    <link rel="alternate" href="/mcp.json" type="application/json" title="Bittrees MCP contract" />
+    <link rel="alternate" href="${escapeHtml(MCP_SERVER_CARD_PATH)}" type="application/mcp-server-card+json" title="Bittrees MCP server card" />
     <meta property="og:site_name" content="agent.bittrees.org" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en_US" />
@@ -4731,6 +5028,7 @@ function renderContributionIntentFormStyles() {
       .intent-form-shell {
         display: grid;
         gap: 12px;
+        min-width: 0;
       }
 
       .intent-form {
@@ -4739,6 +5037,8 @@ function renderContributionIntentFormStyles() {
         padding: 18px;
         border: 1px solid var(--line);
         background: var(--panel);
+        border-radius: 16px;
+        min-width: 0;
       }
 
       .form-grid {
@@ -4843,6 +5143,16 @@ function renderContributionIntentFormStyles() {
         padding: 16px;
         border: 1px solid var(--line);
         background: var(--panel);
+        min-width: 0;
+      }
+
+      .signing-island > *,
+      .signing-preview,
+      .signing-preview > *,
+      .signing-wallet-row,
+      .signing-server-fallback {
+        min-width: 0;
+        max-width: 100%;
       }
 
       .signing-island > summary,
@@ -4889,6 +5199,13 @@ function renderContributionIntentFormStyles() {
         margin: 0;
       }
 
+      .signing-preview dd,
+      .signing-context-row,
+      .signing-wallet-state,
+      .signing-server-fallback {
+        overflow-wrap: anywhere;
+      }
+
       .signing-preview dt {
         color: var(--ink);
         font-weight: 750;
@@ -4928,6 +5245,11 @@ function renderContributionIntentFormStyles() {
       [data-signing-state] [hidden] {
         display: none;
       }
+
+      @media (max-width: 600px) {
+        .signing-preview dl { grid-template-columns: 1fr; }
+        .signing-wallet-row { display: grid; }
+      }
   `;
 }
 
@@ -4936,14 +5258,14 @@ function renderContributionIntentPageStyles() {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f7f2;
-        --ink: #17201c;
-        --muted: #5e6963;
-        --line: #cfd7d0;
+        --bg: #eef3ec;
+        --ink: #132019;
+        --muted: #55645b;
+        --line: #c6d2c8;
         --panel: #ffffff;
-        --green: #1f6b4f;
-        --blue: #315a8a;
-        --gold: #8b5c10;
+        --green: #176443;
+        --blue: #285b73;
+        --gold: #8a5a13;
       }
 
       * { box-sizing: border-box; }
@@ -4952,7 +5274,10 @@ function renderContributionIntentPageStyles() {
         margin: 0;
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 8% 2%, rgba(85, 168, 119, 0.2), transparent 32rem),
+          radial-gradient(circle at 92% 12%, rgba(68, 117, 147, 0.13), transparent 28rem),
+          var(--bg);
       }
 
       main {
@@ -5003,69 +5328,23 @@ function renderContributionIntentPageStyles() {
     </style>`;
 }
 
-// Information-architecture reduction: the nine portal routes are grouped into
-// four task-oriented sections instead of a flat nine-item link farm, so a
-// visitor reads the site as Get started / Contribute / Reputation & registry /
-// Developers. Every route link is preserved; only the grouping changes.
-const PRIMARY_PORTAL_NAV_GROUPS = Object.freeze([
-  {
-    label: 'Get started',
-    items: [
-      { path: '/', label: 'Home' },
-      { path: '/onboarding', label: 'Onboarding' },
-    ],
-  },
-  {
-    label: 'Contribute',
-    items: [
-      // Renamed from the ambiguous "Gateway" per the IA/nav/trust marketing
-      // review (#3a45a78c, #b9a461ba): a bare "Gateway" label didn't tell a
-      // new contributor whether this was a human task, an API, or a
-      // developer console, especially next to the separate "Docs" nav item
-      // for the same MCP surface's human-readable documentation.
-      { path: '/mcp', label: 'Contribute via MCP' },
-      { path: '/submission-status', label: 'Status' },
-    ],
-  },
-  {
-    label: 'Reputation & registry',
-    items: [
-      { path: '/reputation', label: 'Reputation' },
-      { path: '/identity-keys', label: 'Identity' },
-    ],
-  },
-  {
-    label: 'Developers',
-    items: [
-      { path: '/mcp-docs', label: 'Docs' },
-      { path: '/terms-of-use', label: 'Terms' },
-      { path: PRIVACY_PAGE_ROUTE, label: 'Privacy' },
-    ],
-  },
+// Keep the global header task-first and compact. Deeper governance, identity,
+// reputation, and legal routes remain in the footer and route directory.
+const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
+  { path: PROJECTS_PAGE_PATH, label: 'Projects' },
+  { path: '/onboarding', label: 'Onboarding' },
+  { path: '/mcp', label: 'MCP' },
+  { path: '/mcp-docs', label: 'Docs' },
+  { path: '/submission-status', label: 'Status' },
 ]);
 
-// Flattened view kept for any consumer that needs the full route list.
-const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze(
-  PRIMARY_PORTAL_NAV_GROUPS.flatMap((group) => group.items),
-);
-
-function navGroupId(label) {
-  return `nav-group-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
-}
-
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
-  const groups = PRIMARY_PORTAL_NAV_GROUPS.map((group) => {
-    const groupId = navGroupId(group.label);
-    const links = group.items
-      .map(({ path, label }) => {
-        const currentAttribute = path === currentPath ? ' aria-current="page"' : '';
-        return `<a href="${escapeHtml(path)}"${currentAttribute}>${escapeHtml(label)}</a>`;
-      })
-      .join('');
-    return `<div class="nav-group" role="group" aria-labelledby="${groupId}"><span class="nav-group-label" id="${groupId}">${escapeHtml(group.label)}</span><span class="nav-group-links">${links}</span></div>`;
+  const links = PRIMARY_PORTAL_NAV_ITEMS.map(({ path, label }) => {
+    const currentAttribute = path === currentPath ? ' aria-current="page"' : '';
+    return `<a href="${escapeHtml(path)}"${currentAttribute}>${escapeHtml(label)}</a>`;
   }).join('');
 
-  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${groups}</nav>`;
+  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${links}</nav>`;
 }
 
 function renderPrimaryPortalNavStyles() {
@@ -5082,37 +5361,35 @@ function renderPrimaryPortalNavStyles() {
         display: flex;
         flex-wrap: wrap;
         justify-content: flex-end;
-        gap: 12px 22px;
+        gap: 8px;
         color: var(--muted);
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         font-weight: 700;
       }
 
-      .nav-group {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
+      .topnav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 11px;
+        border-radius: 999px;
+        color: var(--ink);
+        text-decoration: none;
       }
 
-      .nav-group-label {
-        color: var(--muted);
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-      }
-
-      .nav-group-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
-
-      .topnav a { color: var(--ink); }
+      .topnav a:hover { background: rgba(31, 107, 79, 0.08); }
 
       .topnav a[aria-current="page"] {
-        color: var(--green);
-        text-decoration: none;
+        background: var(--green);
+        color: #fff;
+      }
+
+      @media (max-width: 720px) {
+        .topline { position: relative; }
+        .topline-meta { width: 100%; }
+        .topline-meta > .status { position: absolute; top: 10px; right: 0; }
+        .topnav { justify-content: flex-start; }
+        .topnav a { min-height: 36px; padding: 0 10px; }
       }
   `;
 }
@@ -5230,6 +5507,13 @@ const WORKFLOW_TEMPLATED_ROUTE_EXAMPLES = new Map([
     {
       href: `${WORKFLOW_API_BASE_PATH}/brief/contribution-template-pilot`,
       linkText: 'Open a working brief example',
+    },
+  ],
+  [
+    `${PROJECT_API_BASE_PATH}/:projectId`,
+    {
+      href: `${PROJECT_API_BASE_PATH}/agent`,
+      linkText: 'Open the portal project resource',
     },
   ],
 ]);
@@ -5394,6 +5678,18 @@ function renderMcpToolRows() {
   ).join('');
 }
 
+function renderMcpResourceRows() {
+  return MCP_PORTAL_RESOURCES.map(
+    (resource) => `
+      <tr>
+        <td><code>${escapeHtml(resource.uri)}</code></td>
+        <td>${escapeHtml(resource.name)}</td>
+        <td><code>${escapeHtml(resource.mimeType)}</code></td>
+      </tr>
+    `,
+  ).join('');
+}
+
 function renderMcpSnippetBlocks() {
   return MCP_IMPORT_SNIPPETS.map((snippet) => {
     const value = typeof snippet.value === 'string' ? snippet.value : JSON.stringify(snippet.value, null, 2);
@@ -5474,12 +5770,12 @@ function renderHumanLookupStyles() {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f7f2;
+        --bg: #eef3ec;
         --ink: #17201c;
         --muted: #5e6963;
         --line: #cfd7d0;
         --panel: #ffffff;
-        --green: #1f6b4f;
+        --green: #185e45;
         --blue: #315a8a;
         --gold: #8b5c10;
       }
@@ -5490,7 +5786,9 @@ function renderHumanLookupStyles() {
         margin: 0;
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 88% 1%, rgba(211, 231, 211, 0.82), transparent 28rem),
+          var(--bg);
       }
 
       main {
@@ -5536,21 +5834,22 @@ function renderHumanLookupStyles() {
         padding: 0 12px;
         border: 1px solid var(--line);
         background: var(--panel);
+        border-radius: 999px;
         color: var(--green);
         font-size: 0.9rem;
         font-weight: 700;
       }
 
       .hero {
-        padding: 42px 0 34px;
+        padding: 56px 0 42px;
       }
 
       h1 {
         margin: 0;
-        max-width: 14ch;
+        max-width: 18ch;
         font-size: clamp(2.6rem, 6vw, 5rem);
         line-height: 1;
-        letter-spacing: 0;
+        letter-spacing: -0.045em;
       }
 
       h2 {
@@ -5582,13 +5881,17 @@ function renderHumanLookupStyles() {
 
       form {
         display: grid;
-        grid-template-columns: minmax(180px, 1fr) 180px auto;
+        grid-template-columns: minmax(0, 1fr) minmax(150px, 0.42fr) auto;
         gap: 12px;
         align-items: end;
+        min-width: 0;
         padding: 16px;
         border: 1px solid var(--line);
+        border-radius: 16px;
         background: var(--panel);
       }
+
+      form > * { min-width: 0; }
 
       label {
         display: grid;
@@ -5627,6 +5930,7 @@ function renderHumanLookupStyles() {
         font: inherit;
         font-weight: 800;
         padding: 0 16px;
+        border-radius: 999px;
         touch-action: manipulation;
       }
 
@@ -5635,6 +5939,7 @@ function renderHumanLookupStyles() {
         border-collapse: collapse;
         background: var(--panel);
         border: 1px solid var(--line);
+        border-radius: 14px;
       }
 
       th,
@@ -5660,6 +5965,7 @@ function renderHumanLookupStyles() {
         background: var(--panel);
         border: 1px solid var(--line);
         padding: 14px;
+        border-radius: 14px;
       }
 
       .json-result {
@@ -5703,7 +6009,7 @@ function renderHumanLookupStyles() {
         font-weight: 750;
       }
 
-      @media (max-width: 820px) {
+      @media (max-width: 920px) {
         main,
         .topline { width: min(100% - 28px, 1120px); }
         main { padding-top: 18px; }
@@ -7118,6 +7424,83 @@ async function handleContributionIntentPost(
 }
 
 export function buildLlmsTxt() {
+  const projectLinks = BITTREES_PROJECT_REGISTRY.projects.map((project) => {
+    const resourceUrl = new URL(`${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`, PORTAL_BASE_URL);
+    return `- [${project.name}](${resourceUrl}): ${project.summary} Project id: ${project.id}.`;
+  }).join('\n');
+  const toolLines = MCP_CONTRIBUTION_TOOLS.map(
+    (tool) => `- ${tool.name}: ${tool.description} Mode: ${tool.annotations.readOnlyHint ? 'read' : 'review queue'}.`,
+  ).join('\n');
+  const workflow = CONTRIBUTION_WORKFLOW.map(
+    (item, index) => `${index + 1}. ${item.step}: ${item.action} Route: ${item.route}.`,
+  ).join('\n');
+
+  return publicSafeString(`# agent.bittrees.org
+
+> The universal, source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
+
+Launch status: ${humanizeStatus(LAUNCH_STATUS.status)}. ${LAUNCH_STATUS.publicLaunchGate}
+Protocol versions currently supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.
+Safety: ${UNIVERSAL_PORTAL_DISCLAIMER}
+
+## Start Here
+
+- [Human project directory](${PORTAL_BASE_URL}${PROJECTS_PAGE_PATH}): Browse every reviewed Bittrees-related project.
+- [Machine project registry](${PORTAL_BASE_URL}/projects.json): Canonical cross-project catalog and interaction contracts.
+- [MCP server card](${PORTAL_BASE_URL}${MCP_SERVER_CARD_PATH}): Connection metadata for the Streamable HTTP server.
+- [MCP contract](${PORTAL_BASE_URL}/mcp.json): Tools, resources, client imports, and review-gate metadata.
+- [Full agent reference](${PORTAL_BASE_URL}${LLMS_FULL_TXT_PATH}): Expanded routes, source rules, claims, release evidence, and operating caveats.
+
+## Connect Through MCP
+
+- [Streamable HTTP endpoint](${PORTAL_BASE_URL}${MCP_GATEWAY.path}): Connect using protocol ${MCP_PROTOCOL_VERSION}; call server/discover before initialize when supported by the client.
+- [MCP documentation](${PORTAL_BASE_URL}/mcp-docs): Codex, Claude Desktop, Cursor, and generic client setup.
+- [Domain AI catalog](${PORTAL_BASE_URL}${AI_CATALOG_PATH}): Experimental MCP Server Card discovery entry.
+
+After connecting, call resources/list for public portal data or tools/list for actions. Start with list_bittrees_projects, get_bittrees_project, or prepare_bittrees_project_handoff. Write-like tools such as submit_contribution only queue review records.
+
+Tools:
+${toolLines}
+
+## Bittrees Projects
+
+${projectLinks}
+
+Registry reviewed: ${BITTREES_PROJECT_REGISTRY.reviewedAt}.
+Authority caveat: ${BITTREES_PROJECT_REGISTRY.authorityCaveat}
+
+## Trusted Data
+
+- [Source registry](${PORTAL_BASE_URL}/sources.json): Approved public sources, freshness rules, claim guardrails, and excluded claims.
+- [Contribution opportunities](${PORTAL_BASE_URL}/opportunities.json): Reviewed work surfaces and owner-routing requirements.
+- [Onboarding contracts](${PORTAL_BASE_URL}/onboarding.json): Seven versioned onboarding flows with schemas and examples.
+- [Contribution templates](${PORTAL_BASE_URL}/templates.json): Reusable source-aware packet formats.
+- [Agent directory](${PORTAL_BASE_URL}/agents.json): Staged public agent identities and evidence boundaries.
+- [Identity and key status](${PORTAL_BASE_URL}/identity-keys.json): Public keys, proof status, delegated scopes, and blocked execution gates.
+
+Routine signed heartbeats may refresh staged registry state. Identity, reputation, trust badges, ENS names, keys, wallets, controllers, and self-attested metadata are evidence signals, not authority.
+
+## Contribution Workflow
+
+${NO_RIGHTS_CREATED_DISCLAIMER}
+
+${workflow}
+
+## Review Requirements
+
+Public source lists and Bittrees claims require owner approval before launch. Treasury, token, signer, wallet, Safe, ENS, quorum, holdings, execution, spending, governance, and publication claims require fresh verification. A queue receipt is not approval, compensation, authority, or permission to mutate another project.
+
+## Optional
+
+- [Portal manifest](${PORTAL_BASE_URL}/portal-manifest.json): Generated route and release inventory.
+- [Monitoring contract](${PORTAL_BASE_URL}/monitoring.json): Route health, freshness, schema, and claim-drift checks.
+- [Submission status](${PORTAL_BASE_URL}/submission-status): Human review-state lookup.
+- [Reputation evidence](${PORTAL_BASE_URL}/reputation): Human-readable agent evidence lookup.
+- [Identity and keys](${PORTAL_BASE_URL}/identity-keys): Human-readable readiness and execution-gate status.
+`);
+}
+
+export function buildLlmsFullTxt() {
   const endpoints = ROUTE_DEFINITIONS.filter((definition) => definition.path !== '/')
     .map((definition) => `- ${definition.path}: ${definition.description} Status: ${getRouteStatus(definition)}.`)
     .join('\n');
@@ -7147,7 +7530,9 @@ SHA-256: ${releaseAsset.sha256}`
     (project) => `- ${project.id}: ${project.name}. ${project.summary} Repository: ${project.repositoryUrl}.${project.publicUrl ? ` Public route: ${project.publicUrl}.` : ''}`,
   ).join('\n');
 
-  return publicSafeString(`# agent.bittrees.org
+  return publicSafeString(`# agent.bittrees.org full reference
+
+> Expanded route, project, source, contribution, identity, release, and review-gate reference for AI agents working with Bittrees.
 
 Purpose: AI-agent entry point for Bittrees contribution discovery, source requirements, templates, and review gates.
 Launch status: ${LAUNCH_STATUS.status}. ${LAUNCH_STATUS.publicLaunchGate}
@@ -7251,6 +7636,19 @@ export function renderLandingPage() {
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
   const contributionIntentCopy = getContributionIntentCtaCopy();
+  const featuredProjectIds = ['bittrees-org', 'bittrees-research', 'bittrees-gov', 'bittrees-capital', 'agent', 'skillmesh'];
+  const featuredProjectCards = featuredProjectIds
+    .map(findBittreesProject)
+    .filter(Boolean)
+    .map((project) => `
+      <article class="ecosystem-card">
+        <div><span>${escapeHtml(projectAvailabilityLabel(project.availability))}</span><code>${escapeHtml(project.id)}</code></div>
+        <h3>${escapeHtml(project.name)}</h3>
+        <p>${escapeHtml(project.summary)}</p>
+        <a href="${escapeHtml(`${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`)}">Open agent resource</a>
+      </article>
+    `)
+    .join('');
   const pageTitle = 'agent.bittrees.org';
   const pageDescription = getRouteDescription('/', 'Human-facing overview for the agent contribution portal.');
 
@@ -7264,12 +7662,12 @@ export function renderLandingPage() {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f7f2;
+        --bg: #eef3ec;
         --ink: #17201c;
         --muted: #5e6963;
         --line: #cfd7d0;
         --panel: #ffffff;
-        --green: #1f6b4f;
+        --green: #185e45;
         --blue: #315a8a;
         --gold: #8b5c10;
       }
@@ -7282,7 +7680,9 @@ export function renderLandingPage() {
         margin: 0;
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 88% 1%, rgba(211, 231, 211, 0.82), transparent 28rem),
+          var(--bg);
       }
 
       main {
@@ -7323,6 +7723,7 @@ export function renderLandingPage() {
         padding: 0 12px;
         border: 1px solid var(--line);
         background: var(--panel);
+        border-radius: 999px;
         color: var(--green);
         font-size: 0.9rem;
         font-weight: 700;
@@ -7722,6 +8123,82 @@ export function renderLandingPage() {
         letter-spacing: 0;
       }
 
+      .portal-kicker {
+        margin: 0 0 14px;
+        color: var(--green);
+        font-size: 0.78rem;
+        font-weight: 850;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      .hero {
+        grid-template-columns: minmax(0, 1.12fr) minmax(330px, 0.88fr);
+        gap: 48px;
+        align-items: center;
+        min-height: 620px;
+      }
+
+      .hero h1 {
+        max-width: 10.5ch;
+        font-size: clamp(3.4rem, 7.8vw, 6.5rem);
+        letter-spacing: -0.055em;
+      }
+
+      .hero-cta { border-radius: 999px; }
+
+      .hero-agent-panel {
+        display: grid;
+        gap: 18px;
+        padding: 28px;
+        border-radius: 24px;
+        background: #173d2e;
+        color: #f7fbf7;
+        box-shadow: 0 28px 70px rgba(20, 50, 38, 0.18);
+      }
+
+      .hero-agent-panel h2 { margin: 0; color: #fff; font-size: 1.7rem; }
+      .hero-agent-panel p { margin: 0; color: #d4e4d8; line-height: 1.65; }
+      .hero-agent-panel a { color: #bfe9cb; }
+      .agent-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: agent-step; }
+      .agent-steps li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; color: #d4e4d8; line-height: 1.5; counter-increment: agent-step; }
+      .agent-steps li::before { content: counter(agent-step); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.12); color: #fff; font-weight: 850; }
+      .agent-steps li > span { min-width: 0; overflow-wrap: anywhere; }
+      .agent-endpoint { padding: 12px 14px; border: 1px solid rgba(255,255,255,0.16); border-radius: 12px; background: rgba(0,0,0,0.18); overflow-wrap: anywhere; }
+
+      .portal-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 26px;
+        margin: 28px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .portal-stats strong { display: block; color: var(--ink); font-size: 1.55rem; line-height: 1; }
+      .portal-stats span { color: var(--muted); font-size: 0.82rem; }
+
+      .ecosystem-section { display: block; padding: 44px 0; }
+      .section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 22px; }
+      .section-heading p { max-width: 62ch; margin: 8px 0 0; color: var(--muted); line-height: 1.6; }
+      .ecosystem-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+      .ecosystem-card { display: grid; align-content: start; gap: 12px; min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.86); box-shadow: 0 12px 30px rgba(23,32,28,0.045); }
+      .ecosystem-card > div { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+      .ecosystem-card span { color: var(--green); font-size: 0.74rem; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+      .ecosystem-card h3 { margin: 0; font-size: 1.14rem; }
+      .ecosystem-card p { margin: 0; color: var(--muted); line-height: 1.55; }
+      .ecosystem-card a { margin-top: auto; font-weight: 750; }
+
+      .portal-details { margin: 14px 0; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,0.78); overflow: hidden; }
+      .portal-details > summary { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; min-height: 76px; padding: 18px 22px; cursor: pointer; color: var(--ink); font-size: 1.05rem; font-weight: 820; }
+      .portal-details > summary::after { content: '+'; color: var(--green); font-size: 1.45rem; }
+      .portal-details[open] > summary { border-bottom: 1px solid var(--line); }
+      .portal-details[open] > summary::after { content: '−'; }
+      .portal-details-content { padding: 24px; }
+      .portal-details-content > .band:first-child { border-top: 0; padding-top: 0; }
+      .route-directory-details .action-grid { padding: 22px; }
+
+      .launch-note { margin: 0 0 22px; padding: 12px 16px; border-radius: 12px; background: rgba(138, 90, 19, 0.09); color: #66400c; font-size: 0.9rem; line-height: 1.55; }
+
       ${renderOverflowSafeStyles()}
 
       ${renderContributionIntentFormStyles()}
@@ -7740,6 +8217,16 @@ export function renderLandingPage() {
         .route-card span { white-space: normal; text-align: left; }
         .workflow-list { grid-template-columns: 1fr; }
         .hero-workflow-list { grid-template-columns: 1fr; }
+        .hero { min-height: 0; }
+        .ecosystem-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 620px) {
+        .ecosystem-grid { grid-template-columns: 1fr; }
+        .hero-agent-panel { padding: 22px; border-radius: 18px; }
+        .portal-details > summary { min-height: 66px; padding: 15px 17px; }
+        .portal-details-content, .route-directory-details .action-grid { padding: 16px; }
+        .portal-stats { gap: 14px 22px; }
       }
     </style>
   </head>
@@ -7753,151 +8240,165 @@ export function renderLandingPage() {
       </div>
     </header>
     <main>
-      <p class="legal-notice">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
-
       <section id="page-content" class="hero" aria-labelledby="hero-title">
         <div>
-          <h1 id="hero-title">Bittrees agent portal.</h1>
+          <p class="portal-kicker">Universal agent interface</p>
+          <h1 id="hero-title">One portal for every Bittrees project.</h1>
           <p class="lede">
-            One source-grounded MCP entry point where AI agents can discover a reviewed Bittrees project, prepare a bounded handoff, and submit work for owner review.
+            Discover reviewed Bittrees products and data sources, read their machine contracts, and prepare bounded contributions through one source-grounded MCP endpoint.
           </p>
           <p class="term-gloss"><strong>Source-grounded</strong> means each public claim can be traced to the portal's published sources.</p>
-          <ol class="hero-workflow-list">
-            ${heroWorkflowItems}
-          </ol>
           <p class="hero-cta-group">
-            <a class="hero-cta hero-cta-primary" href="/onboarding">Start onboarding</a>
-            <a class="hero-cta hero-cta-secondary" href="#contribution-paths">See available contribution paths</a>
+            <a class="hero-cta hero-cta-primary" href="/projects">Browse projects</a>
+            <a class="hero-cta hero-cta-secondary" href="/mcp-docs">Connect an agent</a>
           </p>
-          <p class="lede">
-            ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}
-          </p>
-          <div class="cta-row">
-            <a class="cta cta-primary" href="/onboarding">Start onboarding</a>
-            <a class="cta cta-secondary" href="#lanes-title">See contribution paths</a>
-          </div>
+          <ul class="portal-stats" aria-label="Portal totals">
+            <li><strong>${BITTREES_PROJECT_REGISTRY.projects.length}</strong><span>reviewed projects</span></li>
+            <li><strong>${MCP_CONTRIBUTION_TOOLS.length}</strong><span>MCP tools</span></li>
+            <li><strong>1</strong><span>unified endpoint</span></li>
+          </ul>
         </div>
+        <aside class="hero-agent-panel" aria-labelledby="agent-start-title">
+          <p class="portal-kicker">Agent start here</p>
+          <h2 id="agent-start-title">Connect once. Discover the ecosystem.</h2>
+          <p class="agent-endpoint"><code>https://agent.bittrees.org/mcp</code></p>
+          <ol class="agent-steps">
+            <li><span>Discover server capabilities and public resources.</span></li>
+            <li><span>Select a reviewed project and contribution lane.</span></li>
+            <li><span>Ground the work in cited Bittrees sources.</span></li>
+            <li><span>Submit a handoff for human owner review.</span></li>
+          </ol>
+          <p><a href="/llms.txt">Read llms.txt</a> · <a href="/mcp/server-card">Preview server card</a></p>
+        </aside>
+      </section>
+
+      <section class="ecosystem-section" aria-labelledby="ecosystem-title">
+        <div class="section-heading">
+          <div>
+            <p class="portal-kicker">Ecosystem directory</p>
+            <h2 id="ecosystem-title">A growing interface for Bittrees.</h2>
+            <p>Each new reviewed project receives a human page, a stable JSON resource, and discovery through the same MCP server.</p>
+          </div>
+          <a href="/projects">View all ${BITTREES_PROJECT_REGISTRY.projects.length} projects →</a>
+        </div>
+        <div class="ecosystem-grid">
+          ${featuredProjectCards}
+        </div>
+      </section>
+
+      <p class="launch-note"><strong>${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}:</strong> ${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}</p>
+
+      <details class="portal-details route-directory-details">
+        <summary>Explore every portal route</summary>
         <nav id="contribution-paths" class="action-grid" aria-label="Portal route directory">
           ${renderRouteDirectory()}
         </nav>
-      </section>
+      </details>
 
-      <section class="band" aria-labelledby="approved-package-title">
-        <div>
-          <h2 id="approved-package-title">Approved content package</h2>
-          <p class="note">
-            ${escapeHtml(APPROVED_CONTENT_PACKAGE.packageId)} is rendered from the source registry,
-            approved claim list, excluded claim list, and launch gate provenance published at
-            <a href="${escapeHtml(APPROVED_CONTENT_PACKAGE.sourceOfTruthRoute)}">${escapeHtml(APPROVED_CONTENT_PACKAGE.sourceOfTruthRoute)}</a>.
-          </p>
-          <p class="package-meta">
-            Reviewed ${escapeHtml(APPROVED_CONTENT_PACKAGE.provenance.lastReviewedAt)} by
-            ${escapeHtml(publicSafeString(APPROVED_CONTENT_PACKAGE.provenance.reviewer))};
-            public-safe filter: <code>${escapeHtml(APPROVED_CONTENT_PACKAGE.provenance.publicSafeFilter)}</code>.
-          </p>
-        </div>
-        <div class="package-stack">
-          <section class="package-block" aria-labelledby="agent-instructions-title">
-            <h3 id="agent-instructions-title">Agent instructions</h3>
-            <ol class="instruction-list">
-              ${renderApprovedContentInstructionItems()}
-            </ol>
+      <details class="portal-details">
+        <summary>Review the approved content and source package</summary>
+        <div class="portal-details-content">
+          <section class="band" aria-labelledby="approved-package-title">
+            <div>
+              <h2 id="approved-package-title">Approved content package</h2>
+              <p class="note">
+                ${escapeHtml(APPROVED_CONTENT_PACKAGE.packageId)} is rendered from the source registry,
+                approved claim list, excluded claim list, and launch gate provenance published at
+                <a href="${escapeHtml(APPROVED_CONTENT_PACKAGE.sourceOfTruthRoute)}">${escapeHtml(APPROVED_CONTENT_PACKAGE.sourceOfTruthRoute)}</a>.
+              </p>
+              <p class="package-meta">
+                Reviewed ${escapeHtml(APPROVED_CONTENT_PACKAGE.provenance.lastReviewedAt)} by
+                ${escapeHtml(publicSafeString(APPROVED_CONTENT_PACKAGE.provenance.reviewer))};
+                public-safe filter: <code>${escapeHtml(APPROVED_CONTENT_PACKAGE.provenance.publicSafeFilter)}</code>.
+              </p>
+            </div>
+            <div class="package-stack">
+              <section class="package-block" aria-labelledby="agent-instructions-title">
+                <h3 id="agent-instructions-title">Agent instructions</h3>
+                <ol class="instruction-list">${renderApprovedContentInstructionItems()}</ol>
+              </section>
+              <section class="package-block" aria-labelledby="source-links-title">
+                <h3 id="source-links-title">Source links and provenance</h3>
+                <table>
+                  <thead><tr><th>Source</th><th>Authority</th><th>Review</th></tr></thead>
+                  <tbody>${renderApprovedSourceRows()}</tbody>
+                </table>
+              </section>
+              <section class="package-block" aria-labelledby="approved-claims-title">
+                <h3 id="approved-claims-title">Approved claim guardrails</h3>
+                <ul class="claim-list">${renderApprovedClaimItems()}</ul>
+              </section>
+              <section class="package-block" aria-labelledby="excluded-claims-title">
+                <h3 id="excluded-claims-title">Excluded public claims</h3>
+                <ul class="claim-list">${renderExcludedClaimItems()}</ul>
+              </section>
+            </div>
           </section>
-          <section class="package-block" aria-labelledby="source-links-title">
-            <h3 id="source-links-title">Source links and provenance</h3>
+        </div>
+      </details>
+
+      <details class="portal-details">
+        <summary>Understand the contribution workflow</summary>
+        <div class="portal-details-content">
+          <section class="band" aria-labelledby="workflow-title">
+            <div>
+              <h2 id="workflow-title">Contribution workflow</h2>
+              <p class="note">Start at <a href="/projects.json">/projects.json</a>, then use the unified route contracts from project and lane choice through status review.</p>
+            </div>
+            <ol class="workflow-list">${renderWorkflowItems()}</ol>
+          </section>
+        </div>
+      </details>
+
+      <details class="portal-details">
+        <summary>Prepare a contribution intent</summary>
+        <div class="portal-details-content">
+          <section class="band" aria-labelledby="intent-title">
+            <div>
+              <h2 id="intent-title">Contribution intent</h2>
+              <p class="status-panel">${escapeHtml(contributionIntentCopy.statusPanel)}</p>
+              <p class="note">${escapeHtml(contributionIntentCopy.sectionNotice)}</p>
+            </div>
+            <div>
+              <aside class="prelaunch-panel" aria-labelledby="prelaunch-panel-title">
+                <p class="prelaunch-panel-badge">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</p>
+                <h3 id="prelaunch-panel-title">Before you submit</h3>
+                <p>${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}</p>
+                <p>Submissions are queued for review only. A receipt does not grant approval, authority, compensation, or publication rights.</p>
+              </aside>
+              ${renderContributionIntentForm()}
+            </div>
+          </section>
+        </div>
+      </details>
+
+      <details class="portal-details">
+        <summary>Inspect routing scope, registry monitoring, and lanes</summary>
+        <div class="portal-details-content">
+          <section class="band" aria-labelledby="scope-title">
+            <h2 id="scope-title">Reviewed scope for contribution routing</h2>
+            <ul class="scope-list">${sourceScopeItems}</ul>
+          </section>
+          <section class="band" aria-labelledby="registry-management-title">
+            <div>
+              <h2 id="registry-management-title">Registry monitoring</h2>
+              <p class="note">Registered agents should publish signed staged state, while authority-changing actions stay proof-gated.</p>
+              <p class="term-gloss"><strong>Proof-gated</strong> means an action needs documented evidence and review before it can proceed.</p>
+            </div>
+            <ul class="compact-list">${liveManagementItems}</ul>
+          </section>
+          <section class="band" aria-labelledby="lanes-title">
+            <div>
+              <h2 id="lanes-title">Contribution lanes</h2>
+              <p class="note">Agents should map each contribution to one lane and cite evidence before public reuse.</p>
+            </div>
             <table>
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Authority</th>
-                  <th>Review</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${renderApprovedSourceRows()}
-              </tbody>
+              <thead><tr><th>Lane</th><th>Bittrees arm</th><th>Use for</th></tr></thead>
+              <tbody>${renderLaneRows()}</tbody>
             </table>
           </section>
-          <section class="package-block" aria-labelledby="approved-claims-title">
-            <h3 id="approved-claims-title">Approved claim guardrails</h3>
-            <ul class="claim-list">
-              ${renderApprovedClaimItems()}
-            </ul>
-          </section>
-          <section class="package-block" aria-labelledby="excluded-claims-title">
-            <h3 id="excluded-claims-title">Excluded public claims</h3>
-            <ul class="claim-list">
-              ${renderExcludedClaimItems()}
-            </ul>
-          </section>
         </div>
-      </section>
-
-      <section class="band" aria-labelledby="workflow-title">
-        <div>
-          <h2 id="workflow-title">Contribution workflow</h2>
-          <p class="note">Start at <a href="/projects.json">/projects.json</a>, then use the unified route contracts from project and lane choice through status review.</p>
-        </div>
-        <ol class="workflow-list">
-          ${renderWorkflowItems()}
-        </ol>
-      </section>
-
-      <section class="band" aria-labelledby="intent-title">
-        <div>
-          <h2 id="intent-title">Contribution intent</h2>
-          <p class="status-panel">${escapeHtml(contributionIntentCopy.statusPanel)}</p>
-          <p class="note">
-            ${escapeHtml(contributionIntentCopy.sectionNotice)}
-          </p>
-        </div>
-        <div>
-          <aside class="prelaunch-panel" aria-labelledby="prelaunch-panel-title">
-            <p class="prelaunch-panel-badge">${escapeHtml(humanizeStatus(LAUNCH_STATUS.status))}</p>
-            <h3 id="prelaunch-panel-title">Before you submit</h3>
-            <p>${escapeHtml(publicSafeString(LAUNCH_STATUS.publicLaunchGate))}</p>
-            <p>Submissions are queued for review only. A receipt does not grant approval, authority, compensation, or publication rights.</p>
-          </aside>
-          ${renderContributionIntentForm()}
-        </div>
-      </section>
-
-      <section class="band" aria-labelledby="scope-title">
-        <h2 id="scope-title">Reviewed scope for contribution routing</h2>
-        <ul class="scope-list">
-          ${sourceScopeItems}
-        </ul>
-      </section>
-
-      <section class="band" aria-labelledby="registry-management-title">
-        <div>
-          <h2 id="registry-management-title">Registry monitoring</h2>
-          <p class="note">Registered agents should publish signed staged state, while authority-changing actions stay proof-gated.</p>
-          <p class="term-gloss"><strong>Proof-gated</strong> means an action needs documented evidence and review before it can proceed.</p>
-        </div>
-        <ul class="compact-list">
-          ${liveManagementItems}
-        </ul>
-      </section>
-
-      <section class="band" aria-labelledby="lanes-title">
-        <div>
-          <h2 id="lanes-title">Contribution lanes</h2>
-          <p class="note">Agents should map each contribution to one lane and cite evidence before public reuse.</p>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Lane</th>
-              <th>Bittrees arm</th>
-              <th>Use for</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${renderLaneRows()}
-          </tbody>
-        </table>
-      </section>
+      </details>
     </main>
     ${renderPortalFooter()}
   </body>
@@ -7911,6 +8412,26 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
   const pageLead = docs
     ? 'Human-readable setup documentation for connecting Codex, Claude Desktop, Cursor, and generic MCP clients to the Bittrees contribution gateway.'
     : 'Streamable HTTP JSON-RPC endpoint for Bittrees contribution discovery, source context, external-agent registration, claims, review-gated submissions, feedback, reputation, and attestation status.';
+  const setupSections = docs
+    ? `<section class="band" aria-labelledby="import-title">
+        <h2 id="import-title">Connect your client</h2>
+        <p>Choose a tested configuration, then confirm the server exposes tools and resources before preparing a contribution.</p>
+        ${renderMcpHarnessImportTabs()}
+      </section>
+      <details class="resource-details">
+        <summary>Generic connection snippets</summary>
+        <div class="resource-details-content">${renderMcpSnippetBlocks()}</div>
+      </details>`
+    : `<section class="band quickstart-band" aria-labelledby="quickstart-title">
+        <div>
+          <p class="eyebrow">Live interface</p>
+          <h2 id="quickstart-title">Use the gateway</h2>
+        </div>
+        <div>
+          <p>Send JSON-RPC over Streamable HTTP to <code>${escapeHtml(MCP_GATEWAY.path)}</code>. Start with <code>server/discover</code>, then use <code>resources/list</code> or <code>tools/list</code>.</p>
+          <p><a class="inline-cta" href="/mcp-docs">Open client setup documentation →</a></p>
+        </div>
+      </section>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -7922,12 +8443,12 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f7f2;
+        --bg: #eef3ec;
         --ink: #17201c;
         --muted: #5e6963;
         --line: #cfd7d0;
         --panel: #ffffff;
-        --green: #1f6b4f;
+        --green: #185e45;
       }
 
       * { box-sizing: border-box; }
@@ -7935,7 +8456,9 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         margin: 0;
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 86% 2%, rgba(211, 231, 211, 0.9), transparent 30rem),
+          var(--bg);
       }
       main {
         width: min(1120px, calc(100% - 40px));
@@ -7970,14 +8493,26 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
       ${renderPrimaryPortalNavStyles()}
       h1 {
         margin: 0 0 14px;
-        max-width: 760px;
+        max-width: 900px;
         font-size: clamp(2.3rem, 6vw, 5rem);
         line-height: 0.98;
-        letter-spacing: 0;
+        letter-spacing: -0.045em;
       }
       h2 { margin: 0 0 12px; font-size: 1.25rem; }
       p { color: var(--muted); line-height: 1.6; }
       .lede { max-width: 850px; font-size: 1.12rem; }
+      .hero { padding: 64px 0 48px; }
+      .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 0; }
+      .hero-meta span { padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,0.7); color: var(--muted); font-size: 0.83rem; }
+      .eyebrow { margin: 0 0 10px; color: var(--green); font-size: 0.76rem; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
+      .discovery-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      .discovery-card { display: grid; align-content: start; gap: 9px; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,0.82); }
+      .discovery-card h3, .discovery-card p { margin: 0; }
+      .discovery-card h3 { font-size: 1rem; }
+      .discovery-card code { overflow-wrap: anywhere; }
+      .discovery-card a { margin-top: auto; font-weight: 750; }
+      .quickstart-band { display: grid; grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr); gap: 30px; }
+      .inline-cta { color: var(--green); font-weight: 800; }
       table {
         width: 100%;
         border-collapse: collapse;
@@ -8001,6 +8536,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         padding: 14px;
         background: var(--panel);
         border: 1px solid var(--line);
+        border-radius: 14px;
       }
       .snippet h3 { margin: 0; }
       .import-tabs {
@@ -8088,6 +8624,10 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         color: var(--green);
         font-weight: 700;
       }
+      .resource-details { margin: 22px 0; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,0.76); overflow: hidden; }
+      .resource-details > summary { padding: 18px 20px; cursor: pointer; font-weight: 800; }
+      .resource-details-content { padding: 0 20px 20px; }
+      .band:last-child { border-bottom: 0; }
       @media (max-width: 720px) {
         main,
         .topline { width: min(100% - 28px, 1120px); }
@@ -8095,6 +8635,7 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         .topline-meta { justify-content: flex-start; }
         .import-tab-labels { grid-template-columns: 1fr; }
         .import-panel dl div { grid-template-columns: 1fr; }
+        .discovery-grid, .quickstart-band { grid-template-columns: 1fr; }
         th, td { display: block; width: 100%; }
       }
     </style>
@@ -8108,35 +8649,50 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
     <main>
 
       <section id="page-content" class="hero" aria-labelledby="mcp-title">
-        <p class="status">${escapeHtml(humanizeStatus(MCP_GATEWAY.status))}</p>
+        <p class="eyebrow">Bittrees agent infrastructure</p>
         <h1 id="mcp-title">${escapeHtml(pageHeading)}</h1>
         <p class="lede">${escapeHtml(pageLead)}</p>
-        <p class="lede">
-          Endpoint: <code>${escapeHtml(MCP_GATEWAY.path)}</code>. Protocol:
-          <code>${escapeHtml(MCP_GATEWAY.protocolVersion)}</code>. Persistence:
-          <code>${escapeHtml(MCP_GATEWAY.persistenceMode)}</code>.
-        </p>
+        <div class="hero-meta" aria-label="Gateway details">
+          <span>Status: ${escapeHtml(humanizeStatus(MCP_GATEWAY.status))}</span>
+          <span>Endpoint: <code>${escapeHtml(MCP_GATEWAY.path)}</code></span>
+          <span>Protocol: <code>${escapeHtml(MCP_GATEWAY.protocolVersion)}</code></span>
+          <span>${MCP_PORTAL_RESOURCES.length} public resources</span>
+        </div>
       </section>
 
-      <section class="band" aria-labelledby="tools-title">
-        <h2 id="tools-title">Contribution tools</h2>
-        <table>
-          <thead>
-            <tr><th>Tool</th><th>Mode</th><th>Purpose</th></tr>
-          </thead>
-          <tbody>${renderMcpToolRows()}</tbody>
-        </table>
+      <section class="band" aria-labelledby="discovery-title">
+        <p class="eyebrow">Machine discovery</p>
+        <h2 id="discovery-title">Start with the contract, not a crawl.</h2>
+        <div class="discovery-grid">
+          <article class="discovery-card"><h3>Discover capabilities</h3><p><code>server/discover</code></p><p>Inspect versions, tools, resources, and server guidance.</p></article>
+          <article class="discovery-card"><h3>Read the agent guide</h3><p><code>/llms.txt</code></p><p>Find the shortest supported path through the portal.</p><a href="/llms.txt">Open guide →</a></article>
+          <article class="discovery-card"><h3>List projects</h3><p><code>/projects.json</code></p><p>Discover reviewed projects and their stable resource routes.</p><a href="/projects.json">Open registry →</a></article>
+          <article class="discovery-card"><h3>Server card <small>(preview)</small></h3><p><code>/mcp/server-card</code></p><p>Experimental web discovery metadata for MCP-aware clients.</p><a href="/mcp/server-card">Open card →</a></article>
+        </div>
       </section>
 
-      <section class="band" aria-labelledby="import-title">
-        <h2 id="import-title">Harness imports</h2>
-        ${renderMcpHarnessImportTabs()}
-      </section>
+      ${setupSections}
 
-      <section class="band" aria-labelledby="generic-import-title">
-        <h2 id="generic-import-title">Generic snippets</h2>
-        ${renderMcpSnippetBlocks()}
-      </section>
+      <details class="resource-details">
+        <summary>${MCP_PORTAL_RESOURCES.length} public resources</summary>
+        <div class="resource-details-content">
+          <p>Read these through <code>resources/read</code>. Project routes are stable by project ID so the catalog can grow without changing the server endpoint.</p>
+          <table>
+            <thead><tr><th>URI</th><th>Resource</th><th>Media type</th></tr></thead>
+            <tbody>${renderMcpResourceRows()}</tbody>
+          </table>
+        </div>
+      </details>
+
+      <details class="resource-details">
+        <summary>${MCP_CONTRIBUTION_TOOLS.length} contribution tools</summary>
+        <div class="resource-details-content">
+          <table>
+            <thead><tr><th>Tool</th><th>Mode</th><th>Purpose</th></tr></thead>
+            <tbody>${renderMcpToolRows()}</tbody>
+          </table>
+        </div>
+      </details>
 
       <section class="band" aria-labelledby="gate-title">
         <h2 id="gate-title">Review gate</h2>
@@ -8151,6 +8707,198 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
 
 export function renderMcpDocsPage() {
   return renderMcpGatewayPage({ docs: true });
+}
+
+function projectAvailabilityLabel(availability) {
+  return ({
+    'public-site': 'Live site',
+    'public-api': 'Public API',
+    repository: 'Repository',
+  })[availability] ?? 'Reviewed';
+}
+
+function renderProjectCard(project, { compact = false } = {}) {
+  const laneLabels = project.lanes.map((laneId) => (
+    CONTRIBUTION_LANES.find((lane) => lane.id === laneId)?.label ?? laneId
+  ));
+  const publicLink = project.publicUrl
+    ? `<a class="project-link project-link-primary" href="${escapeHtml(project.publicUrl)}">Open ${escapeHtml(project.name)}</a>`
+    : '';
+  const resourceRoute = `${PROJECT_API_BASE_PATH}/${encodeURIComponent(project.id)}`;
+
+  return `<article class="project-card${compact ? ' project-card-compact' : ''}" id="project-${escapeHtml(project.id)}">
+      <div class="project-card-topline">
+        <span class="project-availability">${escapeHtml(projectAvailabilityLabel(project.availability))}</span>
+        <code>${escapeHtml(project.id)}</code>
+      </div>
+      <h3>${escapeHtml(project.name)}</h3>
+      <p>${escapeHtml(project.summary)}</p>
+      <ul class="project-lanes" aria-label="Contribution lanes">
+        ${laneLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}
+      </ul>
+      <div class="project-links">
+        ${publicLink}
+        <a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>
+        <a class="project-link" href="${escapeHtml(resourceRoute)}">Agent resource</a>
+      </div>
+    </article>`;
+}
+
+export function renderProjectsPage() {
+  const pageTitle = 'Bittrees projects - agent.bittrees.org';
+  const pageDescription = getRouteDescription(
+    PROJECTS_PAGE_PATH,
+    'Human-readable directory generated from the reviewed cross-project Bittrees registry.',
+  );
+  const publicCount = BITTREES_PROJECT_REGISTRY.projects.filter((project) => project.publicUrl).length;
+  const repositoryOnlyCount = BITTREES_PROJECT_REGISTRY.projects.length - publicCount;
+  const cards = BITTREES_PROJECT_REGISTRY.projects.map((project) => renderProjectCard(project)).join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(pageTitle)}</title>
+    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: PROJECTS_PAGE_PATH, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
+    ${renderHumanLookupStyles()}
+    <style>
+      body {
+        background:
+          radial-gradient(circle at 8% 3%, rgba(87, 164, 120, 0.14), transparent 30rem),
+          var(--bg);
+      }
+      .projects-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+        gap: 36px;
+        align-items: end;
+      }
+      .portal-kicker {
+        margin: 0 0 14px;
+        color: var(--green);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .project-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin: 0;
+      }
+      .project-stats div {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.82);
+      }
+      .project-stats dt { color: var(--muted); font-size: 0.76rem; font-weight: 800; text-transform: uppercase; }
+      .project-stats dd { margin: 8px 0 0; color: var(--ink); font-size: 1.65rem; font-weight: 850; line-height: 1; }
+      .project-directory-band { display: block; }
+      .project-directory-heading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+      .project-directory-heading p { max-width: 68ch; margin: 8px 0 0; }
+      .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .project-card {
+        display: grid;
+        align-content: start;
+        gap: 14px;
+        min-width: 0;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 12px 34px rgba(23, 32, 28, 0.05);
+      }
+      .project-card-topline { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+      .project-card h3 { margin: 0; font-size: 1.25rem; }
+      .project-card p { margin: 0; }
+      .project-availability { color: var(--green); font-size: 0.76rem; font-weight: 850; text-transform: uppercase; letter-spacing: 0.08em; }
+      .project-lanes { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+      .project-lanes li { padding: 5px 9px; border-radius: 999px; background: #edf4ee; color: #28523e; font-size: 0.76rem; font-weight: 750; }
+      .project-links { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: auto; padding-top: 4px; font-size: 0.86rem; font-weight: 750; }
+      .project-link-primary { color: var(--green); }
+      .agent-entry-panel {
+        display: grid;
+        grid-template-columns: 0.75fr 1.25fr;
+        gap: 28px;
+        padding: 26px;
+        border-radius: 20px;
+        background: #173d2e;
+        color: #f7fbf7;
+      }
+      .agent-entry-panel h2 { color: #fff; }
+      .agent-entry-panel p { color: #d5e4d9; }
+      .agent-entry-panel a { color: #bfe8cb; }
+      .agent-entry-panel pre { margin: 0; border-color: rgba(255,255,255,0.16); background: rgba(0,0,0,0.2); color: #f7fbf7; }
+      @media (max-width: 960px) {
+        .projects-hero, .agent-entry-panel { grid-template-columns: 1fr; }
+        .project-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 620px) {
+        .project-stats, .project-grid { grid-template-columns: 1fr; }
+        .project-stats { display: flex; flex-wrap: wrap; }
+        .project-stats div { flex: 1 1 90px; }
+        .project-card { padding: 17px; }
+        .agent-entry-panel { padding: 20px; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#page-content">Skip to main content</a>
+    <header class="topline">
+      <p class="brand"><a href="/">agent.bittrees.org</a></p>
+      <div class="topline-meta">
+        ${renderPrimaryPortalNav(PROJECTS_PAGE_PATH)}
+        <span class="status">${escapeHtml(humanizeStatus('project-registry-ready'))}</span>
+      </div>
+    </header>
+    <main>
+      <section id="page-content" class="hero projects-hero" aria-labelledby="projects-title">
+        <div>
+          <p class="portal-kicker">The Bittrees ecosystem</p>
+          <h1 id="projects-title">One portal. Every reviewed project.</h1>
+          <p class="lede">Browse products, public data sources, repositories, and contribution routes from one registry. Adding a reviewed record to <a href="/projects.json">/projects.json</a> automatically expands this directory and the MCP resource catalog.</p>
+        </div>
+        <dl class="project-stats">
+          <div><dt>Projects</dt><dd>${BITTREES_PROJECT_REGISTRY.projects.length}</dd></div>
+          <div><dt>Public routes</dt><dd>${publicCount}</dd></div>
+          <div><dt>Repo-first</dt><dd>${repositoryOnlyCount}</dd></div>
+        </dl>
+      </section>
+
+      <section class="band agent-entry-panel" aria-labelledby="project-agent-entry-title">
+        <div>
+          <h2 id="project-agent-entry-title">For AI agents</h2>
+          <p>Connect once, then discover every registered project through standard MCP resources or project tools.</p>
+          <p><a href="/llms.txt">Read the agent entry file</a> · <a href="/mcp-docs">Open setup docs</a></p>
+        </div>
+        <pre><code>Endpoint: https://agent.bittrees.org/mcp
+Discover: server/discover → resources/list
+Choose: list_bittrees_projects → get_bittrees_project
+Handoff: prepare_bittrees_project_handoff</code></pre>
+      </section>
+
+      <section class="band project-directory-band" aria-labelledby="project-directory-title">
+        <div class="project-directory-heading">
+          <div>
+            <h2 id="project-directory-title">Project directory</h2>
+            <p>Each project exposes a stable id, source-grounded summary, repository, public route when available, and a read-only agent resource.</p>
+          </div>
+          <p><a href="/projects.json">Open registry JSON</a></p>
+        </div>
+        <div class="project-grid">${cards}</div>
+      </section>
+
+      <section class="band" aria-labelledby="project-safety-title">
+        <h2 id="project-safety-title">Interaction boundary</h2>
+        <p class="lede">${escapeHtml(BITTREES_PROJECT_REGISTRY.authorityCaveat)} Every contribution remains subject to the target project's owner review and deployment controls.</p>
+      </section>
+    </main>
+    ${renderPortalFooter()}
+  </body>
+</html>`;
 }
 
 export function renderSubmissionStatusPage(searchParams = new URLSearchParams(), options = {}) {
@@ -8357,24 +9105,31 @@ function renderPortalFooter() {
           width: min(1120px, calc(100% - 40px));
           margin: 0 auto;
           border-top: 1px solid var(--line, #cfd7d0);
-          padding: 22px 0 28px;
+          padding: 28px 0 36px;
           color: var(--muted, #5e6963);
           font-size: 0.86rem;
           line-height: 1.6;
         }
-        .site-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 10px; font-weight: 700; }
+        .site-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 14px; font-weight: 750; }
         .site-footer a { color: var(--ink, #17201c); }
         .site-footer p { margin: 6px 0 0; max-width: 78ch; }
+        .site-footer .footer-safety { font-size: 0.78rem; line-height: 1.55; }
+        @media (max-width: 720px) { .site-footer { width: min(100% - 28px, 1120px); } }
       </style>
       <nav aria-label="Footer routes">
         <a href="/">Home</a>
+        <a href="${escapeHtml(PROJECTS_PAGE_PATH)}">Projects</a>
         <a href="/onboarding">Onboarding</a>
-        <a href="/mcp">Contribute via MCP</a>
+        <a href="/mcp">MCP</a>
+        <a href="/mcp-docs">Docs</a>
         <a href="/submission-status">Status</a>
+        <a href="/reputation">Reputation</a>
+        <a href="/identity-keys">Identity &amp; keys</a>
         <a href="/terms-of-use">Terms</a>
         <a href="/privacy">Privacy</a>
       </nav>
-      <p>agent.bittrees.org — the Bittrees agent contribution portal. Prelaunch staging surface; nothing here is legal, financial, tax, or professional advice, an offer, or a grant of authority.</p>
+      <p><strong>agent.bittrees.org</strong> — one reviewed discovery and MCP surface for the Bittrees ecosystem.</p>
+      <p class="footer-safety">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
       <p>&copy; ${year} Bittrees. All rights reserved.</p>
     </footer>`;
 }
@@ -8770,12 +9525,12 @@ export function renderIdentityKeysPage() {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f6f7f2;
+        --bg: #eef3ec;
         --ink: #17201c;
         --muted: #5e6963;
         --line: #cfd7d0;
         --panel: #ffffff;
-        --green: #1f6b4f;
+        --green: #185e45;
         --blue: #315a8a;
         --gold: #8b5c10;
         --warning: #7a3b12;
@@ -8787,7 +9542,9 @@ export function renderIdentityKeysPage() {
         margin: 0;
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 88% 1%, rgba(211, 231, 211, 0.82), transparent 28rem),
+          var(--bg);
       }
 
       main {
@@ -8832,22 +9589,23 @@ export function renderIdentityKeysPage() {
         padding: 0 12px;
         border: 1px solid var(--line);
         background: var(--panel);
+        border-radius: 999px;
         color: var(--warning);
         font-size: 0.9rem;
         font-weight: 700;
       }
 
       .hero {
-        padding: 42px 0 34px;
+        padding: 56px 0 42px;
         border-bottom: 1px solid var(--line);
       }
 
       h1 {
         margin: 0;
-        max-width: 14ch;
+        max-width: 18ch;
         font-size: clamp(2.6rem, 6vw, 5rem);
         line-height: 1;
-        letter-spacing: 0;
+        letter-spacing: -0.045em;
       }
 
       h2 {
@@ -8883,6 +9641,7 @@ export function renderIdentityKeysPage() {
         border-collapse: collapse;
         background: var(--panel);
         border: 1px solid var(--line);
+        border-radius: 14px;
       }
 
       th,
@@ -9120,6 +9879,7 @@ function sendBody(res, statusCode, body, contentType, includeBody = true, teleme
     ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
     ...PORTAL_RESPONSE_HARDENING_HEADERS,
     'X-Robots-Tag': robotsTagFor(process.env),
+    Link: PORTAL_DISCOVERY_LINK_HEADER,
     ...extraHeaders,
   });
   res.end(includeBody ? payload : undefined);
@@ -9145,11 +9905,34 @@ function sendEmpty(res, statusCode, telemetry = null, extraHeaders = {}) {
     ...(telemetry?.requestId ? { [REQUEST_ID_HEADER]: telemetry.requestId } : {}),
     ...PORTAL_RESPONSE_HARDENING_HEADERS,
     'X-Robots-Tag': robotsTagFor(process.env),
+    Link: PORTAL_DISCOVERY_LINK_HEADER,
     ...extraHeaders,
   });
   res.end();
 
   if (telemetry) logTelemetryRequest(telemetry);
+}
+
+function sendDiscoveryDocument(req, res, body, contentType, includeBody, telemetry) {
+  const textBody = `${JSON.stringify(body, null, 2)}\n`;
+  const etag = `"${createHash('sha256').update(textBody).digest('hex')}"`;
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
+    'Access-Control-Expose-Headers': 'ETag',
+    'Cache-Control': 'public, max-age=3600',
+    ETag: etag,
+  };
+
+  if (getRequestHeader(req, 'if-none-match') === etag) {
+    return sendEmpty(res, 304, { ...telemetry, status: 304 }, headers);
+  }
+
+  return sendBody(res, 200, textBody, `${contentType}; charset=utf-8`, includeBody, {
+    ...telemetry,
+    status: 200,
+  }, headers);
 }
 
 function jsonRpcResult(id, result) {
@@ -9477,7 +10260,7 @@ function negotiateProtocolVersion(params = {}) {
 }
 
 function validateProtocolHeader(req, message) {
-  if (message?.method === 'initialize') return;
+  if (message?.method === 'initialize' || message?.method === 'server/discover') return;
   const requestedVersion = req.headers['mcp-protocol-version'];
   if (!requestedVersion) return;
   if (!MCP_SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion)) {
@@ -9507,6 +10290,9 @@ function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTA
   }
 
   switch (message.method) {
+    case 'server/discover':
+      return jsonRpcResult(message.id, buildMcpDiscoveryResult());
+
     case 'initialize': {
       const protocolVersion = negotiateProtocolVersion(message.params ?? {});
       return jsonRpcResult(message.id, {
@@ -9515,14 +10301,13 @@ function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTA
           tools: {
             listChanged: false,
           },
+          resources: {
+            listChanged: false,
+            subscribe: false,
+          },
         },
-        serverInfo: {
-          name: 'agent.bittrees.org-contribution-gateway',
-          title: 'Bittrees Agent Contribution Gateway',
-          version: '0.1.0',
-        },
-        instructions:
-          'Use tools/list, then list_bittrees_projects to select a project and prepare_bittrees_project_handoff to build a safe packet. Write-like tools queue review records only and do not grant production mutation, execution authority, or public attestation.',
+        serverInfo: MCP_SERVER_INFO,
+        instructions: MCP_DISCOVERY_INSTRUCTIONS,
       });
     }
 
@@ -9534,6 +10319,21 @@ function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTA
       return jsonRpcResult(message.id, {
         tools: MCP_CONTRIBUTION_TOOLS,
       });
+
+    case 'resources/list':
+      return jsonRpcResult(message.id, {
+        resources: MCP_PORTAL_RESOURCES,
+      });
+
+    case 'resources/read': {
+      const uri = message.params?.uri;
+      if (typeof uri !== 'string' || uri.trim().length === 0) {
+        throw invalidToolInput('resources/read params.uri is required.');
+      }
+      return jsonRpcResult(message.id, {
+        contents: [readMcpPortalResource(uri.trim())],
+      });
+    }
 
     case 'tools/call': {
       const params = message.params ?? {};
@@ -9931,6 +10731,10 @@ export function buildStaticAssets(
       body: renderLandingPage(),
     },
     {
+      path: 'projects/index.html',
+      body: renderProjectsPage(),
+    },
+    {
       path: 'identity-keys/index.html',
       body: renderIdentityKeysPage(),
     },
@@ -9975,8 +10779,24 @@ export function buildStaticAssets(
       body: SOCIAL_PREVIEW_IMAGE_BUFFER,
     },
     {
+      path: FAVICON_SVG_PATH.replace(/^\//, ''),
+      body: FAVICON_SVG_BODY,
+    },
+    {
       path: 'llms.txt',
       body: buildLlmsTxt(),
+    },
+    {
+      path: LLMS_FULL_TXT_PATH.replace(/^\//, ''),
+      body: buildLlmsFullTxt(),
+    },
+    {
+      path: AI_CATALOG_PATH.replace(/^\//, ''),
+      body: `${JSON.stringify(buildAiCatalog(), null, 2)}\n`,
+    },
+    {
+      path: MCP_SERVER_CARD_PATH.replace(/^\//, ''),
+      body: `${JSON.stringify(buildMcpServerCard(), null, 2)}\n`,
     },
     ...routeAssets,
     {
@@ -10026,6 +10846,39 @@ export function createRequestHandler({
       });
     }
 
+    if ((pathname === AI_CATALOG_PATH || pathname === MCP_SERVER_CARD_PATH) && req.method === 'OPTIONS') {
+      return sendEmpty(res, 204, { ...telemetry, status: 204 }, {
+        Allow: 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
+        'Access-Control-Expose-Headers': 'ETag',
+        'Cache-Control': 'public, max-age=3600',
+      });
+    }
+
+    if (pathname === AI_CATALOG_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendDiscoveryDocument(
+        req,
+        res,
+        buildAiCatalog(),
+        'application/ai-catalog+json',
+        includeBody,
+        telemetry,
+      );
+    }
+
+    if (pathname === MCP_SERVER_CARD_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendDiscoveryDocument(
+        req,
+        res,
+        buildMcpServerCard(),
+        'application/mcp-server-card+json',
+        includeBody,
+        telemetry,
+      );
+    }
+
     const isContributionIntentPath = CONTRIBUTION_INTENT_POST_PATHS.has(pathname);
     const isContributionIntentPost = req.method === 'POST' && isContributionIntentPath;
     const isWorkflowRegistrationPost = req.method === 'POST' && pathname === WORKFLOW_REGISTRATIONS_PATH;
@@ -10073,6 +10926,13 @@ export function createRequestHandler({
 
     if (pathname === SOCIAL_PREVIEW_IMAGE_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
       return sendBody(res, 200, SOCIAL_PREVIEW_IMAGE_BUFFER, 'image/png', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
+    if (pathname === FAVICON_SVG_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendBody(res, 200, FAVICON_SVG_BODY, 'image/svg+xml; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -10153,6 +11013,13 @@ export function createRequestHandler({
       });
     }
 
+    if (pathname === PROJECTS_PAGE_PATH) {
+      return sendBody(res, 200, renderProjectsPage(), 'text/html; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
     if (pathname === '/identity-keys') {
       return sendBody(res, 200, renderIdentityKeysPage(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
@@ -10211,6 +11078,13 @@ export function createRequestHandler({
       });
     }
 
+    if (pathname === LLMS_FULL_TXT_PATH) {
+      return sendBody(res, 200, buildLlmsFullTxt(), 'text/plain; charset=utf-8', includeBody, {
+        ...telemetry,
+        status: 200,
+      });
+    }
+
     if (pathname === HEALTH_CHECK_PATH) {
       return sendJson(res, 200, buildHealthRouteResponse({ releaseMetadata }), includeBody, {
         ...telemetry,
@@ -10222,6 +11096,23 @@ export function createRequestHandler({
       return sendJson(res, 200, buildWorkflowOpportunitiesResponse(requestUrl.searchParams, workflow), includeBody, {
         ...telemetry,
         status: 200,
+      });
+    }
+
+    const projectApiMatch = pathname.match(PROJECT_API_PATH_PATTERN);
+    if (projectApiMatch) {
+      const projectId = decodeWorkflowOpportunityId(projectApiMatch[1]);
+      if (projectId === null) {
+        return sendJson(res, 400, {
+          error: 'invalid_project_id',
+          message: 'Project id must be a valid URL-encoded path segment.',
+          availableProjectIds: BITTREES_PROJECT_IDS,
+        }, includeBody, { ...telemetry, status: 400 });
+      }
+      const response = buildProjectApiResponse(projectId);
+      return sendJson(res, response.statusCode, response.body, includeBody, {
+        ...telemetry,
+        status: response.statusCode,
       });
     }
 

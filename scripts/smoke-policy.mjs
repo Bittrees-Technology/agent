@@ -12,6 +12,7 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
 // Routes probed by the smoke suite. `kind` selects the per-route assertions.
 export const SMOKE_ROUTES = Object.freeze([
   { path: '/', kind: 'html' },
+  { path: '/projects', kind: 'html' },
   { path: '/identity-keys', kind: 'html' },
   { path: '/submission-status', kind: 'html' },
   { path: '/reputation', kind: 'html' },
@@ -22,9 +23,13 @@ export const SMOKE_ROUTES = Object.freeze([
   { path: '/tou', kind: 'html' },
   { path: '/api/health', kind: 'health-json' },
   { path: '/llms.txt', kind: 'text' },
+  { path: '/llms-full.txt', kind: 'text' },
+  { path: '/.well-known/ai-catalog.json', kind: 'document-json' },
+  { path: '/mcp/server-card', kind: 'document-json' },
   { path: '/agents.json', kind: 'json' },
   { path: '/identity-keys.json', kind: 'json' },
   { path: '/projects.json', kind: 'json' },
+  { path: '/v1/projects/agent', kind: 'api-json' },
   { path: '/templates.json', kind: 'json' },
   { path: '/sources.json', kind: 'json' },
   { path: '/opportunities.json', kind: 'json' },

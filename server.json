@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "org.bittrees/agent",
+  "description": "Discover Bittrees projects and prepare source-grounded, review-gated contribution handoffs.",
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://agent.bittrees.org/mcp",
+      "headers": [
+        {
+          "name": "MCP-Protocol-Version",
+          "value": "2025-06-18"
+        }
+      ]
+    }
+  ],
+  "repository": {
+    "source": "github",
+    "url": "https://github.com/Bittrees-Technology/agent"
+  },
+  "websiteUrl": "https://agent.bittrees.org/mcp-docs"
+}

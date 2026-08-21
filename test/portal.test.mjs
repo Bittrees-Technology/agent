@@ -29,17 +29,24 @@ import {
   MCP_CONTRIBUTION_TOOLS,
   MCP_GATEWAY,
   MCP_HARNESS_IMPORT_TABS,
+  MCP_PORTAL_RESOURCES,
   NO_RIGHTS_CREATED_DISCLAIMER,
   PORTAL_SECURITY_HEADERS,
+  PORTAL_DISCOVERY_LINK_HEADER,
   PRIVACY_LEGAL_STATUS,
   REGISTRY_PROFILE_PUBLICATION_NOTICE,
   ROUTE_DEFINITIONS,
   SOURCE_REGISTRY,
   TERMS_OF_USE_LEGAL_STATUS,
   UNIVERSAL_PORTAL_DISCLAIMER,
+  buildAiCatalog,
   buildJsonResponse,
+  buildLlmsFullTxt,
   buildLlmsTxt,
+  buildMcpDiscoveryResult,
+  buildMcpServerCard,
   buildPortalManifest,
+  buildProjectApiResponse,
   buildPublicRegistryFeed,
   buildStaticAssets,
   callMcpTool,
@@ -55,6 +62,7 @@ import {
   renderNotFoundPage,
   renderOnboardingPage,
   renderPrivacyPage,
+  renderProjectsPage,
   renderReputationPage,
   renderSubmissionStatusPage,
   renderTermsOfUsePage,
@@ -510,8 +518,9 @@ function validateSchemaValue(schema, value, path = '$') {
 
 test('llms.txt is a plain-text agent entry point', () => {
   const llms = buildLlmsTxt();
+  const full = buildLlmsFullTxt();
 
-  assert.match(llms, /^# agent\.bittrees\.org/);
+  assert.match(llms, /^# agent\.bittrees\.org\n\n> /);
   assert.match(llms, /\/sources\.json/);
   assert.match(llms, /\/templates\.json/);
   assert.match(llms, /\/identity-keys/);
@@ -527,7 +536,10 @@ test('llms.txt is a plain-text agent entry point', () => {
   assert.match(llms, /Contribution Workflow/);
   assert.match(llms, /\/monitoring\.json/);
   assert.match(llms, /signed heartbeats/);
+  assert.match(llms, /\[Full agent reference\]\(https:\/\/agent\.bittrees\.org\/llms-full\.txt\)/);
   assert.doesNotMatch(llms, /JSON-encoded/);
+  assert.match(full, /^# agent\.bittrees\.org full reference/);
+  assert.ok(full.length > llms.length);
 });
 
 test('json routes are not placeholder success payloads', () => {
@@ -694,6 +706,7 @@ test('static build includes all advertised routes', () => {
   )));
 
   assert.ok(assetPaths.has('index.html'));
+  assert.ok(assetPaths.has('projects/index.html'));
   assert.ok(assetPaths.has('identity-keys/index.html'));
   // This query-driven page must remain dynamic. A generated index.html shadows
   // the Vercel function route and can self-refresh instead of loading status.
@@ -705,6 +718,10 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('onboarding/index.html'));
   assert.ok(assetPaths.has('tou/index.html'));
   assert.ok(assetPaths.has('llms.txt'));
+  assert.ok(assetPaths.has('favicon.svg'));
+  assert.ok(assetPaths.has('llms-full.txt'));
+  assert.ok(assetPaths.has('.well-known/ai-catalog.json'));
+  assert.ok(assetPaths.has('mcp/server-card'));
   assert.ok(assetPaths.has('sources.json'));
   assert.ok(assetPaths.has('opportunities.json'));
   assert.ok(assetPaths.has('onboarding.json'));
@@ -725,6 +742,7 @@ test('static build includes all advertised routes', () => {
 test('html pages emit description and Open Graph metadata', () => {
   const htmlByRoute = new Map([
     ['/', renderLandingPage()],
+    ['/projects', renderProjectsPage()],
     ['/identity-keys', renderIdentityKeysPage()],
     ['/submission-status', renderSubmissionStatusPage()],
     ['/reputation', renderReputationPage()],
@@ -857,22 +875,16 @@ test('workflow mutation-queue and placeholder routes are not exposed as broken c
   );
 });
 
-test('homepage adds a primary onboarding CTA and a clarified MCP nav label', () => {
+test('homepage adds product-first project and agent connection paths', () => {
   const html = renderLandingPage();
 
-  assert.match(html, /<a class="hero-cta hero-cta-primary" href="\/onboarding">Start onboarding<\/a>/);
-  assert.match(
-    html,
-    /<a class="hero-cta hero-cta-secondary" href="#contribution-paths">See available contribution paths<\/a>/,
-  );
+  assert.match(html, /<a class="hero-cta hero-cta-primary" href="\/projects">Browse projects<\/a>/);
+  assert.match(html, /<a class="hero-cta hero-cta-secondary" href="\/mcp-docs">Connect an agent<\/a>/);
   assert.match(html, /<nav id="contribution-paths" class="action-grid"/);
   assert.match(html, /<p class="status-panel">[^<]*Prelaunch:[^<]*<\/p>/);
-
-  // "Gateway" was ambiguous next to the separate "Docs" nav item for the same
-  // MCP surface (IA/nav/trust audit, #b9a461ba); both the primary nav and
-  // footer nav use the clarified label.
-  assert.match(html, /<a href="\/mcp"[^>]*>Contribute via MCP<\/a>/);
-  assert.doesNotMatch(html, />Gateway<\//);
+  assert.match(html, /<a href="\/projects"[^>]*>Projects<\/a>/);
+  assert.match(html, /<a href="\/mcp"[^>]*>MCP<\/a>/);
+  assert.match(html, /<summary>Explore every portal route<\/summary>/);
 });
 
 test('Terms of Use routes are blocked pending legal-approved content', async () => {
@@ -1165,7 +1177,7 @@ test('human lookup forms expose mobile accessible labels and instructions', () =
   assert.match(statusHtml, /<select id="status-kind" name="kind" aria-describedby="status-kind-hint">/);
   assert.match(statusHtml, /input,\n\s+select,\n\s+textarea \{\n\s+width: 100%;\n\s+min-height: 44px;/);
   assert.match(statusHtml, /button \{\n\s+min-height: 44px;/);
-  assert.match(statusHtml, /@media \(max-width: 820px\)[\s\S]+button \{ width: 100%; \}/);
+  assert.match(statusHtml, /@media \(max-width: 920px\)[\s\S]+button \{ width: 100%; \}/);
 
   assert.match(reputationHtml, /<label for="reputation-agent-id">/);
   assert.match(reputationHtml, /id="reputation-agent-id-hint" class="field-help"/);
@@ -1208,13 +1220,13 @@ test('landing route cards never expose a broken GET anchor for POST-only or temp
   assert.match(html, /href="\/v1\/workflow\/opportunities\/contribution-template-pilot"/);
 });
 
-test('landing hero exposes a primary onboarding CTA and a secondary contribution-paths CTA', () => {
+test('landing hero exposes project discovery and agent connection CTAs', () => {
   const html = renderLandingPage();
 
-  assert.match(html, /<a class="cta cta-primary" href="\/onboarding">Start onboarding<\/a>/);
-  assert.match(html, /<a class="cta cta-secondary" href="#lanes-title">See contribution paths<\/a>/);
-  // The secondary CTA target must resolve to an on-page anchor, not a dead link.
-  assert.match(html, /id="lanes-title"/);
+  assert.match(html, /<a class="hero-cta hero-cta-primary" href="\/projects">Browse projects<\/a>/);
+  assert.match(html, /<a class="hero-cta hero-cta-secondary" href="\/mcp-docs">Connect an agent<\/a>/);
+  assert.match(html, /<h2 id="agent-start-title">Connect once\. Discover the ecosystem\.<\/h2>/);
+  assert.match(html, /https:\/\/agent\.bittrees\.org\/mcp/);
 });
 
 test('landing renders a prelaunch status panel above the contribution intent form', () => {
@@ -2754,6 +2766,59 @@ test('project registry exposes one unified, review-gated route across reviewed B
   }
 });
 
+test('projects page and stable project resources grow from the reviewed registry', () => {
+  const html = renderProjectsPage();
+  const found = buildProjectApiResponse('agent', '2026-08-21T16:09:42.000Z');
+  const missing = buildProjectApiResponse('unknown-project', '2026-08-21T16:09:42.000Z');
+
+  assert.match(html, /One portal\. Every reviewed project\./);
+  assert.equal((html.match(/<article class="project-card/g) ?? []).length, BITTREES_PROJECT_REGISTRY.projects.length);
+  assert.match(html, /href="\/v1\/projects\/agent"/);
+  assert.equal(found.found, true);
+  assert.equal(found.body.project.id, 'agent');
+  assert.equal(found.body.project.interaction.resourceRoute, '/v1/projects/agent');
+  assert.equal(found.body.project.interaction.unifiedMcpEndpoint, '/mcp');
+  assert.equal(missing.found, false);
+  assert.equal(missing.statusCode, 404);
+  assert.deepEqual(missing.body.availableProjectIds, BITTREES_PROJECT_REGISTRY.projects.map((project) => project.id));
+});
+
+test('web discovery documents are consistent, cacheable, and linked from responses', async () => {
+  const catalog = buildAiCatalog();
+  const card = buildMcpServerCard();
+  const discovery = buildMcpDiscoveryResult();
+
+  assert.equal(catalog.entries[0].url, 'https://agent.bittrees.org/mcp/server-card');
+  assert.equal(card.name, discovery._meta['io.modelcontextprotocol/serverInfo'].name);
+  assert.deepEqual(card.remotes[0].supportedProtocolVersions, discovery.supportedVersions);
+  assert.match(PORTAL_DISCOVERY_LINK_HEADER, /<\/llms\.txt>; rel="describedby"/);
+
+  await withPortalServer(async (baseUrl) => {
+    const catalogResponse = await fetch(`${baseUrl}/.well-known/ai-catalog.json`);
+    const cardResponse = await fetch(`${baseUrl}/mcp/server-card`);
+    const projectResponse = await fetch(`${baseUrl}/v1/projects/agent`);
+
+    assert.equal(catalogResponse.status, 200);
+    assert.match(catalogResponse.headers.get('content-type') ?? '', /^application\/ai-catalog\+json/);
+    assert.equal(catalogResponse.headers.get('access-control-allow-origin'), '*');
+    assert.match(catalogResponse.headers.get('cache-control') ?? '', /max-age=3600/);
+    assert.match(catalogResponse.headers.get('link') ?? '', /<\/llms\.txt>; rel="describedby"/);
+    assert.deepEqual(await catalogResponse.json(), catalog);
+
+    assert.equal(cardResponse.status, 200);
+    assert.match(cardResponse.headers.get('content-type') ?? '', /^application\/mcp-server-card\+json/);
+    const etag = cardResponse.headers.get('etag');
+    assert.ok(etag);
+    assert.deepEqual(await cardResponse.json(), card);
+
+    const notModified = await fetch(`${baseUrl}/mcp/server-card`, { headers: { 'If-None-Match': etag } });
+    assert.equal(notModified.status, 304);
+
+    assert.equal(projectResponse.status, 200);
+    assert.equal((await projectResponse.json()).project.id, 'agent');
+  });
+});
+
 test('project registry is covered by the published monitoring and schema inventories', () => {
   assert.ok(LAUNCH_FRESHNESS_MONITORING.routeStatusChecks.includes('/projects.json'));
   assert.ok(LAUNCH_FRESHNESS_MONITORING.schemaValidity.routes.includes('/projects.json'));
@@ -2922,19 +2987,20 @@ test('mcp docs render Codex Claude Desktop and Cursor import tabs', () => {
   const html = renderMcpGatewayPage();
   const docsHtml = renderMcpDocsPage();
 
-  assert.match(html, /Harness imports/);
-  assert.match(html, /mcp-tab-codex/);
-  assert.match(html, /\[mcp_servers\.bittrees\]/);
-  assert.match(html, /Claude Desktop/);
-  assert.match(html, /mcp-stdio-proxy\.mjs/);
-  assert.match(html, /Cursor/);
-  assert.match(html, /\.cursor\/mcp\.json/);
-  assert.match(html, /clip-path: inset\(50%\)/);
-  assert.match(html, /#mcp-tab-codex:focus-visible/);
-  assert.match(html, /aria-controls="mcp-panel-codex"/);
+  assert.match(html, /Use the gateway/);
+  assert.doesNotMatch(html, /<input class="import-tab-input"[^>]+id="mcp-tab-codex"/);
   assert.match(docsHtml, /<title>MCP docs - agent\.bittrees\.org<\/title>/);
   assert.match(docsHtml, /Human-readable setup documentation/);
+  assert.match(docsHtml, /Connect your client/);
   assert.match(docsHtml, /mcp-tab-codex/);
+  assert.match(docsHtml, /\[mcp_servers\.bittrees\]/);
+  assert.match(docsHtml, /Claude Desktop/);
+  assert.match(docsHtml, /mcp-stdio-proxy\.mjs/);
+  assert.match(docsHtml, /Cursor/);
+  assert.match(docsHtml, /\.cursor\/mcp\.json/);
+  assert.match(docsHtml, /clip-path: inset\(50%\)/);
+  assert.match(docsHtml, /#mcp-tab-codex:focus-visible/);
+  assert.match(docsHtml, /aria-controls="mcp-panel-codex"/);
 });
 
 test('html pages constrain wide tables and code blocks', () => {
@@ -2955,25 +3021,31 @@ test('html pages constrain wide tables and code blocks', () => {
 
 test('human pages expose shared primary navigation and route metadata', () => {
   const pages = [
-    { path: '/', label: 'Home', html: renderLandingPage() },
-    { path: '/mcp', label: 'Contribute via MCP', html: renderMcpGatewayPage() },
+    { path: '/', html: renderLandingPage() },
+    { path: '/projects', label: 'Projects', html: renderProjectsPage() },
+    { path: '/mcp', label: 'MCP', html: renderMcpGatewayPage() },
     { path: '/mcp-docs', label: 'Docs', html: renderMcpDocsPage() },
-    { path: '/identity-keys', label: 'Identity', html: renderIdentityKeysPage() },
+    { path: '/identity-keys', html: renderIdentityKeysPage() },
     { path: '/submission-status', label: 'Status', html: renderSubmissionStatusPage() },
-    { path: '/reputation', label: 'Reputation', html: renderReputationPage() },
-    { path: '/terms-of-use', label: 'Terms', html: renderTermsOfUsePage() },
-    { path: '/privacy', label: 'Privacy', html: renderPrivacyPage() },
+    { path: '/reputation', html: renderReputationPage() },
+    { path: '/terms-of-use', html: renderTermsOfUsePage() },
+    { path: '/privacy', html: renderPrivacyPage() },
     { path: '/onboarding', label: 'Onboarding', html: renderOnboardingPage() },
   ];
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   for (const page of pages) {
     assert.match(page.html, /aria-label="Primary portal routes"/);
-    assert.match(
-      page.html,
-      new RegExp(`<a href="${escapeRegex(page.path)}" aria-current="page">${escapeRegex(page.label)}<\\/a>`),
-    );
-    assert.match(page.html, /<meta name="theme-color" content="#f6f7f2" \/>/);
+    if (page.label) {
+      assert.match(
+        page.html,
+        new RegExp(`<a href="${escapeRegex(page.path)}" aria-current="page">${escapeRegex(page.label)}<\\/a>`),
+      );
+    } else {
+      assert.match(page.html, new RegExp(`<a href="${escapeRegex(page.path)}">`));
+    }
+    assert.match(page.html, /<meta name="theme-color" content="#eef3ec" \/>/);
+    assert.match(page.html, /<link rel="describedby" href="\/llms\.txt" type="text\/plain" \/>/);
   }
 });
 
@@ -3178,6 +3250,44 @@ test('mcp streamable http endpoint initializes and serves tools', async () => {
     });
     assert.equal(called.response.status, 200);
     assert.equal(called.json.result.structuredContent.status, 'source-grounded-context-ready');
+  });
+});
+
+test('mcp discovery lists and reads trusted portal resources', async () => {
+  await withPortalServer(async (baseUrl) => {
+    const discovered = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'discover',
+      method: 'server/discover',
+      params: {},
+    });
+    assert.equal(discovered.response.status, 200);
+    assert.deepEqual(discovered.json.result, buildMcpDiscoveryResult());
+    assert.ok(discovered.json.result.capabilities.resources);
+
+    const listed = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'resources-list',
+      method: 'resources/list',
+      params: {},
+    });
+    assert.equal(listed.response.status, 200);
+    assert.deepEqual(listed.json.result.resources, MCP_PORTAL_RESOURCES);
+    assert.equal(
+      listed.json.result.resources.filter((resource) => resource.uri.includes('/v1/projects/')).length,
+      BITTREES_PROJECT_REGISTRY.projects.length,
+    );
+
+    const projectUri = 'https://agent.bittrees.org/v1/projects/agent';
+    const read = await mcpPost(baseUrl, {
+      jsonrpc: '2.0',
+      id: 'resources-read',
+      method: 'resources/read',
+      params: { uri: projectUri },
+    });
+    assert.equal(read.response.status, 200);
+    assert.equal(read.json.result.contents[0].uri, projectUri);
+    assert.equal(JSON.parse(read.json.result.contents[0].text).project.id, 'agent');
   });
 });
 
