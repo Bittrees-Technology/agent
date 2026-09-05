@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { requestUrl } from './request-url.mjs';
+import { fetchLatestIdaccRelease } from './github-release.mjs';
 import {
   RELEASE_METADATA_SCHEMA,
   SMOKE_ROUTES,
@@ -654,15 +655,13 @@ async function checkReleaseFreshness() {
     );
   }
 
-  const githubResponse = await fetch('https://api.github.com/repos/bobofbuilding/idacc/releases/latest', {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'agent.bittrees.org-smoke-check',
-    },
-  });
-  const githubLatest = await githubResponse.json();
-
-  check(githubResponse.status === 200, `GitHub latest release returned ${githubResponse.status}`);
+  let githubLatest;
+  try {
+    githubLatest = await fetchLatestIdaccRelease();
+  } catch (error) {
+    check(false, `GitHub release verification unavailable: ${error.message}`);
+    return;
+  }
   if (snapshotTag !== githubLatest.tag_name) {
     const snapshotCheckedAt = releaseRoute?.data?.releaseSnapshot?.checkedAt;
     const snapshotCheckedTime = Date.parse(snapshotCheckedAt ?? '');

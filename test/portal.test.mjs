@@ -709,7 +709,7 @@ test('static build includes all advertised routes', () => {
 
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('projects/index.html'));
-  assert.ok(assetPaths.has('readiness/index.html'));
+  assert.ok(!assetPaths.has('readiness/index.html'), 'readiness filters require dynamic rendering');
   assert.ok(assetPaths.has('identity-keys/index.html'));
   // This query-driven page must remain dynamic. A generated index.html shadows
   // the Vercel function route and can self-refresh instead of loading status.
@@ -4085,4 +4085,22 @@ test('idacc release snapshot includes verifiable download metadata', () => {
     assert.ok(asset.size > 100_000_000);
   }
   assert.equal(response.data.releases.length, 1);
+});
+
+
+test('readiness filters combine priority, status, and project without hiding global totals', () => {
+  const html = renderReadinessPage(new URLSearchParams('priority=P1&status=todo&project=agent'));
+  assert.equal((html.match(/class="readiness-task priority-/g) ?? []).length, 3);
+  assert.match(html, /Showing 3 of 84 tasks across 1 project/);
+  assert.match(html, /id="readiness-agent" open/);
+  assert.doesNotMatch(html, /id="agent-p0-durable-control-plane"/);
+  assert.match(html, /value="P1" selected/);
+  assert.match(html, /method="get"/);
+});
+
+test('readiness filters handle empty matches and ignore unrecognized inputs', () => {
+  assert.match(renderReadinessPage(new URLSearchParams('project=agent&priority=P2')), /No tasks match/);
+  const html = renderReadinessPage(new URLSearchParams('priority=%3Cscript%3E&project=unknown&status=nope'));
+  assert.match(html, /Showing 84 of 84 tasks/);
+  assert.doesNotMatch(html, /<script>/);
 });

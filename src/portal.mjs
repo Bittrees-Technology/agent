@@ -9104,7 +9104,7 @@ Handoff: prepare_bittrees_project_handoff</code></pre>
 </html>`;
 }
 
-function renderReadinessProject(readiness) {
+function renderReadinessProject(readiness, expand = false) {
   const project = findBittreesProject(readiness.projectId);
   const summary = countReadinessTasks(readiness.tasks);
   const projectLinks = [
@@ -9124,6 +9124,7 @@ function renderReadinessProject(readiness) {
             <span>${escapeHtml(statusLabel)}</span>
           </div>
           <h3>${escapeHtml(task.title)}</h3>
+          ${task.progressNote ? `<p>${escapeHtml(task.progressNote)}</p>` : ''}
           <p class="acceptance-label">Complete when</p>
           <ul class="acceptance-list">${criteria}</ul>
           <a class="task-anchor" href="#${escapeHtml(task.id)}" aria-label="Link to ${escapeHtml(task.title)}">Task link</a>
@@ -9131,7 +9132,7 @@ function renderReadinessProject(readiness) {
       </li>`;
   }).join('');
 
-  const initiallyOpen = readiness.projectId === 'agent' ? ' open' : '';
+  const initiallyOpen = expand || readiness.projectId === 'agent' ? ' open' : '';
   return `<details class="readiness-project" id="readiness-${escapeHtml(readiness.projectId)}"${initiallyOpen}>
       <summary>
         <span class="readiness-project-title">
@@ -9158,14 +9159,33 @@ function renderReadinessProject(readiness) {
     </details>`;
 }
 
-export function renderReadinessPage() {
+export function renderReadinessPage(searchParams = new URLSearchParams()) {
   const pageTitle = 'Project production readiness - agent.bittrees.org';
   const pageDescription = getRouteDescription(
     READINESS_PAGE_PATH,
     'Human-readable, prioritized launch checklist for every project in the reviewed Bittrees registry.',
   );
   const registry = buildProjectReadinessRegistryData();
-  const projectSections = PROJECT_READINESS_REGISTRY.projects.map(renderReadinessProject).join('');
+  const allowed = (key, values) => values.includes(searchParams.get(key)) ? searchParams.get(key) : '';
+  const priority = allowed('priority', ['P0', 'P1', 'P2']);
+  const status = allowed('status', ['todo', 'in-progress', 'blocked', 'done']);
+  const projectId = allowed('project', BITTREES_PROJECT_IDS);
+  const filtered = Boolean(priority || status || projectId);
+  const matchingProjects = PROJECT_READINESS_REGISTRY.projects
+    .filter((project) => !projectId || project.projectId === projectId)
+    .map((project) => ({ ...project, tasks: project.tasks.filter((task) =>
+      (!priority || task.priority === priority) && (!status || task.status === status)) }))
+    .filter((project) => project.tasks.length > 0);
+  const matchingCount = matchingProjects.reduce((count, project) => count + project.tasks.length, 0);
+  const projectSections = matchingProjects.map((project) => renderReadinessProject(project, filtered)).join('');
+  const options = (values, selected, label) => `<option value="">${label}</option>` + values.map(([value, text]) =>
+    `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(text)}</option>`).join('');
+  const filterForm = `<form action="/readiness" method="get" class="readiness-filters" aria-label="Filter task list">
+    <label>Project<select name="project">${options(BITTREES_PROJECT_REGISTRY.projects.map((p) => [p.id, p.name]), projectId, 'All projects')}</select></label>
+    <label>Priority<select name="priority">${options([['P0', 'P0 — Launch blockers'], ['P1', 'P1 — Production requirements'], ['P2', 'P2 — Quality improvements']], priority, 'All priorities')}</select></label>
+    <label>Status<select name="status">${options([['todo', 'To do'], ['in-progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done']], status, 'All statuses')}</select></label>
+    <button type="submit">Apply filters</button><a href="/readiness">Reset</a>
+  </form>`;
   const reviewedDate = PROJECT_READINESS_REGISTRY.reviewedAt.slice(0, 10);
 
   return `<!doctype html>
@@ -9199,6 +9219,11 @@ export function renderReadinessPage() {
       .priority-key strong { color: #fff; }
       .readiness-directory-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 18px; }
       .readiness-directory-heading p { margin: 7px 0 0; max-width: 68ch; }
+      .readiness-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 20px 0; }
+      .readiness-filters label { display: grid; gap: 6px; min-width: 0; max-width: 100%; font-weight: 700; }
+      .readiness-filters select { max-width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); font: inherit; }
+      .readiness-filters button { min-height: 44px; padding: 8px 16px; border: 0; border-radius: 8px; background: var(--green); color: white; font: inherit; cursor: pointer; }
+      .readiness-filters :focus-visible { outline: 3px solid #95691e; outline-offset: 3px; }
       .readiness-directory { display: grid; gap: 14px; }
       .readiness-project { overflow: clip; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.91); box-shadow: 0 12px 34px rgba(23,32,28,.05); }
       .readiness-project summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: center; padding: 20px; cursor: pointer; }
@@ -9258,6 +9283,8 @@ export function renderReadinessPage() {
           <div><dt>Open tasks</dt><dd>${registry.summary.open}</dd></div>
           <div><dt>P0 open</dt><dd>${registry.summary.openByPriority.P0}</dd></div>
           <div><dt>P1 open</dt><dd>${registry.summary.openByPriority.P1}</dd></div>
+          <div><dt>P2 open</dt><dd>${registry.summary.openByPriority.P2}</dd></div>
+          <div><dt>Completed</dt><dd>${registry.summary.completed}</dd></div>
         </dl>
       </section>
 
@@ -9282,7 +9309,9 @@ export function renderReadinessPage() {
           </div>
           <p>Reviewed ${escapeHtml(reviewedDate)}</p>
         </div>
-        <div class="readiness-directory">${projectSections}</div>
+        ${filterForm}
+        <p role="status">Showing ${matchingCount} of ${registry.summary.total} tasks across ${matchingProjects.length} ${matchingProjects.length === 1 ? 'project' : 'projects'}.${filtered ? ' Project counts below reflect the filters.' : ''}</p>
+        <div class="readiness-directory">${projectSections || '<p>No tasks match these filters. <a href="/readiness">Show all tasks</a>.</p>'}</div>
       </section>
 
       <section class="band" aria-labelledby="readiness-limitations-title">
@@ -11130,10 +11159,6 @@ export function buildStaticAssets(
       body: renderProjectsPage(),
     },
     {
-      path: 'readiness/index.html',
-      body: renderReadinessPage(),
-    },
-    {
       path: 'identity-keys/index.html',
       body: renderIdentityKeysPage(),
     },
@@ -11412,7 +11437,7 @@ export function createRequestHandler({
     }
 
     if (pathname === READINESS_PAGE_PATH) {
-      return sendBody(res, 200, renderReadinessPage(), 'text/html; charset=utf-8', includeBody, {
+      return sendBody(res, 200, renderReadinessPage(requestUrl.searchParams), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });

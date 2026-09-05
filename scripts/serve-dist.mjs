@@ -16,6 +16,7 @@ const dynamicPortalHandler = createRequestHandler();
 // contribution service projection loader. Serving dist/submission-status as a
 // static snapshot would make every lookup appear identical.
 const dynamicPortalRoutePaths = new Set([
+  '/readiness',
   '/contribution-intents',
   '/gateway/contribution-intents',
   '/submission-status',

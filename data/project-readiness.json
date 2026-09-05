@@ -399,11 +399,12 @@
           "priority": "P2",
           "area": "operations",
           "title": "Assign content ownership, freshness checks, analytics, and support",
-          "status": "todo",
+          "status": "blocked",
           "acceptanceCriteria": [
             "Every ecosystem record has an owner, last-reviewed date, and automated broken-link/staleness check.",
             "Privacy-respecting analytics, performance budgets, uptime monitoring, and a monitored contact route are documented."
-          ]
+          ],
+          "progressNote": "September 5: content freshness/link checks and build budgets are prepared for review. Completion awaits named content owners, a monitored support contact, and notification/uptime acceptance."
         }
       ]
     },
@@ -843,11 +844,12 @@
           "priority": "P2",
           "area": "agent-discovery",
           "title": "Expose release metadata for agents and complete accessibility QA",
-          "status": "todo",
+          "status": "in-progress",
           "acceptanceCriteria": [
             "llms.txt and a versioned release/support JSON feed link to checksums, compatibility, changelog, and the unified portal.",
             "Keyboard, screen-reader, zoom, contrast, reduced-motion, and cross-platform UI checks are part of release acceptance."
-          ]
+          ],
+          "progressNote": "September 5: website release/support feed, agent guide, and keyboard/reduced-motion improvements are prepared for review. Browser, screen-reader, desktop, and deployed-route acceptance remain outstanding."
         }
       ]
     },
