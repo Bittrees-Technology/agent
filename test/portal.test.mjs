@@ -1095,14 +1095,14 @@ test('signing island shows the review package preview without exposing wallet co
   const html = renderLandingPage();
 
   assert.match(html, /<p class="signing-context-row" id="intent-context-row">Base \(8453\) - agent\.bittrees\.org - contributor review intake<\/p>/);
-  assert.match(html, /<p class="signing-wallet-state" id="intent-wallet-state">Wallet connection is not exposed while this portal uses a no-script production CSP\.<\/p>/);
+  assert.match(html, /<p class="signing-wallet-state" id="intent-wallet-state">Wallet connection is not enabled in this portal\.<\/p>/);
   assert.doesNotMatch(html, /id="intent-connect-wallet"/);
   assert.doesNotMatch(html, />Connect wallet<\/button>/);
   assert.match(html, /<summary>Review package preview<\/summary>/);
   assert.match(html, /<dt>Purpose<\/dt><dd>Contributor application \/ contribution review intake<\/dd>/);
   assert.match(html, /<dt>Portal<\/dt><dd>agent\.bittrees\.org<\/dd>/);
   assert.match(html, /<dt>Network<\/dt><dd>Base \(8453\)<\/dd>/);
-  assert.match(html, /<dt>Account<\/dt><dd id="intent-payload-account">Not requested by this no-script page<\/dd>/);
+  assert.match(html, /<dt>Account<\/dt><dd id="intent-payload-account">Not requested by this page<\/dd>/);
   assert.match(html, /<dt>Review gate<\/dt><dd>review_required_before_publication_or_assignment<\/dd>/);
   assert.match(html, /<dd id="intent-payload-form-summary">Lane: [^<]+ \| Name: \(not set\) \| Summary length: 0 chars \| Source IDs: 0<\/dd>/);
 });
@@ -1123,9 +1123,9 @@ test('signing island matches the no-script CSP and exposes only the server fallb
   const html = renderLandingPage();
 
   assert.match(html, /<section class="signing-island" id="intent-signing-island" data-signing-state="server-fallback" aria-live="polite">/);
-  assert.match(html, /Client scripting is unavailable by policy, so this form uses the offline packet path\./);
-  assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /script-src 'none'/);
-  assert.doesNotMatch(html, /<script\b/i);
+  assert.match(html, /Wallet scripting is unavailable by policy, so this form uses the offline packet path\./);
+  assert.match(PORTAL_SECURITY_HEADERS['Content-Security-Policy'], /script-src https:\/\/insights\.bittrees\.org\/consent\.js https:\/\/insights\.bittrees\.org\/tracker\.js;/);
+  assert.doesNotMatch(html.replaceAll('<script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>', ''), /<script\b/i);
   assert.doesNotMatch(html, /data-signing-state="pending"/);
   assert.doesNotMatch(html, /personal_sign/);
   assert.doesNotMatch(html, /wallet_switchEthereumChain/);
@@ -1154,8 +1154,8 @@ test('workflow HTML responses keep script-src none without inline scripts or wal
       const html = await response.text();
 
       assert.equal(response.status, expectedStatus, path);
-      assert.match(response.headers.get('content-security-policy') ?? '', /script-src 'none'/, path);
-      assert.doesNotMatch(html, /<script\b/i, path);
+      assert.match(response.headers.get('content-security-policy') ?? '', /script-src https:\/\/insights\.bittrees\.org\/consent\.js https:\/\/insights\.bittrees\.org\/tracker\.js;/, path);
+      assert.doesNotMatch(html.replaceAll('<script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>', ''), /<script\b/i, path);
       assert.doesNotMatch(html, /id="intent-connect-wallet"/, path);
       assert.doesNotMatch(html, />Connect wallet<\/button>/, path);
       assert.doesNotMatch(html, /data-signing-state="pending"/, path);
@@ -1167,7 +1167,7 @@ test('workflow HTML responses keep script-src none without inline scripts or wal
     const gatewayContractBody = await gatewayContractResponse.text();
 
     assert.equal(gatewayContractResponse.status, 200);
-    assert.match(gatewayContractResponse.headers.get('content-security-policy') ?? '', /script-src 'none'/);
+    assert.match(gatewayContractResponse.headers.get('content-security-policy') ?? '', /script-src https:\/\/insights\.bittrees\.org\/consent\.js https:\/\/insights\.bittrees\.org\/tracker\.js;/);
     assert.match(gatewayContractResponse.headers.get('content-type') ?? '', /^application\/json/);
     assert.doesNotMatch(gatewayContractBody, /<script\b/i);
   });

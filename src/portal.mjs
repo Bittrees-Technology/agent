@@ -299,7 +299,7 @@ export const PORTAL_CACHE_HEADERS = Object.freeze({
 
 export const PORTAL_SECURITY_HEADERS = Object.freeze({
   'Content-Security-Policy':
-    "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; upgrade-insecure-requests",
+    "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src https://insights.bittrees.org/consent.js https://insights.bittrees.org/tracker.js; connect-src https://insights.bittrees.org; style-src 'self' 'unsafe-inline' https://insights.bittrees.org/consent.css; upgrade-insecure-requests",
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
@@ -6241,7 +6241,7 @@ function renderContributionSigningIsland(values, laneOptions) {
   return `<section class="signing-island" id="intent-signing-island" data-signing-state="server-fallback" aria-live="polite">
     <p class="signing-context-row" id="intent-context-row">${escapeHtml(CONTRIBUTION_CONTEXT_ROW)}</p>
     <div class="signing-wallet-row">
-      <p class="signing-wallet-state" id="intent-wallet-state">Wallet connection is not exposed while this portal uses a no-script production CSP.</p>
+      <p class="signing-wallet-state" id="intent-wallet-state">Wallet connection is not enabled in this portal.</p>
     </div>
     <details class="signing-preview" id="intent-message-preview" open>
       <summary>Wallet signature preview</summary>
@@ -6254,7 +6254,7 @@ function renderContributionSigningIsland(values, laneOptions) {
         <dt>Purpose</dt><dd>Contributor application / contribution review intake</dd>
         <dt>Portal</dt><dd>agent.bittrees.org</dd>
         <dt>Network</dt><dd>Base (8453)</dd>
-        <dt>Account</dt><dd id="intent-payload-account">Not requested by this no-script page</dd>
+        <dt>Account</dt><dd id="intent-payload-account">Not requested by this page</dd>
         <dt>Review gate</dt><dd>review_required_before_publication_or_assignment</dd>
         <dt>Write posture</dt><dd id="intent-payload-write-posture">${escapeHtml(writePostureLabel)}</dd>
         <dt>Form summary</dt><dd id="intent-payload-form-summary">${escapeHtml(initialFormSummary)}</dd>
@@ -6265,7 +6265,7 @@ function renderContributionSigningIsland(values, laneOptions) {
       <h3 id="intent-server-fallback-title">Offline packet path</h3>
       <p>If wallet signing is unavailable, submitting this form returns a server-rendered offline contribution packet. That fallback does not create an assignment, approval, public attestation, onchain action, or wallet grant.</p>
       <noscript>Client scripting is unavailable, so this form will use the offline packet path.</noscript>
-      <p>Client scripting is unavailable by policy, so this form uses the offline packet path.</p>
+      <p>Wallet scripting is unavailable by policy, so this form uses the offline packet path.</p>
     </div>
   </section>`;
 }
@@ -7055,7 +7055,8 @@ function renderContributionIntentPage({ title, heading, lead, body, path = CONTR
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: lead, path, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderContributionIntentPageStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <main id="main-content">
@@ -8420,7 +8421,8 @@ export function renderLandingPage() {
         .portal-stats { gap: 14px 22px; }
       }
     </style>
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -8832,7 +8834,8 @@ export function renderMcpGatewayPage({ docs = false } = {}) {
         th, td { display: block; width: 100%; }
       }
     </style>
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9047,7 +9050,8 @@ export function renderProjectsPage() {
         .agent-entry-panel { padding: 20px; }
       }
     </style>
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9236,7 +9240,8 @@ export function renderReadinessPage() {
         .readiness-project summary, .readiness-project-overview, .readiness-task { padding: 17px; }
       }
     </style>
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9330,7 +9335,8 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/submission-status', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9429,7 +9435,8 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/reputation', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9546,7 +9553,8 @@ export function renderNotFoundPage() {
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/404', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9592,7 +9600,8 @@ export function renderTermsOfUsePage() {
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/terms-of-use', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9653,7 +9662,8 @@ export function renderPrivacyPage() {
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: PRIVACY_PAGE_ROUTE, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -9737,7 +9747,8 @@ export function renderOnboardingPage() {
     <title>${escapeHtml(pageTitle)}</title>
     ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/onboarding', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
     ${renderHumanLookupStyles()}
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
@@ -10074,7 +10085,8 @@ export function renderIdentityKeysPage() {
         h1 { max-width: 100%; }
       }
     </style>
-  </head>
+  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
+</head>
   <body>
     <a class="skip-link" href="#page-content">Skip to main content</a>
     <header class="topline">
