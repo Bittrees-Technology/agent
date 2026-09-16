@@ -9072,7 +9072,7 @@ export function renderProjectsPage() {
         <div>
           <p class="portal-kicker">The Bittrees ecosystem</p>
           <h1 id="projects-title">One portal. A shared project catalog.</h1>
-          <p class="lede">Browse products, public data sources, repositories, and contribution routes from one registry. Adding a reviewed record to <a href="/projects.json">/projects.json</a> automatically expands this directory and the MCP resource catalog.</p>
+          <p class="lede">Browse the reviewed project snapshot, contribution routes and pending integration status. The separate MCP service manages connections and its current integration catalog.</p>
         </div>
         <dl class="project-stats">
           <div><dt>Projects</dt><dd>${BITTREES_PROJECT_REGISTRY.projects.length}</dd></div>
@@ -9084,13 +9084,10 @@ export function renderProjectsPage() {
       <section class="band agent-entry-panel" aria-labelledby="project-agent-entry-title">
         <div>
           <h2 id="project-agent-entry-title">For AI agents</h2>
-          <p>Connect once, then discover every registered project through standard MCP resources or project tools.</p>
-          <p><a href="/llms.txt">Read the agent entry file</a> · <a href="/mcp-docs">Open setup docs</a></p>
+          <p>Choose the projects your agent can discover through the separate Bittrees MCP service.</p>
+          <p><a href="https://mcp.bittrees.org/connect">Connect your agent</a> · <a href="https://mcp.bittrees.org/mcp-docs">Connection guide</a></p>
         </div>
-        <pre><code>Endpoint: https://agent.bittrees.org/mcp
-Discover: server/discover → resources/list
-Choose: list_bittrees_projects → get_bittrees_project
-Handoff: prepare_bittrees_project_handoff</code></pre>
+        <p>Existing Agent contribution clients keep their current endpoint and authorization. <a href="/mcp-docs">Legacy contribution setup</a> · <a href="/llms.txt">Agent guide</a></p>
       </section>
 
       <section class="band project-directory-band" aria-labelledby="project-directory-title">
