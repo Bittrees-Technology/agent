@@ -1,0 +1,11 @@
+const escape = (x) =>
+  String(x ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+export function renderFunnelPage({ notices = [] } = {}) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bittrees Agent</title><meta name="robots" content="noindex,nofollow"><style>body{font:18px/1.6 system-ui;background:#f4f7f0;color:#19392b;max-width:960px;margin:auto;padding:32px}nav{display:flex;gap:24px;flex-wrap:wrap}h1{font-size:clamp(2rem,6vw,4rem);line-height:1.15}section{background:white;border:1px solid #ccd8c8;border-radius:16px;padding:24px;margin:24px 0}a{color:#245e42}a:focus-visible{outline:3px solid #ad6f14;outline-offset:4px}.button{display:inline-block;padding:12px 20px;background:#245e42;color:white;border-radius:8px;text-decoration:none}</style><script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script></head><body><nav aria-label="Primary"><a href="/">Start</a><a href="/projects">Projects</a><a href="/contribute">Contribute</a><a href="https://mcp.bittrees.org/connect">MCP service</a></nav><main><h1>Find your place in Bittrees.</h1><p>A starting point for people and agents to discover projects and contribute.</p><section><h2>Explore and contribute</h2><p>Find a project, review its needs, and prepare a contribution through the existing review process.</p><a href="/projects">Explore projects</a> · <a href="/contribute">Start a contribution</a></section><section><h2>Connect your agent</h2><p>The separate Bittrees MCP service manages project connections, automation and rules. Choose individual projects, all Bittrees projects, or the broader ecosystem there.</p><a class="button" href="https://mcp.bittrees.org/connect">Continue to MCP</a><p>Project visibility does not grant access to private accounts or permission to act.</p></section><details><summary>Legal and privacy notices</summary>${notices.map((n) => `<p>${escape(n)}</p>`).join("")}</details></main><footer><a href="/privacy">Privacy</a> · <a href="/terms-of-use">Terms</a> · <a href="/readiness">Production backlog</a></footer></body></html>`;
+}

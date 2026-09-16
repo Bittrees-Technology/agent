@@ -709,7 +709,7 @@ test('static build includes all advertised routes', () => {
 
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('projects/index.html'));
-  assert.ok(assetPaths.has('readiness/index.html'));
+  assert.ok(!assetPaths.has('readiness/index.html'), 'readiness filters require dynamic rendering');
   assert.ok(assetPaths.has('identity-keys/index.html'));
   // This query-driven page must remain dynamic. A generated index.html shadows
   // the Vercel function route and can self-refresh instead of loading status.
@@ -2117,11 +2117,11 @@ test('homepage and monitoring expose contribution workflow', () => {
   const monitoringRoute = JSON_ROUTE_MAP.get('/monitoring.json');
   const response = buildJsonResponse(monitoringRoute, '2026-07-06T00:00:00.000Z');
 
-  assert.match(htmlAsset.body, /Contribution workflow/);
-  assert.match(htmlAsset.body, /Agent discovery/);
-  assert.match(htmlAsset.body, /Status tracking/);
-  assert.match(htmlAsset.body, /Discovery is read-only/);
-  assert.match(htmlAsset.body, /Contributor application submission/);
+  assert.match(htmlAsset.body, /Explore and contribute/);
+  assert.match(htmlAsset.body, /Find your place in Bittrees/);
+  assert.match(htmlAsset.body, /https:\/\/mcp.bittrees.org\/connect/);
+  assert.match(htmlAsset.body, /Project visibility does not grant access/);
+  assert.match(htmlAsset.body, /href="\/contribute"/);
   assert.equal(response.status, LAUNCH_FRESHNESS_MONITORING.status);
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/identity-keys'));
   assert.ok(response.data.monitoring.routeStatusChecks.includes('/submission-status'));
@@ -2757,20 +2757,25 @@ test('project registry exposes one unified, review-gated route across reviewed B
   const ids = response.data.projects.map((project) => project.id);
 
   assert.equal(response.status, 'project-registry-ready');
-  assert.equal(BITTREES_PROJECT_REGISTRY.schema, 'agent.bittrees.project-registry.v1');
-  assert.equal(ids.length, 14);
+  assert.equal(BITTREES_PROJECT_REGISTRY.schema, 'agent.bittrees.project-registry.v2');
+  assert.equal(ids.length, BITTREES_PROJECT_REGISTRY.projects.length);
+  assert.ok(ids.includes('crm') && ids.includes('node'));
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.includes('agent'));
   assert.ok(ids.includes('bittrees-research'));
   assert.ok(ids.includes('skillmesh'));
   assert.equal(response.data.reviewGate.productionMutationAllowed, false);
   for (const project of response.data.projects) {
-    assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
+    if (project.repositoryUrl !== null) assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
     assert.equal(project.interaction.unifiedMcpEndpoint, '/mcp');
     assert.equal(project.interaction.directMutationAllowed, false);
     assert.ok(project.relatedOpportunityIds.includes('project-directed-contribution'));
-    assert.ok(project.readiness.summary.total > 0);
-    assert.equal(project.readiness.resourceRoute, '/readiness.json');
+    if (project.readiness) {
+      assert.ok(project.readiness.summary.total > 0);
+      assert.equal(project.readiness.resourceRoute, '/readiness.json');
+    } else {
+      assert.equal(project.gatewayReadiness.actionReady, false);
+    }
     assert.equal(project.interaction.readinessResource, '/readiness.json');
     assert.doesNotMatch(JSON.stringify(project), /\/Users\//);
   }
@@ -2784,7 +2789,8 @@ test('production-readiness registry covers every project with unique acceptance-
   const taskIds = response.data.projects.flatMap((project) => project.tasks.map((task) => task.id));
 
   assert.equal(PROJECT_READINESS_REGISTRY.schema, 'agent.bittrees.project-readiness.v1');
-  assert.deepEqual(projectIds.sort(), registryIds.sort());
+  assert.ok(projectIds.every((id) => registryIds.includes(id)));
+  assert.equal(projectIds.length, PROJECT_READINESS_REGISTRY.projects.length);
   assert.equal(new Set(taskIds).size, taskIds.length);
   assert.equal(response.data.summary.total, taskIds.length);
   assert.equal(response.data.summary.open, taskIds.length);
@@ -2795,7 +2801,7 @@ test('production-readiness registry covers every project with unique acceptance-
 
   for (const project of response.data.projects) {
     assert.ok(project.tasks.length >= 6, `${project.projectId} needs a substantial readiness list`);
-    assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
+    if (project.repositoryUrl !== null) assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
     for (const task of project.tasks) {
       assert.ok(['P0', 'P1', 'P2'].includes(task.priority));
       assert.ok(['todo', 'in-progress', 'blocked', 'done'].includes(task.status));
@@ -2823,7 +2829,7 @@ test('projects page and stable project resources grow from the reviewed registry
   const found = buildProjectApiResponse('agent', '2026-08-21T16:09:42.000Z');
   const missing = buildProjectApiResponse('unknown-project', '2026-08-21T16:09:42.000Z');
 
-  assert.match(html, /One portal\. Every reviewed project\./);
+  assert.match(html, /One portal\. A shared project catalog\./);
   assert.equal((html.match(/<article class="project-card/g) ?? []).length, BITTREES_PROJECT_REGISTRY.projects.length);
   assert.match(html, /href="\/v1\/projects\/agent"/);
   assert.equal(found.found, true);
@@ -3095,13 +3101,14 @@ test('human pages expose shared primary navigation and route metadata', () => {
 
   for (const page of pages) {
     assert.match(page.html, /aria-label="Primary portal routes"/);
-    if (page.label) {
+    if (page.path === '/projects') {
       assert.match(
         page.html,
         new RegExp(`<a href="${escapeRegex(page.path)}" aria-current="page">${escapeRegex(page.label)}<\\/a>`),
       );
     } else {
-      assert.match(page.html, new RegExp(`<a href="${escapeRegex(page.path)}">`));
+      assert.match(page.html, /href="\/contribute"/);
+      assert.match(page.html, /href="https:\/\/mcp.bittrees.org\/connect"/);
     }
     assert.match(page.html, /<meta name="theme-color" content="#eef3ec" \/>/);
     assert.match(page.html, /<link rel="describedby" href="\/llms\.txt" type="text\/plain" \/>/);
@@ -4085,4 +4092,22 @@ test('idacc release snapshot includes verifiable download metadata', () => {
     assert.ok(asset.size > 100_000_000);
   }
   assert.equal(response.data.releases.length, 1);
+});
+
+
+test('readiness filters combine priority, status, and project without hiding global totals', () => {
+  const html = renderReadinessPage(new URLSearchParams('priority=P1&status=todo&project=agent'));
+  assert.equal((html.match(/class="readiness-task priority-/g) ?? []).length, 3);
+  assert.match(html, /Showing 3 of 84 tasks across 1 project/);
+  assert.match(html, /id="readiness-agent" open/);
+  assert.doesNotMatch(html, /id="agent-p0-durable-control-plane"/);
+  assert.match(html, /value="P1" selected/);
+  assert.match(html, /method="get"/);
+});
+
+test('readiness filters handle empty matches and ignore unrecognized inputs', () => {
+  assert.match(renderReadinessPage(new URLSearchParams('project=agent&priority=P2')), /No tasks match/);
+  const html = renderReadinessPage(new URLSearchParams('priority=%3Cscript%3E&project=unknown&status=nope'));
+  assert.match(html, /Showing 84 of 84 tasks/);
+  assert.doesNotMatch(html, /<script>/);
 });

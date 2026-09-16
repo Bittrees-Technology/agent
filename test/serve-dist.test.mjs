@@ -158,3 +158,15 @@ test('dist server never falls back to octet-stream under nosniff for known stati
     }
   });
 });
+
+
+test('dist server renders readiness filters dynamically', async () => {
+  await withDistServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/readiness?priority=P2&project=agent`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /No tasks match these filters/);
+    const head = await fetch(`${baseUrl}/readiness?priority=P2`, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal(await head.text(), '');
+  });
+});

@@ -378,3 +378,12 @@ npm run start:dist
 - The identity/key route remains prelaunch-contract-under-review. The durable authenticated writer and signed-heartbeat ingestion primitives in `src/registry-control-plane.mjs` are mounted only as signed control-plane routes: `PUT /v1/registry/agents/:agentId` and `POST /v1/registry/heartbeats`. They are not self-service onboarding APIs and cannot grant authority, spend, execution, deployment, DNS, credential, or asset-movement capability; the public read projection remains bounded.
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.
+
+## Agent funnel and standalone MCP service
+
+Agent owns person/agent onboarding, project discovery and existing contribution
+workflows. [Bittrees MCP](https://github.com/Bittrees-Technology/mcp) independently
+owns integration transport, saved profiles, automation, rules, schemas and releases.
+The funnel links to https://mcp.bittrees.org/connect. Existing Agent contribution
+MCP clients retain their original endpoint and authorization; see
+[the migration contract](docs/ecosystem-integration.md). Node implementation is deferred.

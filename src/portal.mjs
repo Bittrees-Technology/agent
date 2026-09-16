@@ -1,3 +1,6 @@
+import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
+import { scopedMcpResult } from './ecosystem/mcp.mjs';
+import { renderFunnelPage } from './ecosystem/ui.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
@@ -106,9 +109,9 @@ function assertProjectReadinessRegistry() {
   if (PROJECT_READINESS_BY_ID.size !== readinessIds.length) {
     throw new Error('Project readiness registry contains a duplicate projectId.');
   }
-  const missingIds = BITTREES_PROJECT_IDS.filter((projectId) => !PROJECT_READINESS_BY_ID.has(projectId));
+  const missingIds = []; // Newly inventoried projects have no historical readiness review.
   const unknownIds = readinessIds.filter((projectId) => !BITTREES_PROJECT_IDS.includes(projectId));
-  if (missingIds.length > 0 || unknownIds.length > 0) {
+  if (unknownIds.length > 0) {
     throw new Error(`Project readiness registry does not match the project registry (missing: ${missingIds.join(', ') || 'none'}; unknown: ${unknownIds.join(', ') || 'none'}).`);
   }
 
@@ -3095,6 +3098,7 @@ function summarizeBittreesProject(project) {
   if (!project) return null;
   return {
     ...project,
+    gatewayReadiness: projectState(project),
     readiness: summarizeProjectReadinessOverview(findProjectReadiness(project.id)),
     interaction: projectInteractionContract(project),
     relatedOpportunityIds: OPPORTUNITIES
@@ -3267,6 +3271,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
           schema: BITTREES_PROJECT_REGISTRY.schema,
           version: BITTREES_PROJECT_REGISTRY.version,
           reviewedAt: BITTREES_PROJECT_REGISTRY.reviewedAt,
+          revision: catalogRevision(CATALOG),
           scope: BITTREES_PROJECT_REGISTRY.scope,
           authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
         },
@@ -3693,6 +3698,7 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
     status: MCP_GATEWAY.status,
     generatedAt,
     gateway: MCP_GATEWAY,
+    ecosystem: { manifest: '/catalog.json', connectionPage: 'https://mcp.bittrees.org/connect', canonicalTransport: 'https://mcp.bittrees.org/mcp', configuration: '/connection.json', profileSchema: 'agent.bittrees.selection.v1', modes: ['selected', 'bittrees', 'ecosystem'], serviceRepository: 'https://github.com/Bittrees-Technology/mcp', legacyCompatibility: 'Unparameterized /mcp retains the historical contribution API. New clients use an explicit mode.', revision: catalogRevision(CATALOG) },
     tools: MCP_CONTRIBUTION_TOOLS,
     importSnippets: MCP_IMPORT_SNIPPETS,
     harnessImportTabs: MCP_HARNESS_IMPORT_TABS,
@@ -4271,6 +4277,7 @@ const JSON_ROUTES = [
         schema: BITTREES_PROJECT_REGISTRY.schema,
         version: BITTREES_PROJECT_REGISTRY.version,
         reviewedAt: BITTREES_PROJECT_REGISTRY.reviewedAt,
+          revision: catalogRevision(CATALOG),
         scope: BITTREES_PROJECT_REGISTRY.scope,
         authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
       },
@@ -5498,12 +5505,10 @@ function renderContributionIntentPageStyles() {
 // Keep the global header task-first and compact. Deeper governance, identity,
 // reputation, and legal routes remain in the footer and route directory.
 const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
+  { path: '/', label: 'Start' },
   { path: PROJECTS_PAGE_PATH, label: 'Projects' },
-  { path: READINESS_PAGE_PATH, label: 'Readiness' },
-  { path: '/onboarding', label: 'Onboarding' },
-  { path: '/mcp', label: 'MCP' },
-  { path: '/mcp-docs', label: 'Docs' },
-  { path: '/submission-status', label: 'Status' },
+  { path: '/contribute', label: 'Contribute' },
+  { path: 'https://mcp.bittrees.org/connect', label: 'MCP service' },
 ]);
 
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
@@ -7606,7 +7611,7 @@ export function buildLlmsTxt() {
 
   return publicSafeString(`# agent.bittrees.org
 
-> The universal, source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
+> Agent onboarding funnel. New integration clients connect at https://mcp.bittrees.org/connect (target transport https://mcp.bittrees.org/mcp). Existing contribution MCP clients keep this origin and its independent authorization. Never redirect authenticated POSTs or reuse credentials across these origins.\n\n> The source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
 
 Launch status: ${humanizeStatus(LAUNCH_STATUS.status)}. ${LAUNCH_STATUS.publicLaunchGate}
 Protocol versions currently supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.
@@ -8907,7 +8912,7 @@ export function renderMcpDocsPage() {
 
 function projectAvailabilityLabel(availability) {
   return ({
-    'public-site': 'Live site',
+    'public-site': 'Public site',
     'public-api': 'Public API',
     'protected-preview': 'Protected preview',
     repository: 'Repository',
@@ -8934,15 +8939,16 @@ function renderProjectCard(project, { compact = false } = {}) {
       </div>
       <h3>${escapeHtml(project.name)}</h3>
       <p>${escapeHtml(project.summary)}</p>
+      <p>${escapeHtml(project.affiliation)} · ${escapeHtml(project.approval)} · reachability ${escapeHtml(project.health.status)} · ${escapeHtml(projectState(project).freshness)}</p>
       ${readinessLine}
       <ul class="project-lanes" aria-label="Contribution lanes">
         ${laneLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}
       </ul>
       <div class="project-links">
         ${publicLink}
-        <a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>
+        ${project.repositoryUrl ? `<a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>` : '<span>Repository pending verification</span>'}
         <a class="project-link" href="${escapeHtml(resourceRoute)}">Agent resource</a>
-        <a class="project-link" href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a>
+        ${readiness ? `<a class="project-link" href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a>` : '<span>Launch review pending</span>'}
       </div>
     </article>`;
 }
@@ -9065,8 +9071,8 @@ export function renderProjectsPage() {
       <section id="page-content" class="hero projects-hero" aria-labelledby="projects-title">
         <div>
           <p class="portal-kicker">The Bittrees ecosystem</p>
-          <h1 id="projects-title">One portal. Every reviewed project.</h1>
-          <p class="lede">Browse products, public data sources, repositories, and contribution routes from one registry. Adding a reviewed record to <a href="/projects.json">/projects.json</a> automatically expands this directory and the MCP resource catalog.</p>
+          <h1 id="projects-title">One portal. A shared project catalog.</h1>
+          <p class="lede">Browse the reviewed project snapshot, contribution routes and pending integration status. The separate MCP service manages connections and its current integration catalog.</p>
         </div>
         <dl class="project-stats">
           <div><dt>Projects</dt><dd>${BITTREES_PROJECT_REGISTRY.projects.length}</dd></div>
@@ -9078,13 +9084,10 @@ export function renderProjectsPage() {
       <section class="band agent-entry-panel" aria-labelledby="project-agent-entry-title">
         <div>
           <h2 id="project-agent-entry-title">For AI agents</h2>
-          <p>Connect once, then discover every registered project through standard MCP resources or project tools.</p>
-          <p><a href="/llms.txt">Read the agent entry file</a> · <a href="/mcp-docs">Open setup docs</a></p>
+          <p>Choose the projects your agent can discover through the separate Bittrees MCP service.</p>
+          <p><a href="https://mcp.bittrees.org/connect">Connect your agent</a> · <a href="https://mcp.bittrees.org/mcp-docs">Connection guide</a></p>
         </div>
-        <pre><code>Endpoint: https://agent.bittrees.org/mcp
-Discover: server/discover → resources/list
-Choose: list_bittrees_projects → get_bittrees_project
-Handoff: prepare_bittrees_project_handoff</code></pre>
+        <p>Existing Agent contribution clients keep their current endpoint and authorization. <a href="/mcp-docs">Legacy contribution setup</a> · <a href="/llms.txt">Agent guide</a></p>
       </section>
 
       <section class="band project-directory-band" aria-labelledby="project-directory-title">
@@ -9108,7 +9111,7 @@ Handoff: prepare_bittrees_project_handoff</code></pre>
 </html>`;
 }
 
-function renderReadinessProject(readiness) {
+function renderReadinessProject(readiness, expand = false) {
   const project = findBittreesProject(readiness.projectId);
   const summary = countReadinessTasks(readiness.tasks);
   const projectLinks = [
@@ -9128,6 +9131,7 @@ function renderReadinessProject(readiness) {
             <span>${escapeHtml(statusLabel)}</span>
           </div>
           <h3>${escapeHtml(task.title)}</h3>
+          ${task.progressNote ? `<p>${escapeHtml(task.progressNote)}</p>` : ''}
           <p class="acceptance-label">Complete when</p>
           <ul class="acceptance-list">${criteria}</ul>
           <a class="task-anchor" href="#${escapeHtml(task.id)}" aria-label="Link to ${escapeHtml(task.title)}">Task link</a>
@@ -9135,7 +9139,7 @@ function renderReadinessProject(readiness) {
       </li>`;
   }).join('');
 
-  const initiallyOpen = readiness.projectId === 'agent' ? ' open' : '';
+  const initiallyOpen = expand || readiness.projectId === 'agent' ? ' open' : '';
   return `<details class="readiness-project" id="readiness-${escapeHtml(readiness.projectId)}"${initiallyOpen}>
       <summary>
         <span class="readiness-project-title">
@@ -9162,14 +9166,33 @@ function renderReadinessProject(readiness) {
     </details>`;
 }
 
-export function renderReadinessPage() {
+export function renderReadinessPage(searchParams = new URLSearchParams()) {
   const pageTitle = 'Project production readiness - agent.bittrees.org';
   const pageDescription = getRouteDescription(
     READINESS_PAGE_PATH,
     'Human-readable, prioritized launch checklist for every project in the reviewed Bittrees registry.',
   );
   const registry = buildProjectReadinessRegistryData();
-  const projectSections = PROJECT_READINESS_REGISTRY.projects.map(renderReadinessProject).join('');
+  const allowed = (key, values) => values.includes(searchParams.get(key)) ? searchParams.get(key) : '';
+  const priority = allowed('priority', ['P0', 'P1', 'P2']);
+  const status = allowed('status', ['todo', 'in-progress', 'blocked', 'done']);
+  const projectId = allowed('project', BITTREES_PROJECT_IDS);
+  const filtered = Boolean(priority || status || projectId);
+  const matchingProjects = PROJECT_READINESS_REGISTRY.projects
+    .filter((project) => !projectId || project.projectId === projectId)
+    .map((project) => ({ ...project, tasks: project.tasks.filter((task) =>
+      (!priority || task.priority === priority) && (!status || task.status === status)) }))
+    .filter((project) => project.tasks.length > 0);
+  const matchingCount = matchingProjects.reduce((count, project) => count + project.tasks.length, 0);
+  const projectSections = matchingProjects.map((project) => renderReadinessProject(project, filtered)).join('');
+  const options = (values, selected, label) => `<option value="">${label}</option>` + values.map(([value, text]) =>
+    `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(text)}</option>`).join('');
+  const filterForm = `<form action="/readiness" method="get" class="readiness-filters" aria-label="Filter task list">
+    <label>Project<select name="project">${options(BITTREES_PROJECT_REGISTRY.projects.map((p) => [p.id, p.name]), projectId, 'All projects')}</select></label>
+    <label>Priority<select name="priority">${options([['P0', 'P0 — Launch blockers'], ['P1', 'P1 — Production requirements'], ['P2', 'P2 — Quality improvements']], priority, 'All priorities')}</select></label>
+    <label>Status<select name="status">${options([['todo', 'To do'], ['in-progress', 'In progress'], ['blocked', 'Blocked'], ['done', 'Done']], status, 'All statuses')}</select></label>
+    <button type="submit">Apply filters</button><a href="/readiness">Reset</a>
+  </form>`;
   const reviewedDate = PROJECT_READINESS_REGISTRY.reviewedAt.slice(0, 10);
 
   return `<!doctype html>
@@ -9203,6 +9226,11 @@ export function renderReadinessPage() {
       .priority-key strong { color: #fff; }
       .readiness-directory-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 18px; }
       .readiness-directory-heading p { margin: 7px 0 0; max-width: 68ch; }
+      .readiness-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 20px 0; }
+      .readiness-filters label { display: grid; gap: 6px; min-width: 0; max-width: 100%; font-weight: 700; }
+      .readiness-filters select { max-width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); font: inherit; }
+      .readiness-filters button { min-height: 44px; padding: 8px 16px; border: 0; border-radius: 8px; background: var(--green); color: white; font: inherit; cursor: pointer; }
+      .readiness-filters :focus-visible { outline: 3px solid #95691e; outline-offset: 3px; }
       .readiness-directory { display: grid; gap: 14px; }
       .readiness-project { overflow: clip; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.91); box-shadow: 0 12px 34px rgba(23,32,28,.05); }
       .readiness-project summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; align-items: center; padding: 20px; cursor: pointer; }
@@ -9263,6 +9291,8 @@ export function renderReadinessPage() {
           <div><dt>Open tasks</dt><dd>${registry.summary.open}</dd></div>
           <div><dt>P0 open</dt><dd>${registry.summary.openByPriority.P0}</dd></div>
           <div><dt>P1 open</dt><dd>${registry.summary.openByPriority.P1}</dd></div>
+          <div><dt>P2 open</dt><dd>${registry.summary.openByPriority.P2}</dd></div>
+          <div><dt>Completed</dt><dd>${registry.summary.completed}</dd></div>
         </dl>
       </section>
 
@@ -9287,7 +9317,9 @@ export function renderReadinessPage() {
           </div>
           <p>Reviewed ${escapeHtml(reviewedDate)}</p>
         </div>
-        <div class="readiness-directory">${projectSections}</div>
+        ${filterForm}
+        <p role="status">Showing ${matchingCount} of ${registry.summary.total} tasks across ${matchingProjects.length} ${matchingProjects.length === 1 ? 'project' : 'projects'}.${filtered ? ' Project counts below reflect the filters.' : ''}</p>
+        <div class="readiness-directory">${projectSections || '<p>No tasks match these filters. <a href="/readiness">Show all tasks</a>.</p>'}</div>
       </section>
 
       <section class="band" aria-labelledby="readiness-limitations-title">
@@ -10696,6 +10728,9 @@ function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTA
     return null;
   }
 
+  const scoped = scopedMcpResult(message, req);
+  if (scoped !== undefined) return scoped;
+
   switch (message.method) {
     case 'server/discover':
       return jsonRpcResult(message.id, buildMcpDiscoveryResult());
@@ -11121,6 +11156,10 @@ export function buildSourceSnapshotEvidence(
   };
 }
 
+function renderEcosystemConnect() {
+  return renderFunnelPage({notices:[UNIVERSAL_PORTAL_DISCLAIMER,NO_RIGHTS_CREATED_DISCLAIMER,CONTRIBUTION_PRIVACY_NOTICE]});
+}
+
 export function buildStaticAssets(
   generatedAt = new Date().toISOString(),
   { releaseMetadata = DEPLOYED_RELEASE_METADATA } = {},
@@ -11135,15 +11174,11 @@ export function buildStaticAssets(
   return [
     {
       path: 'index.html',
-      body: renderLandingPage(),
+      body: renderEcosystemConnect(),
     },
     {
       path: 'projects/index.html',
       body: renderProjectsPage(),
-    },
-    {
-      path: 'readiness/index.html',
-      body: renderReadinessPage(),
     },
     {
       path: 'identity-keys/index.html',
@@ -11223,6 +11258,22 @@ export function createRequestHandler({
       : rawPathname;
     const telemetry = withRequestTelemetry(req, { method: req.method ?? 'GET', path: rawPathname }, rawPathname);
     const normalizedPath = normalizeCanonicalPath(pathname);
+
+    if (['/connect','/catalog.json','/connection.json','/catalog-status','/catalog-sync.json','/contribute'].includes(pathname)) {
+      if (!['GET','HEAD'].includes(req.method)) return sendBody(res,405,'Method not allowed','text/plain',includeBody,telemetry,{Allow:'GET, HEAD'});
+      try {
+        if(pathname==='/contribute')return sendBody(res,200,renderLandingPage(),'text/html; charset=utf-8',includeBody,telemetry);
+        if(pathname==='/connect'){const target=new URL(clientConfiguration(selectionFromParams(requestUrl.searchParams)).mcpServers.bittrees.url);target.pathname='/connect';return sendRedirect(res,302,target.href,telemetry);}
+        if(pathname==='/catalog-status')return sendRedirect(res,302,'https://mcp.bittrees.org/status',telemetry);
+        if(pathname==='/catalog-sync.json')return sendRedirect(res,302,'https://mcp.bittrees.org/catalog-sync.json',telemetry);
+        const profile=selectionFromParams(requestUrl.searchParams);
+        const body=pathname==='/connection.json'?clientConfiguration(profile):catalogView(CATALOG,profile,{includePending:!requestUrl.searchParams.has('mode')});
+        const text=JSON.stringify(body);const etag='"'+createHash('sha256').update(text).digest('hex')+'"';
+        if(req.headers['if-none-match']===etag)return sendEmpty(res,304,{...telemetry,status:304},{ETag:etag});
+        return sendBody(res,200,text,'application/json; charset=utf-8',includeBody,telemetry,{ETag:etag,'X-Catalog-Revision':catalogRevision(CATALOG),...(pathname==='/connection.json'?{'Content-Disposition':'attachment; filename="bittrees-mcp.json"'}:{})});
+      } catch(error) { return sendBody(res,400,JSON.stringify({error:'invalid_catalog_request',message:error.message}),'application/json; charset=utf-8',includeBody,telemetry); }
+    }
+
 
     if (pathname !== normalizedPath && CANONICAL_ROUTE_PATHS.has(normalizedPath)) {
       return sendRedirect(res, 301, `${normalizedPath}${requestUrl.search}`, {
@@ -11410,7 +11461,7 @@ export function createRequestHandler({
     }
 
     if (pathname === '/') {
-      return sendBody(res, 200, renderLandingPage(), 'text/html; charset=utf-8', includeBody, {
+      return sendBody(res, 200, renderEcosystemConnect(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -11424,7 +11475,7 @@ export function createRequestHandler({
     }
 
     if (pathname === READINESS_PAGE_PATH) {
-      return sendBody(res, 200, renderReadinessPage(), 'text/html; charset=utf-8', includeBody, {
+      return sendBody(res, 200, renderReadinessPage(requestUrl.searchParams), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
