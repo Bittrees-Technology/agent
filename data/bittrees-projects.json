@@ -1622,7 +1622,7 @@
     {
       "id": "mcp",
       "name": "Bittrees MCP",
-      "summary": "Standalone project integration, deterministic rules and public-context automation service. Production activation is pending.",
+      "summary": "Standalone project integration, deterministic rules and durable public-context automation service. Private product actions require separately authorized adapters.",
       "lanes": [
         "discovery",
         "research",
@@ -1630,11 +1630,12 @@
         "capital-treasury",
         "awareness"
       ],
-      "availability": "protected-preview",
+      "availability": "public-site",
       "repositoryUrl": "https://github.com/Bittrees-Technology/mcp",
       "publicUrl": "https://mcp.bittrees.org",
       "sourceEvidence": [
-        "https://github.com/Bittrees-Technology/mcp/blob/d125f88b69bfbdfa2369c16c36aef7794d19aaa0/docs/EXTRACTION.md"
+        "https://mcp.bittrees.org/health",
+        "https://github.com/Bittrees-Technology/mcp"
       ],
       "aliases": [],
       "affiliation": "bittrees",
@@ -1649,14 +1650,14 @@
         "contactStatus": "pending"
       },
       "source": {
-        "revision": "d125f88b69bfbdfa2369c16c36aef7794d19aaa0",
-        "observedAt": "2026-09-16T17:46:00.000Z",
+        "revision": "c9ae0cfaaf162fb36fc64fc780c7da2851536efa",
+        "observedAt": "2026-09-16T18:00:38.840Z",
         "manifestPath": "bittrees.project.json"
       },
-      "lifecycle": "preview",
+      "lifecycle": "active",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-09-16T18:00:38.840Z"
       },
       "adapter": {
         "type": "catalog-resource",

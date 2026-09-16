@@ -10,8 +10,9 @@ The funnel links to `https://mcp.bittrees.org/connect`. GET `/connect` reconstru
 only the supported selected/bittrees/ecosystem selection fields and hands off to
 that page; it never copies arbitrary query arguments or secrets. GET
 `/connection.json` is a compatibility configuration generator targeting the new
-canonical `https://mcp.bittrees.org/mcp` endpoint. Users should switch existing
-clients only once the independent service's production activation is verified.
+canonical `https://mcp.bittrees.org/mcp` endpoint. The separate service's production health and durable storage were verified on
+September 16, 2026. Existing clients still migrate explicitly; contribution clients
+keep their Agent endpoint unless a separate adapter has been authorized.
 
 Existing POST `/mcp` continues to serve Agent's legacy contribution API and its
 existing identity, review and write gates. Explicit selected-mode legacy requests
