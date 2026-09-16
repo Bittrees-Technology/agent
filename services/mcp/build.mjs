@@ -28,6 +28,8 @@ for (const file of ["engine.mjs", "http.mjs"]) {
       .replaceAll("../../../data/", "../../data/"),
   );
 }
+await mkdir(new URL("public/", out), { recursive: true });
+await writeFile(new URL("public/robots.txt", out), "User-agent: *\nDisallow: /\n");
 await mkdir(new URL("api/", out), { recursive: true });
 await writeFile(
   new URL("api/index.mjs", out),
