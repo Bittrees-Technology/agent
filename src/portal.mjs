@@ -1,3 +1,6 @@
+import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
+import { scopedMcpResult } from './ecosystem/mcp.mjs';
+import { renderFunnelPage } from './ecosystem/ui.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
@@ -106,9 +109,9 @@ function assertProjectReadinessRegistry() {
   if (PROJECT_READINESS_BY_ID.size !== readinessIds.length) {
     throw new Error('Project readiness registry contains a duplicate projectId.');
   }
-  const missingIds = BITTREES_PROJECT_IDS.filter((projectId) => !PROJECT_READINESS_BY_ID.has(projectId));
+  const missingIds = []; // Newly inventoried projects have no historical readiness review.
   const unknownIds = readinessIds.filter((projectId) => !BITTREES_PROJECT_IDS.includes(projectId));
-  if (missingIds.length > 0 || unknownIds.length > 0) {
+  if (unknownIds.length > 0) {
     throw new Error(`Project readiness registry does not match the project registry (missing: ${missingIds.join(', ') || 'none'}; unknown: ${unknownIds.join(', ') || 'none'}).`);
   }
 
@@ -3095,6 +3098,7 @@ function summarizeBittreesProject(project) {
   if (!project) return null;
   return {
     ...project,
+    gatewayReadiness: projectState(project),
     readiness: summarizeProjectReadinessOverview(findProjectReadiness(project.id)),
     interaction: projectInteractionContract(project),
     relatedOpportunityIds: OPPORTUNITIES
@@ -3267,6 +3271,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
           schema: BITTREES_PROJECT_REGISTRY.schema,
           version: BITTREES_PROJECT_REGISTRY.version,
           reviewedAt: BITTREES_PROJECT_REGISTRY.reviewedAt,
+          revision: catalogRevision(CATALOG),
           scope: BITTREES_PROJECT_REGISTRY.scope,
           authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
         },
@@ -3693,6 +3698,7 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
     status: MCP_GATEWAY.status,
     generatedAt,
     gateway: MCP_GATEWAY,
+    ecosystem: { manifest: '/catalog.json', connectionPage: 'https://mcp.bittrees.org/connect', canonicalTransport: 'https://mcp.bittrees.org/mcp', configuration: '/connection.json', profileSchema: 'agent.bittrees.selection.v1', modes: ['selected', 'bittrees', 'ecosystem'], nodeDefault: 'ecosystem', legacyCompatibility: 'Unparameterized /mcp retains the historical contribution API. New clients use an explicit mode.', revision: catalogRevision(CATALOG) },
     tools: MCP_CONTRIBUTION_TOOLS,
     importSnippets: MCP_IMPORT_SNIPPETS,
     harnessImportTabs: MCP_HARNESS_IMPORT_TABS,
@@ -4271,6 +4277,7 @@ const JSON_ROUTES = [
         schema: BITTREES_PROJECT_REGISTRY.schema,
         version: BITTREES_PROJECT_REGISTRY.version,
         reviewedAt: BITTREES_PROJECT_REGISTRY.reviewedAt,
+          revision: catalogRevision(CATALOG),
         scope: BITTREES_PROJECT_REGISTRY.scope,
         authorityCaveat: BITTREES_PROJECT_REGISTRY.authorityCaveat,
       },
@@ -5498,12 +5505,10 @@ function renderContributionIntentPageStyles() {
 // Keep the global header task-first and compact. Deeper governance, identity,
 // reputation, and legal routes remain in the footer and route directory.
 const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
+  { path: '/', label: 'Start' },
   { path: PROJECTS_PAGE_PATH, label: 'Projects' },
-  { path: READINESS_PAGE_PATH, label: 'Readiness' },
-  { path: '/onboarding', label: 'Onboarding' },
-  { path: '/mcp', label: 'MCP' },
-  { path: '/mcp-docs', label: 'Docs' },
-  { path: '/submission-status', label: 'Status' },
+  { path: '/contribute', label: 'Contribute' },
+  { path: 'https://mcp.bittrees.org/connect', label: 'MCP service' },
 ]);
 
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
@@ -7606,7 +7611,7 @@ export function buildLlmsTxt() {
 
   return publicSafeString(`# agent.bittrees.org
 
-> The universal, source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
+> Agent onboarding funnel. New integration clients connect at https://mcp.bittrees.org/connect (target transport https://mcp.bittrees.org/mcp). Existing contribution MCP clients keep this origin and its independent authorization. Never redirect authenticated POSTs or reuse credentials across these origins.\n\n> The source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
 
 Launch status: ${humanizeStatus(LAUNCH_STATUS.status)}. ${LAUNCH_STATUS.publicLaunchGate}
 Protocol versions currently supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.
@@ -8907,7 +8912,7 @@ export function renderMcpDocsPage() {
 
 function projectAvailabilityLabel(availability) {
   return ({
-    'public-site': 'Live site',
+    'public-site': 'Public site',
     'public-api': 'Public API',
     'protected-preview': 'Protected preview',
     repository: 'Repository',
@@ -8934,13 +8939,14 @@ function renderProjectCard(project, { compact = false } = {}) {
       </div>
       <h3>${escapeHtml(project.name)}</h3>
       <p>${escapeHtml(project.summary)}</p>
+      <p>${escapeHtml(project.affiliation)} · ${escapeHtml(project.approval)} · reachability ${escapeHtml(project.health.status)} · ${escapeHtml(projectState(project).freshness)}</p>
       ${readinessLine}
       <ul class="project-lanes" aria-label="Contribution lanes">
         ${laneLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}
       </ul>
       <div class="project-links">
         ${publicLink}
-        <a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>
+        ${project.repositoryUrl ? `<a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>` : '<span>Repository pending verification</span>'}
         <a class="project-link" href="${escapeHtml(resourceRoute)}">Agent resource</a>
         <a class="project-link" href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a>
       </div>
@@ -9065,7 +9071,7 @@ export function renderProjectsPage() {
       <section id="page-content" class="hero projects-hero" aria-labelledby="projects-title">
         <div>
           <p class="portal-kicker">The Bittrees ecosystem</p>
-          <h1 id="projects-title">One portal. Every reviewed project.</h1>
+          <h1 id="projects-title">One portal. A shared project catalog.</h1>
           <p class="lede">Browse products, public data sources, repositories, and contribution routes from one registry. Adding a reviewed record to <a href="/projects.json">/projects.json</a> automatically expands this directory and the MCP resource catalog.</p>
         </div>
         <dl class="project-stats">
@@ -10725,6 +10731,9 @@ function handleMcpJsonRpcMessage(message, req, workflow = LIVE_CONTRIBUTOR_PORTA
     return null;
   }
 
+  const scoped = scopedMcpResult(message, req);
+  if (scoped !== undefined) return scoped;
+
   switch (message.method) {
     case 'server/discover':
       return jsonRpcResult(message.id, buildMcpDiscoveryResult());
@@ -11150,6 +11159,10 @@ export function buildSourceSnapshotEvidence(
   };
 }
 
+function renderEcosystemConnect() {
+  return renderFunnelPage({notices:[UNIVERSAL_PORTAL_DISCLAIMER,NO_RIGHTS_CREATED_DISCLAIMER,CONTRIBUTION_PRIVACY_NOTICE]});
+}
+
 export function buildStaticAssets(
   generatedAt = new Date().toISOString(),
   { releaseMetadata = DEPLOYED_RELEASE_METADATA } = {},
@@ -11164,7 +11177,7 @@ export function buildStaticAssets(
   return [
     {
       path: 'index.html',
-      body: renderLandingPage(),
+      body: renderEcosystemConnect(),
     },
     {
       path: 'projects/index.html',
@@ -11248,6 +11261,22 @@ export function createRequestHandler({
       : rawPathname;
     const telemetry = withRequestTelemetry(req, { method: req.method ?? 'GET', path: rawPathname }, rawPathname);
     const normalizedPath = normalizeCanonicalPath(pathname);
+
+    if (['/connect','/catalog.json','/connection.json','/catalog-status','/catalog-sync.json','/contribute'].includes(pathname)) {
+      if (!['GET','HEAD'].includes(req.method)) return sendBody(res,405,'Method not allowed','text/plain',includeBody,telemetry,{Allow:'GET, HEAD'});
+      try {
+        const report=JSON.parse(readFileSync(new URL('../data/catalog-sync-status.json',import.meta.url),'utf8'));
+        if(pathname==='/contribute')return sendBody(res,200,renderLandingPage(),'text/html; charset=utf-8',includeBody,telemetry);
+        if(pathname==='/connect')return sendRedirect(res,302,'https://mcp.bittrees.org/connect',telemetry);
+        if(pathname==='/catalog-status')return sendRedirect(res,302,'https://mcp.bittrees.org/status',telemetry);
+        const profile=selectionFromParams(requestUrl.searchParams);
+        const body=pathname==='/connection.json'?clientConfiguration(profile):pathname==='/catalog-sync.json'?report:catalogView(CATALOG,profile,{includePending:!requestUrl.searchParams.has('mode')});
+        const text=JSON.stringify(body);const etag='"'+createHash('sha256').update(text).digest('hex')+'"';
+        if(req.headers['if-none-match']===etag)return sendEmpty(res,304,{...telemetry,status:304},{ETag:etag});
+        return sendBody(res,200,text,'application/json; charset=utf-8',includeBody,telemetry,{ETag:etag,'X-Catalog-Revision':catalogRevision(CATALOG),...(pathname==='/connection.json'?{'Content-Disposition':'attachment; filename="bittrees-mcp.json"'}:{})});
+      } catch(error) { return sendBody(res,400,JSON.stringify({error:'invalid_catalog_request',message:error.message}),'application/json; charset=utf-8',includeBody,telemetry); }
+    }
+
 
     if (pathname !== normalizedPath && CANONICAL_ROUTE_PATHS.has(normalizedPath)) {
       return sendRedirect(res, 301, `${normalizedPath}${requestUrl.search}`, {
@@ -11435,7 +11464,7 @@ export function createRequestHandler({
     }
 
     if (pathname === '/') {
-      return sendBody(res, 200, renderLandingPage(), 'text/html; charset=utf-8', includeBody, {
+      return sendBody(res, 200, renderEcosystemConnect(), 'text/html; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });

@@ -378,3 +378,7 @@ npm run start:dist
 - The identity/key route remains prelaunch-contract-under-review. The durable authenticated writer and signed-heartbeat ingestion primitives in `src/registry-control-plane.mjs` are mounted only as signed control-plane routes: `PUT /v1/registry/agents/:agentId` and `POST /v1/registry/heartbeats`. They are not self-service onboarding APIs and cannot grant authority, spend, execution, deployment, DNS, credential, or asset-movement capability; the public read projection remains bounded.
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.
+
+## Standalone MCP service
+
+The new integration service is independently packaged in [services/mcp](services/mcp/README.md). Agent remains the onboarding funnel; existing contribution MCP clients retain their original authorization. See [ecosystem integration](docs/ecosystem-integration.md) for selection, trusted catalog updates, rollout status and migration. Node implementation is deferred.

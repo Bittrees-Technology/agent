@@ -1,0 +1,42 @@
+name: Standalone MCP service checks
+on:
+  pull_request:
+  push:
+    branches: [main, codex/ecosystem-mcp-gateway]
+permissions:
+  contents: read
+jobs:
+  service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mcp_test
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: mcp_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/mcp/package-lock.json
+      - run: npm ci --prefix services/mcp
+      - run: npm test --prefix services/mcp
+        env:
+          MCP_TEST_DATABASE_URL: postgres://mcp_test:test_only@127.0.0.1:5432/mcp_test
+      - run: node services/mcp/build.mjs
+      - run: npm ci --prefix output/mcp-service
+      - name: Verify standalone artifact imports without Agent runtime
+        run: node --input-type=module -e "await import('./output/mcp-service/src/service/runtime.mjs')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: standalone-mcp-service
+          path: |
+            output/mcp-service/
+            !output/mcp-service/node_modules/
+          retention-days: 14
