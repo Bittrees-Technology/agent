@@ -154,7 +154,9 @@ async function checkRoute(path, kind) {
   }
 
   if (path === '/') {
-    check(text.includes('Contribution workflow'), '/ missing contribution workflow');
+    check(text.includes('Find your place in Bittrees.'), '/ missing onboarding funnel');
+    check(text.includes('href="/contribute"'), '/ missing contribution route');
+    check(text.includes('https://mcp.bittrees.org/connect'), '/ missing standalone MCP handoff');
     check(!text.includes('staging-ready'), '/ still contains staging-ready');
   }
 
@@ -454,7 +456,8 @@ function checkProjects() {
   check(new Set(projects.map((project) => project.id)).size === projects.length, '/projects.json has duplicate project ids');
   check(projects.some((project) => project.id === 'agent'), '/projects.json is missing agent');
   for (const project of projects) {
-    check(/^https:\/\/github\.com\//.test(project.repositoryUrl ?? ''), `${project.id} missing canonical GitHub repository`);
+    check(project.repositoryUrl === null || /^https:\/\/github\.com\//.test(project.repositoryUrl ?? ''), `${project.id} has an invalid canonical GitHub repository`);
+    if (project.repositoryUrl === null) check(project.source?.revision === null, `${project.id} claims a repository revision without a verified repository`);
     check(project.interaction?.unifiedMcpEndpoint === '/mcp', `${project.id} missing unified MCP route`);
     check(project.interaction?.directMutationAllowed === false, `${project.id} unexpectedly allows direct mutation`);
   }
