@@ -3,8 +3,8 @@
   "version": 1,
   "project": {
     "id": "agent",
-    "name": "Bittrees Agent Gateway",
-    "summary": "Source-grounded onboarding, discovery, contribution, and review gateway for AI agents working across Bittrees projects.",
+    "name": "Bittrees Agent",
+    "summary": "Person and agent onboarding, ecosystem discovery, and reviewed contribution workflows. Integration, automation and rules are owned by the separate MCP service.",
     "lanes": [
       "discovery",
       "research",

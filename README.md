@@ -379,6 +379,11 @@ npm run start:dist
 - Production DNS/Vercel changes are out of scope for normal content updates.
 - `/idacc/releases.json` contains a dated GitHub release snapshot; re-check GitHub before publishing or recommending a latest-version install.
 
-## Standalone MCP service
+## Agent funnel and standalone MCP service
 
-The new integration service is independently packaged in [services/mcp](services/mcp/README.md). Agent remains the onboarding funnel; existing contribution MCP clients retain their original authorization. See [ecosystem integration](docs/ecosystem-integration.md) for selection, trusted catalog updates, rollout status and migration. Node implementation is deferred.
+Agent owns person/agent onboarding, project discovery and existing contribution
+workflows. [Bittrees MCP](https://github.com/Bittrees-Technology/mcp) independently
+owns integration transport, saved profiles, automation, rules, schemas and releases.
+The funnel links to https://mcp.bittrees.org/connect. Existing Agent contribution
+MCP clients retain their original endpoint and authorization; see
+[the migration contract](docs/ecosystem-integration.md). Node implementation is deferred.

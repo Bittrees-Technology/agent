@@ -12,8 +12,7 @@ import {
   clientConfiguration,
 } from "../src/ecosystem/catalog.mjs";
 import { scopedMcpResult } from "../src/ecosystem/mcp.mjs";
-import { renderConnectionPage } from "../src/ecosystem/ui.mjs";
-import { reconcileCatalog } from "../src/ecosystem/sync.mjs";
+import { renderFunnelPage } from "../src/ecosystem/ui.mjs";
 import { createRequestHandler } from "../src/portal.mjs";
 const profile = (query) => selectionFromParams(new URLSearchParams(query));
 const rpc = (
@@ -154,70 +153,19 @@ test("unknown versions, malformed saved state and duplicate parameters never wid
   ])
     assert.throws(() => profile(query));
 });
-test("synchronization rejects unreviewed origins/capabilities and atomically retains last good data", () => {
-  const base = CATALOG.projects[0];
-  const sources = [
-    { id: base.id, repository: "Bittrees-Technology/agent", enabled: true },
-  ];
-  const updated = {
-    ...structuredClone(base),
-    summary: "Updated approved public description",
-  };
-  const valid = reconcileCatalog(CATALOG, sources, {
-    agent: { project: updated, revision: "a".repeat(40) },
-  });
-  assert.equal(valid.report.state, "reconciled");
-  assert.equal(valid.catalog.projects[0].summary, updated.summary);
-  const replay = reconcileCatalog(valid.catalog, sources, {
-    agent: { project: updated, revision: "a".repeat(40) },
-  });
-  assert.equal(replay.report.changes.length, 0);
-  for (const bad of [
-    { ...updated, publicUrl: "https://evil.example" },
-    { ...updated, authScopes: ["write:any"] },
-    { ...updated, aliases: ["crm"] },
-  ]) {
-    const result = reconcileCatalog(CATALOG, sources, {
-      agent: { project: bad, revision: "a".repeat(40) },
-    });
-    assert.equal(result.report.state, "failed");
-    assert.deepEqual(result.catalog, CATALOG);
-  }
-  const unavailable = reconcileCatalog(CATALOG, sources, {});
-  assert.equal(unavailable.report.state, "failed");
-  assert.deepEqual(unavailable.catalog, CATALOG);
+test("snapshot rejects duplicate identities", () => {
+  const added=newProject();added.aliases=["agent"];
+  assert.throws(()=>validateCatalog({...CATALOG,projects:[...CATALOG.projects,added]}),/Duplicate/);
 });
-test("new approved source templates propagate, while duplicate aliases fail publication", () => {
-  const added = newProject();
-  const source = {
-    id: added.id,
-    repository: "example/new-project",
-    enabled: true,
-    approvedTemplate: added,
-  };
-  const result = reconcileCatalog(CATALOG, [source], {
-    "new-project": { project: added, revision: "b".repeat(40) },
-  });
-  assert.equal(result.report.state, "reconciled");
-  assert.equal(result.report.changes[0].change, "added");
-  added.aliases = ["agent"];
-  assert.throws(
-    () =>
-      validateCatalog({ ...CATALOG, projects: [...CATALOG.projects, added] }),
-    /Duplicate/,
-  );
-});
-test("configuration and UI use the same selection revision and do not imply live product actions", () => {
+test("migration configuration preserves selection while the funnel hands off service controls", () => {
   const saved = profile("mode=selected&projects=crm&exclude=agent");
   const url = clientConfiguration(saved).mcpServers.bittrees.url;
   assert.equal(new URL(url).pathname, "/mcp");
   assert.deepEqual(profile(new URL(url).search.slice(1)), saved);
-  const html = renderConnectionPage(
-    new URLSearchParams("mode=selected&projects=crm"),
-  );
-  assert.match(html, /name="project" value="crm" checked/);
-  assert.match(html, /readonly/);
-  assert.match(html, /Agent onboarding/);
+  const html=renderFunnelPage();
+  assert.match(html,/https:\/\/mcp.bittrees.org\/connect/);
+  assert.doesNotMatch(html,/client-config|name="project"/);
+
 });
 test("HTTP config connects to the implemented scoped MCP and shares a conditional catalog revision", async () => {
   const server = createServer(createRequestHandler());
@@ -225,6 +173,11 @@ test("HTTP config connects to the implemented scoped MCP and shares a conditiona
   await once(server, "listening");
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
+    const handoff=await fetch(`${base}/connect?mode=selected&projects=crm&access_token=do-not-forward`,{redirect:'manual'});
+    assert.equal(handoff.status,302);const destination=new URL(handoff.headers.get('location'));
+    assert.equal(destination.origin,'https://mcp.bittrees.org');assert.equal(destination.pathname,'/connect');
+    assert.equal(destination.searchParams.get('projects'),'crm');assert.equal(destination.searchParams.has('access_token'),false);
+    const invalid=await fetch(`${base}/connect?mode=selected&mode=ecosystem`,{redirect:'manual'});assert.equal(invalid.status,400);
     const response = await fetch(
       `${base}/catalog.json?mode=selected&projects=crm`,
     );
@@ -264,6 +217,7 @@ test("HTTP config connects to the implemented scoped MCP and shares a conditiona
       }),
     });
     assert.equal(mcp.status, 400);
+    assert.equal(mcp.headers.get("location"),null);
     assert.match((await mcp.json()).error.message, /not available/);
   } finally {
     await new Promise((resolve) => server.close(resolve));

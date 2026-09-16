@@ -7,8 +7,8 @@
   "projects": [
     {
       "id": "agent",
-      "name": "Bittrees Agent Gateway",
-      "summary": "Source-grounded onboarding, discovery, contribution, and review gateway for AI agents working across Bittrees projects.",
+      "name": "Bittrees Agent",
+      "summary": "Person and agent onboarding, ecosystem discovery, and reviewed contribution workflows. Integration, automation and rules are owned by the separate MCP service.",
       "lanes": [
         "discovery",
         "research",
@@ -1631,20 +1631,17 @@
         "awareness"
       ],
       "availability": "protected-preview",
-      "repositoryUrl": null,
+      "repositoryUrl": "https://github.com/Bittrees-Technology/mcp",
       "publicUrl": "https://mcp.bittrees.org",
       "sourceEvidence": [
-        "services/mcp/README.md",
-        "docs/ecosystem-rollout-plan.md"
+        "https://github.com/Bittrees-Technology/mcp/blob/d125f88b69bfbdfa2369c16c36aef7794d19aaa0/docs/EXTRACTION.md"
       ],
       "aliases": [],
       "affiliation": "bittrees",
       "approval": "approved",
-      "components": [
-        "Bittrees-Technology/agent:services/mcp"
-      ],
+      "components": [],
       "affiliationEvidence": [
-        "Explicit September 16 user direction and independently deployable services/mcp package in the Agent repository."
+        "Explicit user direction; independently owned Bittrees-Technology/mcp repository and Vercel bittrees-mcp project."
       ],
       "owner": {
         "repositoryController": "Bittrees-Technology",
@@ -1652,9 +1649,9 @@
         "contactStatus": "pending"
       },
       "source": {
-        "revision": null,
-        "observedAt": "2026-09-16T17:30:00.000Z",
-        "manifestPath": null
+        "revision": "d125f88b69bfbdfa2369c16c36aef7794d19aaa0",
+        "observedAt": "2026-09-16T17:46:00.000Z",
+        "manifestPath": "bittrees.project.json"
       },
       "lifecycle": "preview",
       "health": {

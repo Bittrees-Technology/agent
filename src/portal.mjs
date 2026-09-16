@@ -3698,7 +3698,7 @@ export function buildMcpGatewayContract(generatedAt = new Date().toISOString()) 
     status: MCP_GATEWAY.status,
     generatedAt,
     gateway: MCP_GATEWAY,
-    ecosystem: { manifest: '/catalog.json', connectionPage: 'https://mcp.bittrees.org/connect', canonicalTransport: 'https://mcp.bittrees.org/mcp', configuration: '/connection.json', profileSchema: 'agent.bittrees.selection.v1', modes: ['selected', 'bittrees', 'ecosystem'], nodeDefault: 'ecosystem', legacyCompatibility: 'Unparameterized /mcp retains the historical contribution API. New clients use an explicit mode.', revision: catalogRevision(CATALOG) },
+    ecosystem: { manifest: '/catalog.json', connectionPage: 'https://mcp.bittrees.org/connect', canonicalTransport: 'https://mcp.bittrees.org/mcp', configuration: '/connection.json', profileSchema: 'agent.bittrees.selection.v1', modes: ['selected', 'bittrees', 'ecosystem'], serviceRepository: 'https://github.com/Bittrees-Technology/mcp', legacyCompatibility: 'Unparameterized /mcp retains the historical contribution API. New clients use an explicit mode.', revision: catalogRevision(CATALOG) },
     tools: MCP_CONTRIBUTION_TOOLS,
     importSnippets: MCP_IMPORT_SNIPPETS,
     harnessImportTabs: MCP_HARNESS_IMPORT_TABS,
@@ -8948,7 +8948,7 @@ function renderProjectCard(project, { compact = false } = {}) {
         ${publicLink}
         ${project.repositoryUrl ? `<a class="project-link" href="${escapeHtml(project.repositoryUrl)}">Repository</a>` : '<span>Repository pending verification</span>'}
         <a class="project-link" href="${escapeHtml(resourceRoute)}">Agent resource</a>
-        <a class="project-link" href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a>
+        ${readiness ? `<a class="project-link" href="${escapeHtml(`${READINESS_PAGE_PATH}#readiness-${project.id}`)}">Launch tasks</a>` : '<span>Launch review pending</span>'}
       </div>
     </article>`;
 }
@@ -11265,12 +11265,12 @@ export function createRequestHandler({
     if (['/connect','/catalog.json','/connection.json','/catalog-status','/catalog-sync.json','/contribute'].includes(pathname)) {
       if (!['GET','HEAD'].includes(req.method)) return sendBody(res,405,'Method not allowed','text/plain',includeBody,telemetry,{Allow:'GET, HEAD'});
       try {
-        const report=JSON.parse(readFileSync(new URL('../data/catalog-sync-status.json',import.meta.url),'utf8'));
         if(pathname==='/contribute')return sendBody(res,200,renderLandingPage(),'text/html; charset=utf-8',includeBody,telemetry);
-        if(pathname==='/connect')return sendRedirect(res,302,'https://mcp.bittrees.org/connect',telemetry);
+        if(pathname==='/connect'){const target=new URL(clientConfiguration(selectionFromParams(requestUrl.searchParams)).mcpServers.bittrees.url);target.pathname='/connect';return sendRedirect(res,302,target.href,telemetry);}
         if(pathname==='/catalog-status')return sendRedirect(res,302,'https://mcp.bittrees.org/status',telemetry);
+        if(pathname==='/catalog-sync.json')return sendRedirect(res,302,'https://mcp.bittrees.org/catalog-sync.json',telemetry);
         const profile=selectionFromParams(requestUrl.searchParams);
-        const body=pathname==='/connection.json'?clientConfiguration(profile):pathname==='/catalog-sync.json'?report:catalogView(CATALOG,profile,{includePending:!requestUrl.searchParams.has('mode')});
+        const body=pathname==='/connection.json'?clientConfiguration(profile):catalogView(CATALOG,profile,{includePending:!requestUrl.searchParams.has('mode')});
         const text=JSON.stringify(body);const etag='"'+createHash('sha256').update(text).digest('hex')+'"';
         if(req.headers['if-none-match']===etag)return sendEmpty(res,304,{...telemetry,status:304},{ETag:etag});
         return sendBody(res,200,text,'application/json; charset=utf-8',includeBody,telemetry,{ETag:etag,'X-Catalog-Revision':catalogRevision(CATALOG),...(pathname==='/connection.json'?{'Content-Disposition':'attachment; filename="bittrees-mcp.json"'}:{})});
