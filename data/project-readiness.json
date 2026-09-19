@@ -112,80 +112,6 @@
       ]
     },
     {
-      "projectId": "bitlogic",
-      "currentStage": "testnet-validation",
-      "confidence": "high",
-      "evidenceSummary": "The accounting application is polished and has substantial contract testing, but its own milestone remains pre-mainnet and its live discovery, security headers, and operational evidence are incomplete.",
-      "tasks": [
-        {
-          "id": "bitlogic-p0-testnet-acceptance",
-          "priority": "P0",
-          "area": "release",
-          "title": "Finish and refresh the Sepolia acceptance milestone",
-          "status": "blocked",
-          "acceptanceCriteria": [
-            "Deployer configuration, hosted validation, production role assignments, and the browser checklist are completed with evidence.",
-            "The overdue readiness status and projected launch date are replaced by a current owner-approved decision."
-          ]
-        },
-        {
-          "id": "bitlogic-p0-security-review",
-          "priority": "P0",
-          "area": "security",
-          "title": "Independently review contracts, upgrades, and privileged roles",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "An independent review covers accounting invariants, role boundaries, upgrade authority, pause and recovery paths.",
-            "All critical and high findings are closed, retested, and linked from the release record."
-          ]
-        },
-        {
-          "id": "bitlogic-p1-ledger-e2e",
-          "priority": "P1",
-          "area": "quality",
-          "title": "Add deployed ledger write/readback acceptance tests",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "Hosted tests create, authorize, record, reconcile, and read back representative ledger events on the approved network.",
-            "Failure, retry, duplicate, wrong-chain, and revoked-role cases are verified."
-          ]
-        },
-        {
-          "id": "bitlogic-p1-mainnet-runbook",
-          "priority": "P1",
-          "area": "operations",
-          "title": "Approve a mainnet rollout and rollback runbook",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "The runbook pins addresses, owners, role grants, verification steps, monitoring, pause conditions, and rollback decisions.",
-            "A second operator rehearses and signs off on the procedure."
-          ]
-        },
-        {
-          "id": "bitlogic-p1-web-hardening",
-          "priority": "P1",
-          "area": "web-quality",
-          "title": "Harden the public application and discovery surface",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "The deployed origin has a restrictive CSP, nosniff, clickjacking, referrer, and permissions policies.",
-            "Canonical, robots, sitemap, health, llms.txt, and an agent-readable product/API description return correct content types."
-          ]
-        },
-        {
-          "id": "bitlogic-p2-onboarding",
-          "priority": "P2",
-          "area": "product",
-          "title": "Provide professional onboarding, demo data, support, and disclosures",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "A read-only demo explains core accounting workflows before wallet connection.",
-            "Support, privacy, terms, network, preview-state, and financial-risk disclosures are visible and accessible."
-          ]
-        }
-      ]
-    },
-    {
       "projectId": "bittrees-capital",
       "currentStage": "public-preview",
       "confidence": "high",
@@ -198,7 +124,7 @@
           "title": "Remove mobile horizontal overflow and clipped financial data",
           "status": "todo",
           "acceptanceCriteria": [
-            "Every route fits 320–430px viewports without horizontal scrolling or truncated balances, controls, charts, and transaction details.",
+            "Every route fits 320\u2013430px viewports without horizontal scrolling or truncated balances, controls, charts, and transaction details.",
             "Automated responsive screenshots and overflow assertions run in CI."
           ]
         },
@@ -478,80 +404,6 @@
           "acceptanceCriteria": [
             "Canonical, robots, sitemap, security headers, and llms.txt describe only approved public capabilities and data boundaries.",
             "The public agent manifest sends protected interactions through explicit authentication and review gates."
-          ]
-        }
-      ]
-    },
-    {
-      "projectId": "bittrees-vault",
-      "currentStage": "uncommitted-prototype",
-      "confidence": "medium",
-      "evidenceSummary": "The available canonical checkout has no committed history and the repository has no active deployment or CI evidence. Mainnet transaction intent raises a high safety bar before any relaunch.",
-      "tasks": [
-        {
-          "id": "vault-p0-product-decision",
-          "priority": "P0",
-          "area": "governance",
-          "title": "Decide whether to archive or relaunch Bittrees Vault",
-          "status": "blocked",
-          "acceptanceCriteria": [
-            "An accountable owner records the supported product scope, network, integrations, users, maintenance commitment, and archive/relaunch decision.",
-            "The portal and repository communicate the decision consistently."
-          ]
-        },
-        {
-          "id": "vault-p0-source-history",
-          "priority": "P0",
-          "area": "engineering",
-          "title": "Establish a canonical committed and protected source history",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "Reviewed source is committed to the canonical repository with authorship, license, branch protection, and secret scanning.",
-            "A clean checkout builds reproducibly from documented prerequisites."
-          ]
-        },
-        {
-          "id": "vault-p0-mainnet-verification",
-          "priority": "P0",
-          "area": "security",
-          "title": "Verify all mainnet contracts, assets, authorities, and economic assumptions",
-          "status": "blocked",
-          "acceptanceCriteria": [
-            "Pinned addresses, bytecode, owners, upgradeability, fee tiers, decimals, liquidity assumptions, and supported chains are independently verified.",
-            "Unsupported or removed routes cannot be invoked from UI or code."
-          ]
-        },
-        {
-          "id": "vault-p0-transaction-tests",
-          "priority": "P0",
-          "area": "quality",
-          "title": "Add transaction simulation and adversarial E2E tests",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "Tests cover swaps, pool creation, allowances, slippage, price impact, wrong chain, token ordering, reverts, stale quotes, and partial failures.",
-            "Every write shows a verified human-readable preview before wallet confirmation."
-          ]
-        },
-        {
-          "id": "vault-p1-release-operations",
-          "priority": "P1",
-          "area": "release",
-          "title": "Create CI, deployment, monitoring, and incident controls",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "CI runs lint, build, unit, integration, dependency, contract, and deployed smoke checks.",
-            "A public deployment, health check, alerts, pause owner, and rollback procedure are documented and exercised."
-          ]
-        },
-        {
-          "id": "vault-p1-publication",
-          "priority": "P1",
-          "area": "legal-privacy",
-          "title": "Complete disclosures, support, and agent discovery",
-          "status": "blocked",
-          "acceptanceCriteria": [
-            "Approved terms explain non-custodial behavior, transaction and liquidity risk, privacy, fees, networks, and support.",
-            "Canonical metadata, robots, sitemap, llms.txt, and read-only agent resources are published only after relaunch approval."
           ]
         }
       ]
@@ -923,80 +775,6 @@
           "acceptanceCriteria": [
             "After launch approval, the site exposes canonical metadata, robots, sitemap, llms.txt, versioned read APIs, health, and universal MCP links.",
             "Approved Terms, privacy, creator rights, royalties, marketplace risk, moderation, takedown, and support policies are versioned and visible."
-          ]
-        }
-      ]
-    },
-    {
-      "projectId": "skillmesh",
-      "currentStage": "testnet-public-preview",
-      "confidence": "high",
-      "evidenceSummary": "SkillMesh has the strongest project-level agent discovery surface, including MCP, OpenAPI, A2A, llms.txt, health, and a manifest. Production runtime, network decisions, contract/security evidence, external conformance, release operations, and mobile information density remain.",
-      "tasks": [
-        {
-          "id": "skillmesh-p1-link-discovery",
-          "priority": "P1",
-          "area": "agent-discovery",
-          "title": "Link and complete the existing discovery surface",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "Root HTML advertises MCP, OpenAPI, A2A, agent manifest, and llms.txt with correct types, canonical metadata, favicon, and a real sitemap.",
-            "All discovery documents share canonical version, environment, network, ownership, and capability identifiers."
-          ]
-        },
-        {
-          "id": "skillmesh-p0-protocol-conformance",
-          "priority": "P0",
-          "area": "quality",
-          "title": "Prove MCP, A2A, and OpenAPI interoperability externally",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "A client matrix validates authentication, discovery, schemas, errors, streaming, pagination, timeouts, retries, and version negotiation.",
-            "Conformance runs against the deployed origin and prevents contract drift between protocols."
-          ]
-        },
-        {
-          "id": "skillmesh-p0-provider-runtime",
-          "priority": "P0",
-          "area": "platform",
-          "title": "Provision and monitor the production provider runtime",
-          "status": "blocked",
-          "acceptanceCriteria": [
-            "Provider execution, queues, storage, secrets, billing/settlement dependencies, rate limits, and fail-closed behavior are production configured.",
-            "SLOs, load tests, alerts, backups, recovery, and incident ownership meet the published service contract."
-          ]
-        },
-        {
-          "id": "skillmesh-p0-network-security",
-          "priority": "P0",
-          "area": "security",
-          "title": "Approve the testnet-to-production network and contract security plan",
-          "status": "blocked",
-          "acceptanceCriteria": [
-            "Owners record whether launch remains Sepolia or moves networks, with verified contracts, roles, upgrades, pause, settlement, and migration steps.",
-            "Independent review closes critical/high contract, identity, payment, and authorization findings."
-          ]
-        },
-        {
-          "id": "skillmesh-p0-skill-sandbox",
-          "priority": "P0",
-          "area": "security",
-          "title": "Secure executable skills and content-addressed artifacts",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "Sandboxing, permissions, network/file/process access, resource limits, signatures, IPFS integrity, malware checks, revocation, and audit logs are threat-modeled and tested.",
-            "Untrusted skill metadata or output cannot escalate provider, user, wallet, or host authority."
-          ]
-        },
-        {
-          "id": "skillmesh-p1-settlement-release-ux",
-          "priority": "P1",
-          "area": "release",
-          "title": "Complete settlement E2E, protected releases, and mobile information architecture",
-          "status": "todo",
-          "acceptanceCriteria": [
-            "Identity, publish, discover, execute, meter, pay, dispute, revoke, and recover flows pass deployed E2E tests with release provenance and rollback.",
-            "The long mobile page is reorganized into task-first progressive disclosure with performance and accessibility budgets."
           ]
         }
       ]
