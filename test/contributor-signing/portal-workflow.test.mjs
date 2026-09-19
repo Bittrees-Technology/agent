@@ -72,8 +72,8 @@ test('cross-project workflow requires and preserves a reviewed project id', () =
   const claimPayload = {
     agentId: 'agent-contract',
     opportunityId: 'project-directed-contribution',
-    contributionSummary: 'Prepare a reviewed SkillMesh interoperability packet.',
-    evidencePlan: ['source:skillmesh-readme'],
+    contributionSummary: 'Prepare a reviewed TCP interoperability packet.',
+    evidencePlan: ['source:tcp-readme'],
     idempotencyKey: 'project-claim-1',
   };
   assert.throws(
@@ -83,25 +83,25 @@ test('cross-project workflow requires and preserves a reviewed project id', () =
 
   const claimed = workflow.claim({
     actor: tokens.claim,
-    payload: { ...claimPayload, projectId: 'skillmesh' },
+    payload: { ...claimPayload, projectId: 'tcp' },
   });
-  assert.equal(claimed.claim.projectId, 'skillmesh');
+  assert.equal(claimed.claim.projectId, 'tcp');
 
   const submitted = workflow.submit({
     actor: tokens.submit,
     payload: {
       agentId: 'agent-contract',
-      projectId: 'skillmesh',
+      projectId: 'tcp',
       opportunityId: 'project-directed-contribution',
       claimId: claimed.claim.id,
-      title: 'SkillMesh interoperability packet',
+      title: 'TCP interoperability packet',
       summary: 'Source-grounded MCP contract notes.',
       artifact: { kind: 'markdown', value: 'Reviewed handoff content.' },
-      evidence: ['source:skillmesh-readme'],
+      evidence: ['source:tcp-readme'],
       idempotencyKey: 'project-submission-1',
     },
   });
-  assert.equal(submitted.submission.projectId, 'skillmesh');
+  assert.equal(submitted.submission.projectId, 'tcp');
 });
 
 test('workflow HTTP contract fails closed for invalid identity and unauthorized actions', async () => {
