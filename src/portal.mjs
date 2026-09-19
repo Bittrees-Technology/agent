@@ -1,3 +1,4 @@
+import { publicCatalog } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
 import { scopedMcpResult } from './ecosystem/mcp.mjs';
 import { renderFunnelPage } from './ecosystem/ui.mjs';
@@ -88,11 +89,11 @@ const PROJECT_READINESS_DATA = JSON.parse(
 );
 export const BITTREES_PROJECT_REGISTRY = Object.freeze({
   ...BITTREES_PROJECT_REGISTRY_DATA,
-  projects: Object.freeze(BITTREES_PROJECT_REGISTRY_DATA.projects.map((project) => Object.freeze(project))),
+  projects: Object.freeze(publicCatalog(BITTREES_PROJECT_REGISTRY_DATA).projects.map((project) => Object.freeze(project))),
 });
 export const PROJECT_READINESS_REGISTRY = Object.freeze({
   ...PROJECT_READINESS_DATA,
-  projects: Object.freeze(PROJECT_READINESS_DATA.projects.map((project) => Object.freeze({
+  projects: Object.freeze(publicCatalog(PROJECT_READINESS_DATA).projects.map((project) => Object.freeze({
     ...project,
     tasks: Object.freeze(project.tasks.map((task) => Object.freeze(task))),
   }))),
@@ -7832,7 +7833,7 @@ export function renderLandingPage() {
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
   const contributionIntentCopy = getContributionIntentCtaCopy();
-  const featuredProjectIds = ['bittrees-org', 'bittrees-research', 'bittrees-gov', 'bittrees-capital', 'agent', 'skillmesh'];
+  const featuredProjectIds = ['bittrees-org', 'bittrees-research', 'bittrees-gov', 'bittrees-capital', 'agent'];
   const featuredProjectCards = featuredProjectIds
     .map(findBittreesProject)
     .filter(Boolean)

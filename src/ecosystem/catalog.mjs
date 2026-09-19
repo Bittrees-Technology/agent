@@ -1,3 +1,4 @@
+import { publicCatalog, isExcludedProject } from '../public-project-policy.mjs';
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -13,6 +14,7 @@ export function scopeError(message) {
   });
 }
 export function validateCatalog(catalog) {
+  catalog = publicCatalog(catalog);
   if (
     catalog?.schema !== MANIFEST_SCHEMA ||
     catalog.version !== 2 ||
@@ -139,6 +141,7 @@ export function validateSelection(profile) {
   if (!Number.isSafeInteger(profile.revision) || profile.revision < 1)
     throw scopeError("Invalid profile revision");
   for (const key of ["selectedIds", "excludedIds"]) {
+    if (profile[key]?.some(isExcludedProject)) throw scopeError("Project is not available for public connection");
     if (
       !Array.isArray(profile[key]) ||
       profile[key].length > 300 ||
@@ -189,6 +192,7 @@ export function eligible(p) {
   );
 }
 export function resolveSelection(catalog, input) {
+  catalog = publicCatalog(catalog);
   const profile = validateSelection(input);
   const byId = new Map(catalog.projects.map((p) => [p.id, p]));
   const projects = catalog.projects.filter(
@@ -241,6 +245,7 @@ export function projectState(p, now = Date.now()) {
   };
 }
 export function catalogView(catalog, profile, { includePending = false } = {}) {
+  catalog = publicCatalog(catalog);
   const selected = resolveSelection(catalog, profile);
   return {
     schema: MANIFEST_SCHEMA,
