@@ -1674,6 +1674,61 @@
         }
       ],
       "authScopes": []
+    },
+    {
+      "id": "ai",
+      "name": "Bittrees AI",
+      "summary": "Mac development preview for local AI tasks and reviewed app connections. Models are separate downloads; Apple signing, notarization and personal pilot acceptance remain open. This catalog entry grants no app access.",
+      "lanes": [
+        "discovery"
+      ],
+      "availability": "development-preview",
+      "repositoryUrl": "https://github.com/Bittrees-Technology/ai",
+      "publicUrl": "https://github.com/Bittrees-Technology/ai/blob/main/docs/macos-companion.md",
+      "sourceEvidence": [
+        "https://github.com/Bittrees-Technology/ai/blob/main/docs/macos-companion.md",
+        "https://github.com/Bittrees-Technology/ai/blob/main/docs/mac-download-provenance.md"
+      ],
+      "aliases": [
+        "bittrees-ai"
+      ],
+      "affiliation": "bittrees",
+      "approval": "approved",
+      "components": [],
+      "affiliationEvidence": [
+        "Public MIT companion repository created and maintained under Bittrees-Technology.",
+        "https://github.com/Bittrees-Technology/ai"
+      ],
+      "owner": {
+        "repositoryController": "Bittrees-Technology",
+        "accountableContact": null,
+        "contactStatus": "pending"
+      },
+      "source": {
+        "revision": "b6e18be56888e4abf51fef5f2ee7d3de2ee236ff",
+        "observedAt": "2026-09-25T15:06:03Z",
+        "manifestPath": "docs/macos-companion.md"
+      },
+      "lifecycle": "preview",
+      "health": {
+        "status": "unverified",
+        "checkedAt": null
+      },
+      "adapter": {
+        "type": "catalog-resource",
+        "status": "ready",
+        "privateReads": "not-implemented",
+        "actions": "not-implemented"
+      },
+      "capabilities": [
+        {
+          "id": "project.context",
+          "kind": "resource",
+          "scope": "public:catalog",
+          "status": "ready"
+        }
+      ],
+      "authScopes": []
     }
   ],
   "sync": {
