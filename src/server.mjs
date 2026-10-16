@@ -1,3 +1,5 @@
+import { projectAdministrationNode } from '../shared/project-administration/portal.mjs';
+const administration = projectAdministrationNode('agent');
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -64,6 +66,7 @@ export function createServerRequestHandler({ roleApplicationService, resolvePrin
   }
   return async function serverRequestHandler(req, res) {
     const pathname = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`).pathname;
+    if (/^\/(administration\/?|api\/(project-admin(?:\/.*)?|shared-roles-health))$/.test(pathname)) return administration(req,res);
     if (isRoleApplicationPath(pathname)) {
       if (!roleApplicationService) return sendRoleRouteNotFound(req, res);
       const roleHandler = await loadRoleHandler();

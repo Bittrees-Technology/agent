@@ -9561,6 +9561,7 @@ function renderPortalFooter() {
         <a href="/identity-keys">Identity &amp; keys</a>
         <a href="/terms-of-use">Terms</a>
         <a href="/privacy">Privacy</a>
+        <a href="/administration">Profile &amp; roles</a>
       </nav>
       <p><strong>agent.bittrees.org</strong> — one reviewed discovery and MCP surface for the Bittrees ecosystem.</p>
       <p class="footer-safety">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
