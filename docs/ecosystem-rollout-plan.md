@@ -8,6 +8,5 @@ selection handoff, catalog snapshots and authorization boundaries.
 
 MCP production activation, database/secrets, domain verification, integration
 adapters, automation and rules are independently managed in that repository.
-Bitlogic and SkillMesh feature work remain deferred. Node implementation remains
-deferred; its future default should include the approved ecosystem and preserve
-saved user overrides.
+
+Keep all nine products in the migration contract’s [exclusion list](ecosystem-integration.md#excluded-products) out of discovery and active plans until explicit owner reapproval.

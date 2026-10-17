@@ -1,3 +1,5 @@
+import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
+import { publicCatalog } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
 import { scopedMcpResult } from './ecosystem/mcp.mjs';
 import { renderFunnelPage } from './ecosystem/ui.mjs';
@@ -88,11 +90,11 @@ const PROJECT_READINESS_DATA = JSON.parse(
 );
 export const BITTREES_PROJECT_REGISTRY = Object.freeze({
   ...BITTREES_PROJECT_REGISTRY_DATA,
-  projects: Object.freeze(BITTREES_PROJECT_REGISTRY_DATA.projects.map((project) => Object.freeze(project))),
+  projects: Object.freeze(publicCatalog(BITTREES_PROJECT_REGISTRY_DATA).projects.map((project) => Object.freeze(project))),
 });
 export const PROJECT_READINESS_REGISTRY = Object.freeze({
   ...PROJECT_READINESS_DATA,
-  projects: Object.freeze(PROJECT_READINESS_DATA.projects.map((project) => Object.freeze({
+  projects: Object.freeze(publicCatalog(PROJECT_READINESS_DATA).projects.map((project) => Object.freeze({
     ...project,
     tasks: Object.freeze(project.tasks.map((task) => Object.freeze(task))),
   }))),
@@ -4286,6 +4288,14 @@ const JSON_ROUTES = [
     }),
   },
   {
+    path: '/tasks.json',
+    label: 'Agent task sync feed',
+    description: 'Stable public backlog identities and content revisions grouped by site for authorized MCP-to-CRM sync.',
+    status: 'ready',
+    schema: TASK_FEED_SCHEMA,
+    data: () => buildTaskFeed(publicSafeContent(PROJECT_READINESS_REGISTRY), publicSafeContent(BITTREES_PROJECT_REGISTRY)),
+  },
+  {
     path: READINESS_JSON_PATH,
     label: 'Bittrees production-readiness registry',
     description:
@@ -4783,6 +4793,7 @@ export const ROUTE_DEFINITIONS = [
 export const JSON_ROUTE_MAP = new Map(JSON_ROUTES.map((definition) => [definition.path, definition]));
 
 const MCP_CORE_RESOURCE_ROUTES = Object.freeze([
+  {path: '/tasks.json', name: 'agent-task-sync-feed', title: 'Agent task sync feed', description: 'Public site-grouped backlog with stable source IDs for authorized CRM sync.'},
   {
     path: '/projects.json',
     name: 'bittrees-project-registry',
@@ -7622,7 +7633,7 @@ Safety: ${UNIVERSAL_PORTAL_DISCLAIMER}
 - [Human project directory](${PORTAL_BASE_URL}${PROJECTS_PAGE_PATH}): Browse every reviewed Bittrees-related project.
 - [Machine project registry](${PORTAL_BASE_URL}/projects.json): Canonical cross-project catalog and interaction contracts.
 - [Production-readiness task list](${PORTAL_BASE_URL}${READINESS_PAGE_PATH}): Prioritized launch backlog for every reviewed project.
-- [Machine readiness registry](${PORTAL_BASE_URL}${READINESS_JSON_PATH}): Acceptance-testable P0, P1, and P2 tasks with review methodology and limitations.
+- [Machine readiness registry](${PORTAL_BASE_URL}${READINESS_JSON_PATH}): Acceptance-testable P0, P1, and P2 tasks with review methodology and limitations. Stable sync identities and revisions are available at /tasks.json.
 - [MCP server card](${PORTAL_BASE_URL}${MCP_SERVER_CARD_PATH}): Connection metadata for the Streamable HTTP server.
 - [MCP contract](${PORTAL_BASE_URL}/mcp.json): Tools, resources, client imports, and review-gate metadata.
 - [Full agent reference](${PORTAL_BASE_URL}${LLMS_FULL_TXT_PATH}): Expanded routes, source rules, claims, release evidence, and operating caveats.
@@ -7832,7 +7843,7 @@ export function renderLandingPage() {
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join('');
   const contributionIntentCopy = getContributionIntentCtaCopy();
-  const featuredProjectIds = ['bittrees-org', 'bittrees-research', 'bittrees-gov', 'bittrees-capital', 'agent', 'skillmesh'];
+  const featuredProjectIds = ['bittrees-org', 'bittrees-research', 'bittrees-gov', 'bittrees-capital', 'agent'];
   const featuredProjectCards = featuredProjectIds
     .map(findBittreesProject)
     .filter(Boolean)

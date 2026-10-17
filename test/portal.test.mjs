@@ -2759,11 +2759,11 @@ test('project registry exposes one unified, review-gated route across reviewed B
   assert.equal(response.status, 'project-registry-ready');
   assert.equal(BITTREES_PROJECT_REGISTRY.schema, 'agent.bittrees.project-registry.v2');
   assert.equal(ids.length, BITTREES_PROJECT_REGISTRY.projects.length);
-  assert.ok(ids.includes('crm') && ids.includes('node'));
+  assert.ok(ids.includes('crm') && !ids.includes('node'));
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.includes('agent'));
   assert.ok(ids.includes('bittrees-research'));
-  assert.ok(ids.includes('skillmesh'));
+  assert.ok(ids.includes('tcp'));
   assert.equal(response.data.reviewGate.productionMutationAllowed, false);
   for (const project of response.data.projects) {
     if (project.repositoryUrl !== null) assert.match(project.repositoryUrl, /^https:\/\/github\.com\//);
@@ -2898,17 +2898,17 @@ test('project MCP tools discover, resolve, and prepare a cross-project handoff',
   assert.equal(resolved.project.publicUrl, 'https://tcp.bittrees.org');
 
   const handoff = callMcpTool('prepare_bittrees_project_handoff', {
-    projectId: 'skillmesh',
-    lane: 'discovery',
+    projectId: 'tcp',
+    lane: 'research',
     intent: 'Document the public MCP interoperability contract and its review boundary.',
-    evidence: ['https://github.com/bobofbuilding/skillmesh'],
+    evidence: ['https://github.com/Bittrees-Technology/tcp'],
   }).structuredContent;
   assert.equal(handoff.status, 'project-handoff-ready');
-  assert.equal(handoff.handoff.projectId, 'skillmesh');
+  assert.equal(handoff.handoff.projectId, 'tcp');
   assert.equal(handoff.handoff.opportunityId, 'project-directed-contribution');
   assert.equal(handoff.reviewGate.productionMutationAllowed, false);
 
-  const opportunities = callMcpTool('list_contribution_opportunities', { projectId: 'skillmesh' }).structuredContent;
+  const opportunities = callMcpTool('list_contribution_opportunities', { projectId: 'tcp' }).structuredContent;
   assert.deepEqual(opportunities.opportunities.map((item) => item.id), ['project-directed-contribution']);
 
   assert.throws(
@@ -2923,14 +2923,14 @@ test('project MCP tools discover, resolve, and prepare a cross-project handoff',
 
   const claim = callMcpTool('claim_contribution', {
     agentId: 'external-project-agent',
-    projectId: 'skillmesh',
+    projectId: 'tcp',
     opportunityId: 'project-directed-contribution',
-    contributionSummary: 'Prepare an owner-review packet for SkillMesh interoperability.',
+    contributionSummary: 'Prepare an owner-review packet for TCP interoperability.',
     evidencePlan: ['public repository evidence'],
   }).structuredContent;
   assert.equal(claim.status, 'claim_pending_owner_review');
-  assert.equal(claim.claim.projectId, 'skillmesh');
-  assert.equal(claim.project.id, 'skillmesh');
+  assert.equal(claim.claim.projectId, 'tcp');
+  assert.equal(claim.project.id, 'tcp');
 });
 
 test('public MCP review gates use role labels without internal reviewer routes', () => {
@@ -4098,7 +4098,7 @@ test('idacc release snapshot includes verifiable download metadata', () => {
 test('readiness filters combine priority, status, and project without hiding global totals', () => {
   const html = renderReadinessPage(new URLSearchParams('priority=P1&status=todo&project=agent'));
   assert.equal((html.match(/class="readiness-task priority-/g) ?? []).length, 3);
-  assert.match(html, /Showing 3 of 84 tasks across 1 project/);
+  assert.match(html, /Showing 3 of 66 tasks across 1 project/);
   assert.match(html, /id="readiness-agent" open/);
   assert.doesNotMatch(html, /id="agent-p0-durable-control-plane"/);
   assert.match(html, /value="P1" selected/);
@@ -4108,6 +4108,6 @@ test('readiness filters combine priority, status, and project without hiding glo
 test('readiness filters handle empty matches and ignore unrecognized inputs', () => {
   assert.match(renderReadinessPage(new URLSearchParams('project=agent&priority=P2')), /No tasks match/);
   const html = renderReadinessPage(new URLSearchParams('priority=%3Cscript%3E&project=unknown&status=nope'));
-  assert.match(html, /Showing 84 of 84 tasks/);
+  assert.match(html, /Showing 66 of 66 tasks/);
   assert.doesNotMatch(html, /<script>/);
 });
