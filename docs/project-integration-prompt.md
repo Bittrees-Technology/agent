@@ -8,5 +8,5 @@ provides the person/agent onboarding funnel and existing contribution review.
 Use one stable product ID, evidence-backed affiliation and explicit readiness.
 Catalog visibility never grants private access or permission to execute actions.
 Keep Agent's legacy contribution authorization separate; never forward its bearer
-credentials across origins. Node implementation, Bitlogic feature work and
-SkillMesh feature work remain deferred.
+credentials across origins.
+Keep all nine products in the migration contract’s [exclusion list](ecosystem-integration.md#excluded-products) out of discovery and active plans until explicit owner reapproval.

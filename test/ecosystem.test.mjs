@@ -165,6 +165,8 @@ test("migration configuration preserves selection while the funnel hands off ser
   const html=renderFunnelPage();
   assert.match(html,/https:\/\/mcp.bittrees.org\/connect/);
   assert.doesNotMatch(html,/client-config|name="project"/);
+  for (const area of ["connect", "explore", "automations", "status"]) assert.ok(html.includes(`href="https://mcp.bittrees.org/${area}"`));
+  assert.match(html, /Sign-in does not grant execution access/);
 
 });
 test("HTTP config connects to the implemented scoped MCP and shares a conditional catalog revision", async () => {

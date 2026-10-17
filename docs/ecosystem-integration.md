@@ -1,6 +1,9 @@
 # Agent funnel and MCP migration contract
 
 Agent owns onboarding, public project discovery and existing contribution review.
+The toolbar and contextual links lead to MCP Connect, Explore, Automations and
+Status. Sign-in never grants execution access; app authorization and approval
+requirements remain independent.
 The independent [Bittrees MCP repository](https://github.com/Bittrees-Technology/mcp)
 owns transport, integration profiles, rules, automation, authoritative catalog,
 schemas and its dedicated Vercel/database/release configuration. Agent has no MCP
@@ -33,10 +36,18 @@ publication alone is not a claim that both services run the same revision.
 `bittrees.project.json` describes only this Agent product for reviewed onboarding
 into the independent service. The original 14-project readiness review remains
 historical; new inventory entries do not receive fabricated acceptance results.
-Bitlogic and SkillMesh stay discovery-only; Node implementation is deferred, with
-its future ecosystem default preserved as a documentation requirement.
+The excluded products listed below are absent from discovery and active plans.
 
 The service extraction is recoverable at Agent commit
 `5016589b84da082684db83f8aefb15b02e5232ef`, and independent MCP commit
 `d125f88b69bfbdfa2369c16c36aef7794d19aaa0`. Service code and production ownership
 were handed to the parent task; Agent PR21 covers funnel and compatibility only.
+
+## Excluded products
+
+Bitlogic, Bittrees Vault, SkillMesh, Metatokens, Wallet, TreeSwap, Builders Advocacy
+Group, MyCloud and Bittrees Node must stay out of public discovery, connection
+selection, readiness queues and active integration plans until explicit owner
+reapproval. `src/public-project-policy.mjs` applies independently of imported
+snapshots, including aliases and saved selections. Historical review documents
+are evidence only, not active rollout instructions.
