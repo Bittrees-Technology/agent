@@ -51,3 +51,10 @@ selection, readiness queues and active integration plans until explicit owner
 reapproval. `src/public-project-policy.mjs` applies independently of imported
 snapshots, including aliases and saved selections. Historical review documents
 are evidence only, not active rollout instructions.
+
+## CRM backlog handoff
+
+The full allowed backlog is exported at `/tasks.json` with stable task identities,
+content hashes and site groups. MCP owns authorized per-project CRM sync; see
+[the task sync contract](crm-task-sync.md). Public feed access never authorizes
+CRM writes or supplies a destination account.
