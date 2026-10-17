@@ -4293,7 +4293,7 @@ const JSON_ROUTES = [
     description: 'Stable public backlog identities and content revisions grouped by site for authorized MCP-to-CRM sync.',
     status: 'ready',
     schema: TASK_FEED_SCHEMA,
-    data: () => buildTaskFeed(PROJECT_READINESS_REGISTRY, BITTREES_PROJECT_REGISTRY),
+    data: () => buildTaskFeed(publicSafeContent(PROJECT_READINESS_REGISTRY), publicSafeContent(BITTREES_PROJECT_REGISTRY)),
   },
   {
     path: READINESS_JSON_PATH,

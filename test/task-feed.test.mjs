@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildTaskFeed} from '../src/task-feed.mjs';
@@ -30,5 +31,8 @@ test('task feed is available through the existing JSON envelope and static disco
   const result=buildJsonResponse(JSON_ROUTE_MAP.get('/tasks.json'));
   assert.equal(result.schema.title,'Agent public task feed v1');
   assert.equal(result.data.schema,'agent.bittrees.task-feed.v1');
+  const {revision,...content}=result.data;
+  assert.equal(createHash('sha256').update(JSON.stringify(content)).digest('hex'),revision);
+  for(const task of content.projects.flatMap(p=>p.tasks)){const {contentHash,...fields}=task;assert.equal(createHash('sha256').update(JSON.stringify(fields)).digest('hex'),contentHash);}
   assert.ok(result.generatedAt);assert.ok(buildStaticAssets().some(a=>a.path==='tasks.json'));
 });
