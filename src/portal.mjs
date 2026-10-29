@@ -1,4 +1,5 @@
 import { BRAND_VERSION, LOGO_SVG_BODY } from './ecosystem/brand.mjs';
+import { reputationEvidence } from './reputation-evidence.mjs';
 import { CONSOLIDATED_PAGES, consolidatedDestination, LEGACY_DISCOVERY_PATHS, buildHubAgentGuide } from './ecosystem/public-surface.mjs';
 import { LEGAL_EFFECTIVE_DATE, renderLegalDocument } from './ecosystem/legal.mjs';
 import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
@@ -3577,11 +3578,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
         status: approvedProfile ? 'reviewed_profile_found' : 'not_found',
         reviewGate: reviewGateRecord(),
         agentId,
-        reputation: {
-          score: approvedProfile ? 70 : 0,
-          status: approvedProfile ? 'operator-reviewed-evidence' : 'unknown',
-          caveat: 'Reputation is an evidence signal and does not authorize execution, spending, registry mutation, or public claim expansion.',
-        },
+        reputation: reputationEvidence({ profileReviewed: Boolean(approvedProfile) }),
         approvedProfile,
         pendingRegistration: null,
         queuedSubmissionCount: 0,
