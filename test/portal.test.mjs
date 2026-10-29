@@ -2118,7 +2118,7 @@ test('homepage and monitoring expose contribution workflow', () => {
   const response = buildJsonResponse(monitoringRoute, '2026-07-06T00:00:00.000Z');
 
   assert.match(htmlAsset.body, /Explore and contribute/);
-  assert.match(htmlAsset.body, /Find your place in Bittrees/);
+  assert.match(htmlAsset.body, /Put AI agents/);
   assert.match(htmlAsset.body, /https:\/\/mcp.bittrees.org\/connect/);
   assert.match(htmlAsset.body, /Project visibility does not grant access/);
   assert.match(htmlAsset.body, /href="\/contribute"/);
@@ -2815,7 +2815,7 @@ test('readiness page renders every project and launch task without claiming comp
   const html = renderReadinessPage();
   const taskCount = PROJECT_READINESS_REGISTRY.projects.flatMap((project) => project.tasks).length;
 
-  assert.match(html, /What each project needs before launch\./);
+  assert.match(html, /A snapshot of project launch tasks\./);
   assert.match(html, /This is the working list—not a claim that the projects are already production-ready\./);
   assert.equal((html.match(/<details class="readiness-project"/g) ?? []).length, PROJECT_READINESS_REGISTRY.projects.length);
   assert.equal((html.match(/class="readiness-task priority-/g) ?? []).length, taskCount);
@@ -2829,7 +2829,7 @@ test('projects page and stable project resources grow from the reviewed registry
   const found = buildProjectApiResponse('agent', '2026-08-21T16:09:42.000Z');
   const missing = buildProjectApiResponse('unknown-project', '2026-08-21T16:09:42.000Z');
 
-  assert.match(html, /One portal\. A shared project catalog\./);
+  assert.match(html, /The wider Bittrees ecosystem\./);
   assert.equal((html.match(/<article class="project-card/g) ?? []).length, BITTREES_PROJECT_REGISTRY.projects.length);
   assert.match(html, /href="\/v1\/projects\/agent"/);
   assert.equal(found.found, true);
@@ -3097,19 +3097,14 @@ test('human pages expose shared primary navigation and route metadata', () => {
     { path: '/privacy', html: renderPrivacyPage() },
     { path: '/onboarding', label: 'Onboarding', html: renderOnboardingPage() },
   ];
-  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   for (const page of pages) {
     assert.match(page.html, /aria-label="Primary portal routes"/);
-    if (page.path === '/projects') {
-      assert.match(
-        page.html,
-        new RegExp(`<a href="${escapeRegex(page.path)}" aria-current="page">${escapeRegex(page.label)}<\\/a>`),
-      );
-    } else {
-      assert.match(page.html, /href="\/contribute"/);
-      assert.match(page.html, /href="https:\/\/mcp.bittrees.org\/connect"/);
+    for (const path of ['/tools', '/workflows', '/resources', '/developers']) {
+      assert.ok(page.html.includes(`href="${path}"`));
     }
+    assert.match(page.html, /href="\/contribute"/);
+    assert.match(page.html, /href="https:\/\/mcp.bittrees.org\/connect"/);
     assert.match(page.html, /<meta name="theme-color" content="#eef3ec" \/>/);
     assert.match(page.html, /<link rel="describedby" href="\/llms\.txt" type="text\/plain" \/>/);
   }

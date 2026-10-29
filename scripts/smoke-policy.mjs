@@ -12,6 +12,7 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
 // Routes probed by the smoke suite. `kind` selects the per-route assertions.
 export const SMOKE_ROUTES = Object.freeze([
   { path: '/', kind: 'html' },
+  ...['/tools', '/workflows', '/resources', '/developers', '/contribute'].map((path) => ({ path, kind: 'html' })),
   { path: '/projects', kind: 'html' },
   { path: '/readiness', kind: 'html' },
   { path: '/identity-keys', kind: 'html' },

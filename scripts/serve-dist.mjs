@@ -44,6 +44,7 @@ const extensionlessStaticRoutePaths = new Set(
 // rendered. Keep these aligned with the asset kinds scripts/build.mjs can emit.
 const contentTypes = new Map([
   ['.html', 'text/html; charset=utf-8'],
+  ['.css', 'text/css; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
   ['.txt', 'text/plain; charset=utf-8'],
   ['.svg', 'image/svg+xml; charset=utf-8'],
