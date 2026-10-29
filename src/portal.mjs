@@ -1,7 +1,7 @@
 import { CONSOLIDATED_PAGES, consolidatedDestination, LEGACY_DISCOVERY_PATHS, buildHubAgentGuide } from './ecosystem/public-surface.mjs';
 import { LEGAL_EFFECTIVE_DATE, renderLegalDocument } from './ecosystem/legal.mjs';
 import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
-import { publicCatalog } from './public-project-policy.mjs';
+import { publicCatalog, isExcludedProject } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
 import { scopedMcpResult } from './ecosystem/mcp.mjs';
 import { renderHubPage, renderHubNav, renderHubFooter, HUB_PATHS } from './ecosystem/ui.mjs';
@@ -9348,14 +9348,15 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
   const workflow = options?.workflow ?? LIVE_CONTRIBUTOR_PORTAL_WORKFLOW;
   const id = readSearchParam(searchParams, 'id').trim();
   const kind = readSearchParam(searchParams, 'kind').trim() || 'any';
+  const excludedOpportunity = OPPORTUNITIES.find(opportunity => opportunity.id === id)?.projectIds?.some(isExcludedProject);
   const lookup = id && isStatusLookupKind(kind)
-    ? publicSafeContent(workflow.status({ id, kind }))
+    ? (excludedOpportunity ? { status: 'not_found' } : publicSafeContent(workflow.status({ id, kind })))
     : null;
   const kindOptions = STATUS_LOOKUP_KINDS.map((item) => ({ value: item, label: item }));
   const resultBody = lookup
     ? renderReadonlyJsonResult({ id: 'status-result', label: 'Status JSON result', value: lookup })
     : '<p class="lede">Enter an opportunity id, queued review id, submission id, feedback id, or attestation id to inspect review status.</p>';
-  const opportunityRows = OPPORTUNITIES.map(
+  const opportunityRows = OPPORTUNITIES.filter(opportunity => !opportunity.projectIds?.some(isExcludedProject)).map(
     (opportunity) => `
       <tr>
         <td><code>${escapeHtml(opportunity.id)}</code></td>

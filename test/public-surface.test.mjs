@@ -26,7 +26,7 @@ test('retired public pages redirect without publishing their old static content'
       assert.ok(!assets.some(asset => asset.path === path.slice(1) + '/index.html'));
       assert.ok(config.redirects.some(item => item.source === path + '/:path*' && item.destination === target));
     }
-    for (const path of ['/', '/tools', '/workflows', '/resources', '/developers', '/contribute', '/projects', '/readiness', '/mcp-docs', '/privacy', '/terms-of-use', '/does-not-exist']) {
+    for (const path of ['/', '/tools', '/workflows', '/resources', '/developers', '/contribute', '/projects', '/readiness', '/mcp-docs', '/mcp', '/submission-status', '/privacy', '/terms-of-use', '/does-not-exist']) {
       const response = await fetch(base + path, { headers: { Accept: 'text/html' } });
       const html = await response.text();
       assert.doesNotMatch(html, /IDACC|idacc-default|Profile &amp; roles|href="\/(?:identity-keys|reputation|onboarding|administration)(?:["?#])/i, path);
