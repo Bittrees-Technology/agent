@@ -6,7 +6,22 @@
 // preview smoke, the rollout verification, and the API handler check all
 // assert exactly the same policy.
 
+import { INDEXABLE_HUB_PATHS } from '../src/feature-gates.mjs';
+
 export const RELEASE_METADATA_SCHEMA = 'agent.bittrees.release-metadata.v1';
+
+// Vercel protected previews replace the application directive with `noindex`.
+// That remains an indexing exclusion. Public production must retain the full
+// intended policy and may never inherit this preview exception.
+export function robotsHeaderMatches(value, path, { publicHub = false, protectedPreview = false } = {}) {
+  const directives = new Set(String(value ?? '').toLowerCase().split(',').map((item) => item.trim()));
+  if (publicHub && INDEXABLE_HUB_PATHS.includes(path)) {
+    return !protectedPreview && directives.has('index') && directives.has('follow')
+      && !directives.has('noindex') && !directives.has('nofollow');
+  }
+  return directives.has('noindex') && !directives.has('index')
+    && (protectedPreview || directives.has('nofollow'));
+}
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 
 // Routes probed by the smoke suite. `kind` selects the per-route assertions.

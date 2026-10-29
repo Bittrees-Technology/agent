@@ -7,6 +7,7 @@ import {
   RELEASE_METADATA_SCHEMA,
   SMOKE_ROUTES,
   securityHeaderFailures,
+  robotsHeaderMatches,
 } from './smoke-policy.mjs';
 
 const DEFAULT_BASE_URL = 'https://agent.bittrees.org';
@@ -31,6 +32,7 @@ const defaultVercelDeployment = vercelDeploymentArg?.split('=').slice(1).join('=
 const vercelProtected = args.includes('--vercel-protected');
 // Explicit only: a release must assert the intended crawl posture rather than infer it.
 const expectPublicHubIndexing = args.includes('--expect-public-hub-indexing');
+const protectedPreview = vercelProtected && baseUrl.hostname.endsWith('.vercel.app');
 
 const routeChecks = SMOKE_ROUTES;
 
@@ -75,8 +77,7 @@ async function readJson(path) {
 
   check(response.status === 200, `${path} returned ${response.status}`);
   checkSecurityHeaders(response, path);
-  check(robots.toLowerCase().includes('noindex'), `${path} missing noindex header`);
-  check(robots.toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
+  check(robotsHeaderMatches(robots, path, { protectedPreview }), `${path} missing indexing exclusion`);
 
   try {
     const json = JSON.parse(text);
@@ -98,7 +99,7 @@ async function checkRoute(path, kind) {
   check(response.status === 200, `${path} returned ${response.status}`);
   checkSecurityHeaders(response, path);
   const expectedRobots = expectPublicHubIndexing && INDEXABLE_HUB_PATHS.includes(path) ? 'index, follow' : 'noindex, nofollow';
-  check(robots.toLowerCase() === expectedRobots, `${path} robots header did not match ${expectedRobots}`);
+  check(robotsHeaderMatches(robots, path, { publicHub: expectPublicHubIndexing, protectedPreview }), `${path} robots header did not match ${expectedRobots}${protectedPreview ? ' (platform preview exclusion)' : ''}`);
 
   if (kind === 'json') {
     try {
@@ -247,8 +248,7 @@ async function checkStaticStatusDelegation() {
   check(redirected?.pathname === '/submission-status', `${path} did not delegate to /submission-status`);
   check(redirected?.search === '?id=smoke-status&kind=submission', `${path} did not preserve lookup query`);
   checkSecurityHeaders(response, path);
-  check((response.headers.get('x-robots-tag') ?? '').toLowerCase().includes('noindex'), `${path} missing noindex header`);
-  check((response.headers.get('x-robots-tag') ?? '').toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
+  check(robotsHeaderMatches(response.headers.get('x-robots-tag'), path, { protectedPreview }), `${path} missing indexing exclusion`);
 }
 
 async function checkNotFoundContentNegotiation() {
@@ -269,8 +269,7 @@ async function checkNotFoundContentNegotiation() {
   check(browserBody.includes('<footer class="site-footer"'), `${path} missing footer landmark`);
   check(browserBody.includes('<meta name="description"'), `${path} missing page description metadata`);
   checkSecurityHeaders(browserResponse, `${path} browser request`);
-  check(browserRobots.toLowerCase().includes('noindex'), `${path} browser request missing noindex header`);
-  check(browserRobots.toLowerCase().includes('nofollow'), `${path} browser request missing nofollow header`);
+  check(robotsHeaderMatches(browserRobots, path, { protectedPreview }), `${path} browser request missing indexing exclusion`);
 
   const agentResponse = await requestPortal(path, {
     headers: {
@@ -502,8 +501,7 @@ async function postMcp(body) {
 
   check(response.status === 200, `/mcp POST returned ${response.status}: ${text.slice(0, 160)}`);
   checkSecurityHeaders(response, '/mcp POST');
-  check(robots.toLowerCase().includes('noindex'), '/mcp POST missing noindex header');
-  check(robots.toLowerCase().includes('nofollow'), '/mcp POST missing nofollow header');
+  check(robotsHeaderMatches(robots, '/mcp', { protectedPreview }), '/mcp POST missing indexing exclusion');
 
   try {
     return JSON.parse(text);
