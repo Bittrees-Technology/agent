@@ -1,9 +1,10 @@
+import { CONSOLIDATED_PAGES, consolidatedDestination, LEGACY_DISCOVERY_PATHS, buildHubAgentGuide } from './ecosystem/public-surface.mjs';
 import { LEGAL_EFFECTIVE_DATE, renderLegalDocument } from './ecosystem/legal.mjs';
 import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
-import { publicCatalog } from './public-project-policy.mjs';
+import { publicCatalog, isExcludedProject } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
 import { scopedMcpResult } from './ecosystem/mcp.mjs';
-import { renderHubPage, renderHubNav, HUB_PATHS } from './ecosystem/ui.mjs';
+import { renderHubPage, renderHubNav, renderHubFooter, HUB_PATHS } from './ecosystem/ui.mjs';
 import { HUB_PAGES } from './ecosystem/resources.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -175,7 +176,7 @@ const CONTRIBUTION_INTENT_POST_PATHS = new Set([
 const CONTRIBUTION_SIGNING_MESSAGE =
   'Bittrees — application encryption key (v1)\n\nSign to derive your private decryption key for contributor applications. No gas; this only proves wallet ownership.';
 const CONTRIBUTION_SIGNING_EXPLAINER =
-  'This wallet signature derives a local encryption key. It is not a transaction, does not spend funds, and does not grant Bittrees, IDACC, or this portal authority over your wallet.';
+  'This wallet signature derives a local encryption key. It is not a transaction, does not spend funds, and does not grant Bittrees or this portal authority over your wallet.';
 const CONTRIBUTION_SIGNING_DISTINCTION =
   'If wallet signing is enabled in a reviewed enhancement, the wallet prompt signs only the key-derivation message above. Your form contents are shown here for review and are handled by the portal write gate separately.';
 const CONTRIBUTION_CONTEXT_ROW = 'Base (8453) - agent.bittrees.org - contributor review intake';
@@ -288,7 +289,7 @@ function publicSafeContent(value) {
   );
 }
 export const UNIVERSAL_PORTAL_DISCLAIMER =
-  'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, registry owner, or governance body.';
+  'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees or any wallet, Safe, signer, controller, registry owner, or governance body.';
 export const NO_RIGHTS_CREATED_DISCLAIMER =
   'Submitting through this portal does not create employment, contractor status, agency, partnership, fiduciary duties, onboarding approval, compensation rights, token rights, equity rights, grant rights, revenue-share rights, confidentiality obligations, or acceptance into any program or workflow. Any formal contributor relationship, compensated work, token program, grant, or authority delegation requires separate written terms and explicit owner approval.';
 export const CONTRIBUTION_PRIVACY_NOTICE =
@@ -5052,7 +5053,7 @@ const SITEMAP_HTML_PATHS = Object.freeze([
 // ready to publish the moment the noindex/launch gate lifts, per the SEO
 // audit's routed follow-up.
 function buildSitemapXml() {
-  const paths = isPublicIndexingEnabled(process.env) ? INDEXABLE_HUB_PATHS : SITEMAP_HTML_PATHS;
+  const paths = (isPublicIndexingEnabled(process.env) ? INDEXABLE_HUB_PATHS : SITEMAP_HTML_PATHS).filter(path => !consolidatedDestination(path));
   const urlEntries = paths.map((path) => {
     const loc = new URL(path, PORTAL_BASE_URL).toString();
     return `  <url>\n    <loc>${escapeHtml(loc)}</loc>\n  </url>`;
@@ -5523,8 +5524,8 @@ function renderContributionIntentPageStyles() {
     </style>`;
 }
 
-// Keep the global header task-first and compact. Deeper governance, identity,
-// reputation, and legal routes remain in the footer and route directory.
+// Keep the global header task-first and compact. Supporting discovery and legal links
+// use the same concise footer as the hub.
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
   return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${renderHubNav(currentPath)}</nav>`;
 }
@@ -5760,14 +5761,14 @@ function isCanonicalAliasRoute(definition) {
 }
 
 function shouldRenderVisibleRouteListItem(definition) {
-  return definition.path !== '/' && !isCanonicalAliasRoute(definition);
+  return definition.path !== '/' && !isCanonicalAliasRoute(definition) && !LEGACY_DISCOVERY_PATHS.has(definition.path);
 }
 
 const ROUTE_DIRECTORY_GROUPS = Object.freeze([
   {
     id: 'portal-pages',
     label: 'Portal pages',
-    description: 'Human-readable pages for onboarding, status, reputation, legal gates, and documentation.',
+    description: 'Human-readable pages for projects, contribution status, policies and documentation.',
     includes: (definition) => definition.kind === 'html' && definition.path !== MCP_GATEWAY.path,
   },
   {
@@ -9347,14 +9348,15 @@ export function renderSubmissionStatusPage(searchParams = new URLSearchParams(),
   const workflow = options?.workflow ?? LIVE_CONTRIBUTOR_PORTAL_WORKFLOW;
   const id = readSearchParam(searchParams, 'id').trim();
   const kind = readSearchParam(searchParams, 'kind').trim() || 'any';
+  const excludedOpportunity = OPPORTUNITIES.find(opportunity => opportunity.id === id)?.projectIds?.some(isExcludedProject);
   const lookup = id && isStatusLookupKind(kind)
-    ? publicSafeContent(workflow.status({ id, kind }))
+    ? (excludedOpportunity ? { status: 'not_found' } : publicSafeContent(workflow.status({ id, kind })))
     : null;
   const kindOptions = STATUS_LOOKUP_KINDS.map((item) => ({ value: item, label: item }));
   const resultBody = lookup
     ? renderReadonlyJsonResult({ id: 'status-result', label: 'Status JSON result', value: lookup })
     : '<p class="lede">Enter an opportunity id, queued review id, submission id, feedback id, or attestation id to inspect review status.</p>';
-  const opportunityRows = OPPORTUNITIES.map(
+  const opportunityRows = OPPORTUNITIES.filter(opportunity => !opportunity.projectIds?.some(isExcludedProject)).map(
     (opportunity) => `
       <tr>
         <td><code>${escapeHtml(opportunity.id)}</code></td>
@@ -9542,9 +9544,7 @@ export function renderReputationPage(searchParams = new URLSearchParams()) {
 // by the portal CSP style-src 'unsafe-inline') so it renders consistently on
 // every page without editing each page's own style block.
 function renderPortalFooter() {
-  const year = new Date().getUTCFullYear();
-  return `<footer class="site-footer" aria-label="Site information">
-      <style>
+  return `<style>
         .site-footer {
           width: min(1120px, calc(100% - 40px));
           margin: 0 auto;
@@ -9559,30 +9559,7 @@ function renderPortalFooter() {
         .site-footer p { margin: 6px 0 0; max-width: 78ch; }
         .site-footer .footer-safety { font-size: 0.78rem; line-height: 1.55; }
         @media (max-width: 720px) { .site-footer { width: min(100% - 28px, 1120px); } }
-      </style>
-      <nav aria-label="Footer routes">
-        <a href="/">Home</a>
-        <a href="/tools">Tools</a>
-        <a href="/resources">Learn</a>
-        <a href="/contribute">Contribute</a>
-        <a href="https://mcp.bittrees.org/connect">Connect through MCP</a>
-        <a href="${escapeHtml(PROJECTS_PAGE_PATH)}">Projects</a>
-        <a href="${escapeHtml(READINESS_PAGE_PATH)}">Readiness</a>
-        <a href="/onboarding">Onboarding</a>
-        <a href="/mcp">MCP</a>
-        <a href="/mcp-docs">Docs</a>
-        <a href="/submission-status">Status</a>
-        <a href="/reputation">Reputation</a>
-        <a href="/identity-keys">Identity &amp; keys</a>
-        <a href="/terms-of-use">Terms</a>
-        <a href="mailto:agent@bittrees.org">Contact Bittrees, Inc.</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/administration">Profile &amp; roles</a>
-      </nav>
-      <p><strong>agent.bittrees.org</strong> — one reviewed discovery and MCP surface for the Bittrees ecosystem.</p>
-      <p class="footer-safety">${escapeHtml(UNIVERSAL_PORTAL_DISCLAIMER)}</p>
-      <p>&copy; ${year} Bittrees. All rights reserved.</p>
-    </footer>`;
+      </style>${renderHubFooter({notices: [UNIVERSAL_PORTAL_DISCLAIMER]})}`;
 }
 
 export function renderNotFoundPage() {
@@ -10976,7 +10953,7 @@ export function buildPortalManifest(
     launchStatus: LAUNCH_STATUS,
     sourceScope: SOURCE_SCOPE.map((source) => source.name),
     sourceSnapshotEvidence: buildSourceSnapshotEvidence(generatedAt, { releaseMetadata }),
-    routes: ROUTE_DEFINITIONS.map((definition) => ({
+    routes: ROUTE_DEFINITIONS.filter((definition) => !LEGACY_DISCOVERY_PATHS.has(definition.path)).map((definition) => ({
       path: definition.path,
       label: definition.label,
       description: definition.description,
@@ -10995,7 +10972,6 @@ export function buildSourceSnapshotEvidence(
     TERMS_OF_USE_PAGE_ROUTE,
     TERMS_OF_USE_SHORT_ROUTE,
     '/terms-of-use.json',
-    '/idacc/releases.json',
     '/monitoring.json',
     '/portal-manifest.json',
   ];
@@ -11077,14 +11053,6 @@ export function buildStaticAssets(
       body: renderProjectsPage(),
     },
     {
-      path: 'identity-keys/index.html',
-      body: renderIdentityKeysPage(),
-    },
-    {
-      path: 'reputation/index.html',
-      body: renderReputationPage(),
-    },
-    {
       path: 'terms/index.html',
       body: renderTermsOfUsePage(),
     },
@@ -11095,10 +11063,6 @@ export function buildStaticAssets(
     {
       path: 'privacy/index.html',
       body: renderPrivacyPage(),
-    },
-    {
-      path: 'onboarding/index.html',
-      body: renderOnboardingPage(),
     },
     {
       path: 'tou/index.html',
@@ -11126,11 +11090,11 @@ export function buildStaticAssets(
     },
     {
       path: 'llms.txt',
-      body: buildLlmsTxt(),
+      body: buildHubAgentGuide(),
     },
     {
       path: LLMS_FULL_TXT_PATH.replace(/^\//, ''),
-      body: buildLlmsFullTxt(),
+      body: buildHubAgentGuide({ full: true }),
     },
     ...routeAssets,
     {
@@ -11154,6 +11118,11 @@ export function createRequestHandler({
       : rawPathname;
     const telemetry = withRequestTelemetry(req, { method: req.method ?? 'GET', path: rawPathname }, rawPathname);
     const normalizedPath = normalizeCanonicalPath(pathname);
+    const consolidated = consolidatedDestination(pathname);
+    if (consolidated && (req.method === 'GET' || req.method === 'HEAD')) {
+      return sendRedirect(res, 301, consolidated, { ...telemetry, status: 301 });
+    }
+
 
     if (['/connect','/catalog.json','/connection.json','/catalog-status','/catalog-sync.json'].includes(pathname)) {
       if (!['GET','HEAD'].includes(req.method)) return sendBody(res,405,'Method not allowed','text/plain',includeBody,telemetry,{Allow:'GET, HEAD'});
@@ -11436,14 +11405,14 @@ export function createRequestHandler({
     }
 
     if (pathname === '/llms.txt') {
-      return sendBody(res, 200, buildLlmsTxt(), 'text/plain; charset=utf-8', includeBody, {
+      return sendBody(res, 200, buildHubAgentGuide(), 'text/plain; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
     }
 
     if (pathname === LLMS_FULL_TXT_PATH) {
-      return sendBody(res, 200, buildLlmsFullTxt(), 'text/plain; charset=utf-8', includeBody, {
+      return sendBody(res, 200, buildHubAgentGuide({ full: true }), 'text/plain; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
       });
@@ -11594,7 +11563,7 @@ export function createRequestHandler({
       $schema: SCHEMA_URL,
       error: 'not_found',
       message: 'No portal route exists at this path.',
-      availableRoutes: ROUTE_DEFINITIONS.map((definition) => definition.path),
+      availableRoutes: ROUTE_DEFINITIONS.filter((definition) => !LEGACY_DISCOVERY_PATHS.has(definition.path)).map((definition) => definition.path),
     }, includeBody, {
       ...telemetry,
       status: 404,

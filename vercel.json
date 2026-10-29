@@ -124,5 +124,22 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/identity-keys/:path*",
+      "destination": "/workflows#permissions",
+      "permanent": true
+    },
+    {
+      "source": "/reputation/:path*",
+      "destination": "/workflows#permissions",
+      "permanent": true
+    },
+    {
+      "source": "/onboarding/:path*",
+      "destination": "/contribute",
+      "permanent": true
+    }
   ]
 }

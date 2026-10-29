@@ -1,3 +1,4 @@
+import { consolidatedDestination } from '../src/ecosystem/public-surface.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative, sep } from 'node:path';
@@ -29,7 +30,7 @@ const dynamicPortalRoutePaths = new Set([
 const dynamicPortalRoutePrefixes = ['/v1/workflow/', '/v1/registry/'];
 
 function isDynamicPortalPath(pathname) {
-  return dynamicPortalRoutePaths.has(pathname)
+  return Boolean(consolidatedDestination(pathname)) || dynamicPortalRoutePaths.has(pathname)
     || dynamicPortalRoutePrefixes.some((prefix) => pathname.startsWith(prefix));
 }
 const extensionlessStaticRoutePaths = new Set(

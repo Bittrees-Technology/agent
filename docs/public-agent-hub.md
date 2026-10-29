@@ -88,3 +88,19 @@ it does not import Bounties’ escrow, marketplace or database claims.
 
 Recipient acceptance and forwarding configuration are verified; end-to-end email
 delivery was not tested. Selective indexing and contribution writes remain off.
+
+## Public surface consolidation
+
+The hub and supporting pages share one footer. Project profile administration
+remains protected at its existing route but is not a public navigation item.
+The old identity/key and reputation pages redirect to `/workflows#permissions`;
+onboarding redirects to `/contribute`. The build omits their static snapshots,
+and source, dist and platform redirects cover old asset URLs. Public route
+lists, manifest, sitemap and both agent guides omit these retired surfaces.
+
+IDACC is excluded from the public project catalog and task feed by identity.
+Historical source records are retained. The resulting feed has 60 tasks across
+10 projects; omission never instructs CRM to delete prior records. Changed feed
+content requires current source review before any sync. Existing contribution
+MCP, registry and machine compatibility contracts retain their authorization
+and data contracts; this cleanup is not an integration decommission.
