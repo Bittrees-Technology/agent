@@ -19,9 +19,11 @@ function validateSignIn(rule) {
   if (!exact(rule, ['domain', 'uri']) || typeof rule.domain !== 'string' || typeof rule.uri !== 'string') invalid();
   let url;
   try { url = new URL(rule.uri); } catch { invalid(); }
-  // Exact HTTPS origin and URI, no wildcard, credentials, fragments or ports.
+  // Roles signs its bare origin without a trailing slash. Accept that exact
+  // spelling too; never rewrite the URI that a source signed or reviewed.
+  // No wildcard, credentials, fragments, ports or other URL normalization.
   if (url.protocol !== 'https:' || url.host !== rule.domain || url.port || url.username || url.password || url.hash
-    || url.href !== rule.uri || !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+bittrees\.org$/.test(rule.domain)) invalid();
+    || (url.href !== rule.uri && url.origin !== rule.uri) || !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+bittrees\.org$/.test(rule.domain)) invalid();
 }
 
 function validateCall(rule, policy) {
