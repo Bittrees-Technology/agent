@@ -154,10 +154,18 @@ async function checkRoute(path, kind) {
   }
 
   if (path === '/') {
-    check(text.includes('Find your place in Bittrees.'), '/ missing onboarding funnel');
+    check(text.includes('Put AI agents'), '/ missing agent hub');
+    check(text.includes('https://ai.bittrees.org/'), '/ missing local AI destination');
+    check(text.includes('href="/resources"'), '/ missing curated resources');
     check(text.includes('href="/contribute"'), '/ missing contribution route');
     check(text.includes('https://mcp.bittrees.org/connect'), '/ missing standalone MCP handoff');
     check(!text.includes('staging-ready'), '/ still contains staging-ready');
+  }
+
+  if (['/tools', '/workflows', '/resources', '/developers', '/contribute'].includes(path)) {
+    check(text.includes('Skip to main content'), `${path} missing keyboard navigation`);
+    check(text.includes('href="/hub.css"'), `${path} missing hub stylesheet`);
+    check(text.includes(`https://agent.bittrees.org${path}`), `${path} missing canonical URL`);
   }
 
   if (path === '/mcp') {

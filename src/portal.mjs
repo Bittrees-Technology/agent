@@ -2,7 +2,8 @@ import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
 import { publicCatalog } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
 import { scopedMcpResult } from './ecosystem/mcp.mjs';
-import { renderFunnelPage } from './ecosystem/ui.mjs';
+import { renderHubPage, renderHubNav, HUB_PATHS } from './ecosystem/ui.mjs';
+import { HUB_PAGES } from './ecosystem/resources.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
@@ -47,7 +48,7 @@ export const SITEMAP_XML_PATH = '/sitemap.xml';
 export const SOCIAL_PREVIEW_IMAGE_PATH = '/social-preview.png';
 export const FAVICON_SVG_PATH = '/favicon.svg';
 const SOCIAL_PREVIEW_IMAGE_ALT =
-  'agent.bittrees.org — source-grounded, review-gated agent contribution portal (Preview)';
+  'Bittrees Agent — AI tools and resources';
 const PROJECTS_PAGE_PATH = '/projects';
 const READINESS_PAGE_PATH = '/readiness';
 const READINESS_JSON_PATH = '/readiness.json';
@@ -4568,10 +4569,11 @@ const JSON_ROUTES = [
 ];
 
 export const ROUTE_DEFINITIONS = [
+  ...HUB_PAGES.filter(({ path }) => path !== '/').map(({ path, title, description }) => ({ path, label: title, description, kind: 'html', status: 'preview' })),
   {
     path: '/',
     label: 'Landing page',
-    description: 'Human-facing overview for the agent contribution portal.',
+    description: 'Bittrees-first guide to AI tools, agent connections, workflows and learning resources.',
     kind: 'html',
     status: LAUNCH_STATUS.status,
   },
@@ -4585,7 +4587,7 @@ export const ROUTE_DEFINITIONS = [
   {
     path: READINESS_PAGE_PATH,
     label: 'Project production readiness',
-    description: 'Human-readable, prioritized launch checklist for every project in the reviewed Bittrees registry.',
+    description: 'Reviewed project backlog snapshot; confirm current task status with each project owner.',
     kind: 'html',
     status: 'production-readiness-reviewed',
   },
@@ -4904,6 +4906,7 @@ const CANONICAL_ROUTE_PATHS = new Set([
   ...ROUTE_DEFINITIONS.map((definition) => definition.path),
   GATEWAY_CONTRIBUTION_INTENT_PATH,
   '/portal-manifest.json',
+  '/hub.css',
 ]);
 
 function getRouteStatus(definition) {
@@ -5022,7 +5025,7 @@ function renderReadonlyJsonResult({ id, label, value }) {
 // routes for /terms-of-use, so the sitemap doesn't advertise duplicate-content
 // URLs for the same page.
 const SITEMAP_HTML_PATHS = Object.freeze([
-  '/',
+  ...HUB_PATHS,
   PROJECTS_PAGE_PATH,
   READINESS_PAGE_PATH,
   '/onboarding',
@@ -5515,20 +5518,8 @@ function renderContributionIntentPageStyles() {
 
 // Keep the global header task-first and compact. Deeper governance, identity,
 // reputation, and legal routes remain in the footer and route directory.
-const PRIMARY_PORTAL_NAV_ITEMS = Object.freeze([
-  { path: '/', label: 'Start' },
-  { path: PROJECTS_PAGE_PATH, label: 'Projects' },
-  { path: '/contribute', label: 'Contribute' },
-  { path: 'https://mcp.bittrees.org/connect', label: 'MCP service' },
-]);
-
 function renderPrimaryPortalNav(currentPath, ariaLabel = 'Primary portal routes') {
-  const links = PRIMARY_PORTAL_NAV_ITEMS.map(({ path, label }) => {
-    const currentAttribute = path === currentPath ? ' aria-current="page"' : '';
-    return `<a href="${escapeHtml(path)}"${currentAttribute}>${escapeHtml(label)}</a>`;
-  }).join('');
-
-  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${links}</nav>`;
+  return `<nav class="topnav" aria-label="${escapeHtml(ariaLabel)}">${renderHubNav(currentPath)}</nav>`;
 }
 
 function renderPrimaryPortalNavStyles() {
@@ -7622,7 +7613,7 @@ export function buildLlmsTxt() {
 
   return publicSafeString(`# agent.bittrees.org
 
-> Agent onboarding funnel. New integration clients connect at https://mcp.bittrees.org/connect (target transport https://mcp.bittrees.org/mcp). Existing contribution MCP clients keep this origin and its independent authorization. Never redirect authenticated POSTs or reuse credentials across these origins.\n\n> The source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
+> Bittrees Agent is the public guide to AI tools, connections, workflows and learning. Human entry points: /tools, /workflows, /resources and /developers. New integration clients connect at https://mcp.bittrees.org/connect (target transport https://mcp.bittrees.org/mcp). Existing contribution MCP clients keep this origin and its independent authorization. Never redirect authenticated POSTs or reuse credentials across these origins.\n\n> The source-grounded Bittrees agent portal: discover reviewed projects and data, connect through MCP, prepare bounded handoffs, and submit work for owner review without gaining downstream authority.
 
 Launch status: ${humanizeStatus(LAUNCH_STATUS.status)}. ${LAUNCH_STATUS.publicLaunchGate}
 Protocol versions currently supported: ${MCP_SUPPORTED_PROTOCOL_VERSIONS.join(', ')}.
@@ -9082,8 +9073,8 @@ export function renderProjectsPage() {
       <section id="page-content" class="hero projects-hero" aria-labelledby="projects-title">
         <div>
           <p class="portal-kicker">The Bittrees ecosystem</p>
-          <h1 id="projects-title">One portal. A shared project catalog.</h1>
-          <p class="lede">Browse the reviewed project snapshot, contribution routes and pending integration status. The separate MCP service manages connections and its current integration catalog.</p>
+          <h1 id="projects-title">The wider Bittrees ecosystem.</h1>
+          <p class="lede">This reference directory is a reviewed snapshot, not a live service inventory. For agent tools and current setup guidance, start with the curated tools directory. Each app owns its availability and access requirements.</p>
         </div>
         <dl class="project-stats">
           <div><dt>Projects</dt><dd>${BITTREES_PROJECT_REGISTRY.projects.length}</dd></div>
@@ -9094,7 +9085,7 @@ export function renderProjectsPage() {
 
       <section class="band agent-entry-panel" aria-labelledby="project-agent-entry-title">
         <div>
-          <h2 id="project-agent-entry-title">For AI agents</h2>
+          <h2 id="project-agent-entry-title">Find your agent tools</h2><p><a href="/tools">Browse curated AI tools</a> for local AI, connections, workflows and access review.</p>
           <p>Choose the projects your agent can discover through the separate Bittrees MCP service.</p>
           <p><a href="https://mcp.bittrees.org/connect">Connect your agent</a> · <a href="https://mcp.bittrees.org/mcp-docs">Connection guide</a></p>
         </div>
@@ -9181,7 +9172,7 @@ export function renderReadinessPage(searchParams = new URLSearchParams()) {
   const pageTitle = 'Project production readiness - agent.bittrees.org';
   const pageDescription = getRouteDescription(
     READINESS_PAGE_PATH,
-    'Human-readable, prioritized launch checklist for every project in the reviewed Bittrees registry.',
+    'Reviewed project backlog snapshot; confirm current task status with each project owner.',
   );
   const registry = buildProjectReadinessRegistryData();
   const allowed = (key, values) => values.includes(searchParams.get(key)) ? searchParams.get(key) : '';
@@ -9294,7 +9285,7 @@ export function renderReadinessPage(searchParams = new URLSearchParams()) {
       <section id="page-content" class="hero readiness-hero" aria-labelledby="readiness-title">
         <div>
           <p class="readiness-kicker">Production backlog</p>
-          <h1 id="readiness-title">What each project needs before launch.</h1>
+          <h1 id="readiness-title">A snapshot of project launch tasks.</h1>
           <p class="lede">A point-in-time review of all ${PROJECT_READINESS_REGISTRY.projects.length} Bittrees projects, converted into prioritized tasks with observable completion criteria. This is the working list—not a claim that the projects are already production-ready.</p>
         </div>
         <dl class="readiness-stats">
@@ -9562,6 +9553,10 @@ function renderPortalFooter() {
       </style>
       <nav aria-label="Footer routes">
         <a href="/">Home</a>
+        <a href="/tools">Tools</a>
+        <a href="/resources">Learn</a>
+        <a href="/contribute">Contribute</a>
+        <a href="https://mcp.bittrees.org/connect">Connect through MCP</a>
         <a href="${escapeHtml(PROJECTS_PAGE_PATH)}">Projects</a>
         <a href="${escapeHtml(READINESS_PAGE_PATH)}">Readiness</a>
         <a href="/onboarding">Onboarding</a>
@@ -11169,7 +11164,7 @@ export function buildSourceSnapshotEvidence(
 }
 
 function renderEcosystemConnect() {
-  return renderFunnelPage({notices:[UNIVERSAL_PORTAL_DISCLAIMER,NO_RIGHTS_CREATED_DISCLAIMER,CONTRIBUTION_PRIVACY_NOTICE]});
+  return renderHubPage('/', {notices:[UNIVERSAL_PORTAL_DISCLAIMER,NO_RIGHTS_CREATED_DISCLAIMER,CONTRIBUTION_PRIVACY_NOTICE]});
 }
 
 export function buildStaticAssets(
@@ -11188,6 +11183,8 @@ export function buildStaticAssets(
       path: 'index.html',
       body: renderEcosystemConnect(),
     },
+    ...HUB_PATHS.filter((path) => path !== '/').map((path) => ({ path: `${path.slice(1)}/index.html`, body: renderHubPage(path, { notices: [UNIVERSAL_PORTAL_DISCLAIMER, NO_RIGHTS_CREATED_DISCLAIMER, CONTRIBUTION_PRIVACY_NOTICE] }) })),
+    { path: 'hub.css', body: readFileSync(new URL('../public/hub.css', import.meta.url), 'utf8') },
     {
       path: 'projects/index.html',
       body: renderProjectsPage(),
@@ -11271,10 +11268,9 @@ export function createRequestHandler({
     const telemetry = withRequestTelemetry(req, { method: req.method ?? 'GET', path: rawPathname }, rawPathname);
     const normalizedPath = normalizeCanonicalPath(pathname);
 
-    if (['/connect','/catalog.json','/connection.json','/catalog-status','/catalog-sync.json','/contribute'].includes(pathname)) {
+    if (['/connect','/catalog.json','/connection.json','/catalog-status','/catalog-sync.json'].includes(pathname)) {
       if (!['GET','HEAD'].includes(req.method)) return sendBody(res,405,'Method not allowed','text/plain',includeBody,telemetry,{Allow:'GET, HEAD'});
       try {
-        if(pathname==='/contribute')return sendBody(res,200,renderLandingPage(),'text/html; charset=utf-8',includeBody,telemetry);
         if(pathname==='/connect'){const target=new URL(clientConfiguration(selectionFromParams(requestUrl.searchParams)).mcpServers.bittrees.url);target.pathname='/connect';return sendRedirect(res,302,target.href,telemetry);}
         if(pathname==='/catalog-status')return sendRedirect(res,302,'https://mcp.bittrees.org/status',telemetry);
         if(pathname==='/catalog-sync.json')return sendRedirect(res,302,'https://mcp.bittrees.org/catalog-sync.json',telemetry);
@@ -11477,6 +11473,14 @@ export function createRequestHandler({
         ...telemetry,
         status: 200,
       });
+    }
+
+    if (HUB_PATHS.includes(pathname)) {
+      return sendBody(res, 200, renderHubPage(pathname, { notices: [UNIVERSAL_PORTAL_DISCLAIMER, NO_RIGHTS_CREATED_DISCLAIMER, CONTRIBUTION_PRIVACY_NOTICE] }), 'text/html; charset=utf-8', includeBody, { ...telemetry, status: 200 });
+    }
+
+    if (pathname === '/hub.css') {
+      return sendBody(res, 200, readFileSync(new URL('../public/hub.css', import.meta.url), 'utf8'), 'text/css; charset=utf-8', includeBody, { ...telemetry, status: 200 });
     }
 
     if (pathname === PROJECTS_PAGE_PATH) {

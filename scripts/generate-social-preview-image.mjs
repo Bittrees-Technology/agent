@@ -156,8 +156,8 @@ export function buildSocialPreviewPng() {
   fillRect(pixels, 90, 260, 1110, 264, GOLD);
 
   drawText(pixels, 90, 300, 'agent.bittrees.org', 9, DARK);
-  drawText(pixels, 90, 400, 'agent contribution portal', 5, MUTED);
-  drawText(pixels, 90, 460, 'source grounded. review gated. preview.', 3, GREEN);
+  drawText(pixels, 90, 400, 'ai tools and resources', 5, MUTED);
+  drawText(pixels, 90, 460, 'local ai. connected tools.', 3, GREEN);
 
   return encodePng(pixels);
 }

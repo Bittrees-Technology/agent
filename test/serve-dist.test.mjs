@@ -20,6 +20,7 @@ const MIXED_CASE_XML_FIXTURE = '__serve-dist-mime-fixture__.XML';
 const HTML_FIXTURE = '__serve-dist-mime-fixture__.html';
 const JSON_FIXTURE = '__serve-dist-mime-fixture__.json';
 const TEXT_FIXTURE = '__serve-dist-mime-fixture__.txt';
+const CSS_FIXTURE = '__serve-dist-mime-fixture__.css';
 const SVG_BODY = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>';
 const XML_BODY = '<?xml version="1.0" encoding="UTF-8"?><urlset></urlset>';
 
@@ -59,6 +60,7 @@ async function withDistServer(run) {
   const htmlPath = join(distDir, HTML_FIXTURE);
   const jsonPath = join(distDir, JSON_FIXTURE);
   const textPath = join(distDir, TEXT_FIXTURE);
+  const cssPath = join(distDir, CSS_FIXTURE);
   await mkdir(distDir, { recursive: true });
   await writeFile(svgPath, SVG_BODY);
   await writeFile(xmlPath, XML_BODY);
@@ -67,6 +69,7 @@ async function withDistServer(run) {
   await writeFile(htmlPath, '<!doctype html><title>fixture</title>');
   await writeFile(jsonPath, '{}');
   await writeFile(textPath, 'fixture');
+  await writeFile(cssPath, 'body{color:green}');
 
   const stderrRef = { value: '' };
   const child = spawn(process.execPath, [scriptPath], {
@@ -93,6 +96,7 @@ async function withDistServer(run) {
     await rm(htmlPath, { force: true });
     await rm(jsonPath, { force: true });
     await rm(textPath, { force: true });
+    await rm(cssPath, { force: true });
   }
 }
 
@@ -168,5 +172,15 @@ test('dist server renders readiness filters dynamically', async () => {
     const head = await fetch(`${baseUrl}/readiness?priority=P2`, { method: 'HEAD' });
     assert.equal(head.status, 200);
     assert.equal(await head.text(), '');
+  });
+});
+
+ test('dist stylesheet is served with a CSS MIME type under nosniff', async () => {
+  await withDistServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/${CSS_FIXTURE}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /^text\/css/);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(await response.text(), 'body{color:green}');
   });
 });
