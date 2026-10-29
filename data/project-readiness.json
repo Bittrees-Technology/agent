@@ -34,14 +34,15 @@
   "limitations": [
     "This is a point-in-time technical and product review, not a legal opinion, financial audit, or independent smart-contract audit.",
     "Private infrastructure, secrets, off-repository operating procedures, and third-party dashboards were not treated as complete without public-safe durable evidence.",
-    "Live deployments may lag their repositories; deployed smoke tests remain required after each release."
+    "Live deployments may lag their repositories; deployed smoke tests remain required after each release.",
+    "29 October 2026 reconciliation: public hub and landing-page evidence was refreshed; historical task statuses remain unchanged unless every criterion has owner-accepted evidence. The original reviewedAt is preserved and is not a current all-project launch audit."
   ],
   "projects": [
     {
       "projectId": "agent",
       "currentStage": "prelaunch-platform",
       "confidence": "high",
-      "evidenceSummary": "The portal has a strong tested MCP and discovery foundation, but public indexing and write workflows intentionally remain gated while durable storage, approvals, and production operations are incomplete.",
+      "evidenceSummary": "The public AI hub is deployed and verified through PR30. Existing contribution workflows, final legal publication and search launch remain separately gated. Historical task acceptance criteria and statuses are retained.",
       "tasks": [
         {
           "id": "agent-p0-durable-control-plane",
@@ -52,7 +53,8 @@
           "acceptanceCriteria": [
             "Registrations, claims, submissions, reviews, feedback, idempotency records, rate limits, audit events, and outbox delivery survive restarts and concurrent instances.",
             "Migration, backup, restore, retention, and failure-recovery tests run against the production-class store."
-          ]
+          ],
+          "progressNote": "29 October 2026: the public hub is deployed, but the original contribution write workflows remain default-off. Shared transactional storage and recovery acceptance are still required; publication of static hub pages does not complete this task."
         },
         {
           "id": "agent-p0-launch-approvals",
@@ -63,7 +65,8 @@
           "acceptanceCriteria": [
             "Named owners approve the public source set, supported claims, threat model, incident plan, and indexing switch in a durable record.",
             "The launch gate and robots policy are changed only by the reviewed release containing those approvals."
-          ]
+          ],
+          "progressNote": "29 October 2026: hub PR30 passed 228 tests, all three hosted platform checks and deployed smoke. The public-indexing, legal approval and source-authority decisions remain separate; this task stays blocked."
         },
         {
           "id": "agent-p0-legal-publication",
@@ -74,7 +77,8 @@
           "acceptanceCriteria": [
             "Legal-approved Terms and privacy text identify the responsible entity, jurisdiction, data handling, retention, and user rights.",
             "A monitored security, privacy, and support contact is linked from every page and machine contract."
-          ]
+          ],
+          "progressNote": "29 October 2026: the owner named Bittrees, Inc. and agent@bittrees.org, and selected Bounties terms as the reference framework. Mailbox recipient acceptance and forwarding configuration are verified. Final hub-specific legal publication approval remains pending; no legal sign-off is asserted."
         },
         {
           "id": "agent-p1-workflow-e2e",
@@ -85,7 +89,8 @@
           "acceptanceCriteria": [
             "Automated tests cover registration through reviewed completion, rejection, feedback, duplicate requests, timeouts, and recovery.",
             "At least two external MCP clients pass the same production smoke suite without gaining downstream mutation authority."
-          ]
+          ],
+          "progressNote": "29 October 2026: existing automated workflow tests pass, but the complete production lifecycle and acceptance from two external clients have not been verified in this launch review."
         },
         {
           "id": "agent-p1-mcp-conformance",
@@ -96,7 +101,8 @@
           "acceptanceCriteria": [
             "MCP initialization, resources, tools, errors, CORS, conditional requests, and advertised MIME types pass conformance tests from the deployed origin.",
             "The server package is submitted to appropriate registries only after experimental metadata and ownership are reviewed."
-          ]
+          ],
+          "progressNote": "29 October 2026: deployed Agent smoke passes and new integration setup links to the separate central MCP. Registry submission and full external-client conformance acceptance are not established by those checks."
         },
         {
           "id": "agent-p1-production-operations",
@@ -107,9 +113,15 @@
           "acceptanceCriteria": [
             "Dashboards and alerts cover availability, latency, error rate, queue depth, stale sources, failed delivery, and security events.",
             "An on-call owner completes a documented restore and incident-response exercise."
-          ]
+          ],
+          "progressNote": "29 October 2026: existing hosted health/smoke and backup workflows, public health metadata and rollback documentation are present. The complete task still needs the stated operational acceptance and owner exercise evidence."
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "partial-evidence-review",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "bittrees-capital",
@@ -183,7 +195,12 @@
             "Every action accurately labels network, asset, contract, fees, and whether the feature is preview or production."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "bittrees-gov",
@@ -257,7 +274,12 @@
             "Approved privacy, terms, governance-effect, accessibility, and support information is linked from the application."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "bittrees-org",
@@ -332,7 +354,12 @@
           ],
           "progressNote": "September 5: content freshness/link checks and build budgets are prepared for review. Completion awaits named content owners, a monitored support contact, and notification/uptime acceptance."
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "bittrees-research",
@@ -406,7 +433,12 @@
             "The public agent manifest sends protected interactions through explicit authentication and review gates."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "bounties",
@@ -480,7 +512,12 @@
             "Health, SLO, release, queue, indexer, and settlement metrics are monitored with an incident owner."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "chat",
@@ -554,7 +591,12 @@
             "llms.txt documents safe read-only capabilities while health, SLOs, backups, provider degradation, and incident ownership are monitored."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "crypto-directory",
@@ -628,7 +670,12 @@
             "Canonical metadata and llms.txt link the feed to the unified Bittrees MCP resource catalog."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "id-agent-control-center",
@@ -703,7 +750,12 @@
           ],
           "progressNote": "September 5: website release/support feed, agent guide, and keyboard/reduced-motion improvements are prepared for review. Browser, screen-reader, desktop, and deployed-route acceptance remain outstanding."
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "nftfactory",
@@ -777,7 +829,12 @@
             "Approved Terms, privacy, creator rights, royalties, marketplace risk, moderation, takedown, and support policies are versioned and visible."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     },
     {
       "projectId": "tcp",
@@ -851,7 +908,12 @@
             "Health, analytics, uptime, form delivery, stale data, and incident ownership are monitored without leaking submitted lead data."
           ]
         }
-      ]
+      ],
+      "reconciliation": {
+        "checkedAt": "2026-10-29",
+        "status": "owner-acceptance-review-required",
+        "note": "Historical task statuses retained. Public site reachability is not task completion or protected-feature acceptance."
+      }
     }
   ]
 }

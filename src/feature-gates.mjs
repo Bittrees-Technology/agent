@@ -32,8 +32,11 @@ function anyFlagEnabled(flagNames, env) {
   return flagNames.some((flagName) => isTruthyFlag(env[flagName]));
 }
 
+// Only reviewed public hub pages may opt in. New pages require an explicit review.
+export const INDEXABLE_HUB_PATHS = Object.freeze(['/', '/tools', '/workflows', '/resources', '/developers', '/contribute']);
 export function isPublicIndexingEnabled(env = process.env) {
-  return anyFlagEnabled(PUBLIC_INDEXING_FLAG_NAMES, env);
+  return env.VERCEL_ENV !== 'preview' && env.VERCEL_ENV !== 'development'
+    && anyFlagEnabled(PUBLIC_INDEXING_FLAG_NAMES, env);
 }
 
 export function isDurableContributionWritesEnabled(env = process.env) {
@@ -42,13 +45,14 @@ export function isDurableContributionWritesEnabled(env = process.env) {
 
 // Robots directive resolved from the public-indexing gate. Fail-closed default
 // keeps every response noindex,nofollow until indexing is explicitly enabled.
-export function robotsTagFor(env = process.env) {
-  return isPublicIndexingEnabled(env) ? 'index, follow' : 'noindex, nofollow';
+export function robotsTagFor(env = process.env, path = '/') {
+  return isPublicIndexingEnabled(env) && INDEXABLE_HUB_PATHS.includes(path)
+    ? 'index, follow' : 'noindex, nofollow';
 }
 
 export function robotsTxtBodyFor(env = process.env) {
   return isPublicIndexingEnabled(env)
-    ? 'User-agent: *\nAllow: /\n'
+    ? 'User-agent: *\nAllow: /\nDisallow: /administration\nDisallow: /api/\nDisallow: /v1/\nDisallow: /mcp$\nSitemap: https://agent.bittrees.org/sitemap.xml\n'
     : 'User-agent: *\nDisallow: /\n';
 }
 
@@ -69,6 +73,8 @@ export function resolveFeatureGates(env = process.env) {
       aliases: PUBLIC_INDEXING_FLAG_NAMES.slice(1),
       default: false,
       enabled: publicIndexingEnabled,
+      indexablePaths: [...INDEXABLE_HUB_PATHS],
+      previewIndexing: false,
       failClosedBehavior: 'Responses retain X-Robots-Tag: noindex, nofollow and /robots.txt disallows all.',
     }),
     durableContributionWrites: Object.freeze({

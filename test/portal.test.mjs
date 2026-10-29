@@ -905,7 +905,7 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
   assert.equal(termsContract.data.publicationStatus, 'not-published');
   assert.equal(termsContract.data.legalContentOwner, 'legal/general-counsel');
   assert.deepEqual(termsContract.data.aliasRoutes, ['/terms', '/tou']);
-  assert.match(termsContract.data.requiredNextAction, /Legal\/general-counsel must author and approve/);
+  assert.match(termsContract.data.requiredNextAction, /Bittrees, Inc\. must record approval/);
   assert.match(termsPage, /Terms of Use are pending legal approval/);
   assert.match(termsPage, /not a legal agreement, acceptance flow, or substitute/);
   assert.match(termsPage, /<meta name="robots" content="noindex,nofollow" \/>/);
@@ -969,7 +969,7 @@ test('privacy routes expose an accurate prelaunch status without inventing appro
   assert.equal(privacyContract.data.contentStatus, 'pending-legal-approved-content');
   assert.equal(privacyContract.data.publicationStatus, 'not-published');
   assert.equal(privacyContract.data.currentIntakeNotice, CONTRIBUTION_PRIVACY_NOTICE);
-  assert.match(privacyPage, /Privacy policy and contact are pending legal approval/);
+  assert.match(privacyPage, /Privacy policy review and contact/);
   assert.match(privacyPage, /not a substitute for a final policy/);
   assert.match(privacyPage, /<meta name="robots" content="noindex,nofollow" \/>/);
 
@@ -1399,7 +1399,7 @@ test('legal disclaimers and privacy notice are present across public route outpu
   );
   assert.equal(
     CONTRIBUTION_PRIVACY_NOTICE,
-    'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. A public privacy-contact route is pending legal approval; privacy, correction, and deletion requests are not yet accepted.',
+    'Submit non-confidential information only. Do not submit private keys, seed phrases, raw signatures, bearer tokens, session secrets, API keys, identity documents, tax forms, sanctions materials, wallet secrets, privileged legal material, regulated personal data, or third-party confidential information through this portal. Submission data is used for staged contribution-intent routing and review, may be visible to operators, reviewers, infrastructure providers, and audit logs used to run the service, and may be retained in internal review records for audit purposes. Contact Bittrees, Inc. at agent@bittrees.org for privacy, correction, deletion, security, or support requests. Do not include credentials or confidential data in an initial message.',
   );
   assert.equal(
     LAUNCH_STATUS.publicLaunchGate,
@@ -1899,7 +1899,7 @@ test('human pages expose a keyboard skip target and visible focus treatment', ()
   }
 });
 
-test('vercel catch-all headers mirror the portal launch gate', () => {
+test('vercel leaves indexing to route policy and retains protected-surface exclusions', () => {
   const vercelConfig = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
   const catchAllHeaders = vercelConfig.headers.find((entry) => entry.source === '/(.*)')?.headers ?? [];
   const configuredHeaders = Object.fromEntries(catchAllHeaders.map((header) => [header.key, header.value]));
@@ -1912,7 +1912,11 @@ test('vercel catch-all headers mirror the portal launch gate', () => {
   assert.equal(configuredHeaders['Vercel-CDN-Cache-Control'], 'no-store');
   assert.equal(configuredHeaders.Pragma, 'no-cache');
   assert.equal(configuredHeaders['X-Content-Type-Options'], 'nosniff');
-  assert.equal(configuredHeaders['X-Robots-Tag'], 'noindex, nofollow');
+  assert.equal(configuredHeaders['X-Robots-Tag'], undefined);
+  for (const source of ['/administration', '/api/:path*']) {
+    const entry = vercelConfig.headers.find((item) => item.source === source);
+    assert.ok(entry.headers.some((item) => item.key === 'X-Robots-Tag' && item.value === 'noindex, nofollow'));
+  }
 });
 
 test('vercel config does not shadow the dynamic submission-status alias', () => {

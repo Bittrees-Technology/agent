@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { INDEXABLE_HUB_PATHS } from '../src/feature-gates.mjs';
 
 import { requestUrl } from './request-url.mjs';
 import { fetchLatestIdaccRelease } from './github-release.mjs';
@@ -28,6 +29,8 @@ const defaultVercelDeployment = vercelDeploymentArg?.split('=').slice(1).join('=
   || process.env.VERCEL_DEPLOYMENT
   || '';
 const vercelProtected = args.includes('--vercel-protected');
+// Explicit only: a release must assert the intended crawl posture rather than infer it.
+const expectPublicHubIndexing = args.includes('--expect-public-hub-indexing');
 
 const routeChecks = SMOKE_ROUTES;
 
@@ -94,8 +97,8 @@ async function checkRoute(path, kind) {
 
   check(response.status === 200, `${path} returned ${response.status}`);
   checkSecurityHeaders(response, path);
-  check(robots.toLowerCase().includes('noindex'), `${path} missing noindex header`);
-  check(robots.toLowerCase().includes('nofollow'), `${path} missing nofollow header`);
+  const expectedRobots = expectPublicHubIndexing && INDEXABLE_HUB_PATHS.includes(path) ? 'index, follow' : 'noindex, nofollow';
+  check(robots.toLowerCase() === expectedRobots, `${path} robots header did not match ${expectedRobots}`);
 
   if (kind === 'json') {
     try {
@@ -221,7 +224,7 @@ async function checkRoute(path, kind) {
   }
 
   if (path === '/privacy') {
-    check(text.includes('Privacy policy and contact are pending legal approval'), '/privacy missing legal approval status');
+    check(text.includes('The final privacy policy remains pending legal approval'), '/privacy missing legal approval status');
     check(text.includes('not a substitute for a final policy'), '/privacy overstates the pending policy');
   }
 
