@@ -81,3 +81,17 @@ test('aggregate budgets and stable counters cannot be bypassed through a revisio
   const review=prepareAgentWalletPolicyChange(old,next);
   assert.match(review.counterMigration,/no-revision-reset/);assert.ok(review.activationHolds.includes('semantic-effect-and-budget-enforcement'));
 });
+test('actual Roles bare-origin SIWE URI stays exact and distinct from its slash spelling',()=>{
+  const bare=policy();bare.signIns[0].uri='https://roles.bittrees.org';
+  assert.equal(validateAgentWalletPolicy(bare).signIns[0].uri,'https://roles.bittrees.org');
+  const review=prepareAgentWalletPolicyChange(null,bare);
+  assert.equal(review.proposed.signIns[0].uri,'https://roles.bittrees.org');
+  assert.notEqual(agentWalletPolicyDigest(bare),agentWalletPolicyDigest(policy()));
+  assert.equal(review.grantsAuthority,false);
+  for(const uri of ['http://roles.bittrees.org','https://roles.bittrees.org:443','https://roles.bittrees.org:444',
+    'https://user@roles.bittrees.org','https://roles.bittrees.org#fragment',
+    'https://roles.bittrees.org.evil.org','https://roles.bittrees.org/a/../',
+    'https://ROLES.BITTREES.ORG','https://roles.bittrees.org\\evil']) {
+    const bad=structuredClone(bare);bad.signIns[0].uri=uri;assert.throws(()=>validateAgentWalletPolicy(bad),uri);
+  }
+});
