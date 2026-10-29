@@ -42,7 +42,7 @@
       "projectId": "agent",
       "currentStage": "prelaunch-platform",
       "confidence": "high",
-      "evidenceSummary": "The public AI hub is deployed and verified through PR30. Existing contribution workflows, final legal publication and search launch remain separately gated. Historical task acceptance criteria and statuses are retained.",
+      "evidenceSummary": "The public AI hub is deployed and verified through PR30. Owner-authorized hub Terms and Privacy Notice are published with a monitored contact. Contribution execution, independent legal review under the original acceptance criteria, and selective search launch remain separate. Historical task statuses are retained.",
       "tasks": [
         {
           "id": "agent-p0-durable-control-plane",
@@ -78,7 +78,7 @@
             "Legal-approved Terms and privacy text identify the responsible entity, jurisdiction, data handling, retention, and user rights.",
             "A monitored security, privacy, and support contact is linked from every page and machine contract."
           ],
-          "progressNote": "29 October 2026: the owner named Bittrees, Inc. and agent@bittrees.org, and selected Bounties terms as the reference framework. Mailbox recipient acceptance and forwarding configuration are verified. Final hub-specific legal publication approval remains pending; no legal sign-off is asserted."
+          "progressNote": "29 October 2026: on the owner’s instruction, published Agent-specific Terms of Use and Privacy Notice using Bittrees’ existing framework, naming Bittrees, Inc. and agent@bittrees.org. Public notices replace the draft/status pages. Mailbox recipient acceptance and forwarding configuration are verified. No independent legal opinion or counsel sign-off is represented; the original task’s broader acceptance criteria and status are retained."
         },
         {
           "id": "agent-p1-workflow-e2e",

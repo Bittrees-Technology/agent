@@ -763,29 +763,29 @@ test('html pages emit description and Open Graph metadata', () => {
 
   for (const [route, html] of htmlByRoute) {
     assert.match(html, /<title>[^<]+<\/title>/, route);
-    assert.match(html, /<meta name="description" content="[^"]+" \/>/, route);
-    assert.match(html, /<meta name="robots" content="noindex,nofollow" \/>/, route);
-    assert.match(html, new RegExp(`<link rel="canonical" href="https://agent\\.bittrees\\.org${route === '/' ? '/' : route}" \\/>`), route);
-    assert.match(html, /<meta property="og:title" content="[^"]+" \/>/, route);
-    assert.match(html, /<meta property="og:description" content="[^"]+" \/>/, route);
-    assert.match(html, /<meta property="og:url" content="https:\/\/agent\.bittrees\.org[^"]*" \/>/, route);
+    assert.match(html, /<meta name="description" content="[^"]+"\s*\/?>/, route);
+    assert.match(html, /<meta name="robots" content="noindex,nofollow"\s*\/?>/, route);
+    assert.match(html, new RegExp(`<link rel="canonical" href="https://agent\\.bittrees\\.org${route === '/' ? '/' : route}"\\s*\\/?>`), route);
+    assert.match(html, /<meta property="og:title" content="[^"]+"\s*\/?>/, route);
+    assert.match(html, /<meta property="og:description" content="[^"]+"\s*\/?>/, route);
+    assert.match(html, /<meta property="og:url" content="https:\/\/agent\.bittrees\.org[^"]*"\s*\/?>/, route);
     // Every indexable page ships a same-origin social-preview image (closes
     // the SEO/metadata audit gap in #3a45a78c/#21327bc1: no page previously
     // shipped an og:image/twitter:image, so link unfurls had no preview).
     assert.match(
       html,
-      /<meta property="og:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png" \/>/,
+      /<meta property="og:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png"\s*\/?>/,
       route,
     );
-    assert.match(html, /<meta property="og:image:alt" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta property="og:image:alt" content="[^"]+"\s*\/?>/, route);
     assert.match(
       html,
-      /<meta name="twitter:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png" \/>/,
+      /<meta name="twitter:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png"\s*\/?>/,
       route,
     );
-    assert.match(html, /<meta name="twitter:card" content="summary_large_image" \/>/, route);
-    assert.match(html, /<meta name="twitter:title" content="[^"]+" \/>/, route);
-    assert.match(html, /<meta name="twitter:description" content="[^"]+" \/>/, route);
+    assert.match(html, /<meta name="twitter:card" content="summary_large_image"\s*\/?>/, route);
+    assert.match(html, /<meta name="twitter:title" content="[^"]+"\s*\/?>/, route);
+    assert.match(html, /<meta name="twitter:description" content="[^"]+"\s*\/?>/, route);
     assert.match(html, /<footer class="site-footer" aria-label="Site information">/, route);
   }
 });
@@ -894,21 +894,25 @@ test('homepage adds product-first project and agent connection paths', () => {
   assert.match(html, /<summary>Explore every portal route<\/summary>/);
 });
 
-test('Terms of Use routes are blocked pending legal-approved content', async () => {
+test('published Terms are consistent across canonical, alias and JSON routes', async () => {
   const termsRoute = JSON_ROUTE_MAP.get('/terms-of-use.json');
   const termsContract = buildJsonResponse(termsRoute, '2026-07-10T00:00:00.000Z');
   const termsPage = renderTermsOfUsePage();
 
   assert.ok(termsRoute);
   assert.equal(termsContract.status, TERMS_OF_USE_LEGAL_STATUS.status);
-  assert.equal(termsContract.data.contentStatus, 'pending-legal-approved-content');
-  assert.equal(termsContract.data.publicationStatus, 'not-published');
-  assert.equal(termsContract.data.legalContentOwner, 'legal/general-counsel');
+  assert.equal(termsContract.data.contentStatus, 'published');
+  assert.equal(termsContract.data.publicationStatus, 'published');
+  assert.equal(termsContract.data.legalContentOwner, 'Bittrees, Inc.');
   assert.deepEqual(termsContract.data.aliasRoutes, ['/terms', '/tou']);
-  assert.match(termsContract.data.requiredNextAction, /Bittrees, Inc\. must record approval/);
-  assert.match(termsPage, /Terms of Use are pending legal approval/);
-  assert.match(termsPage, /not a legal agreement, acceptance flow, or substitute/);
-  assert.match(termsPage, /<meta name="robots" content="noindex,nofollow" \/>/);
+  assert.equal(termsContract.data.requiredNextAction, null);
+  assert.equal(termsContract.data.effectiveDate, '2026-10-29');
+  assert.match(termsPage, /<h1>Terms of Use<\/h1>/);
+  assert.match(termsPage, /Open Metaverse is a contractual framework/);
+  assert.match(termsPage, /mandatory rights that cannot lawfully be waived/);
+  assert.doesNotMatch(termsPage, /Bounties reference|pending legal|Final version pending|publication review/);
+  assert.match(termsPage, /By using the service, you agree/);
+  assert.match(termsPage, /<meta name="robots" content="noindex,nofollow"\s*\/?>/);
 
   await withPortalServer(async (baseUrl) => {
     const publicRouteResponse = await fetch(`${baseUrl}/terms`);
@@ -923,29 +927,29 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
     assert.match(publicRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(publicRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
     const publicRouteBody = await publicRouteResponse.text();
-    assert.match(publicRouteBody, /Terms of Use are pending legal approval/);
+    assert.match(publicRouteBody, /<h1>Terms of Use<\/h1>/);
 
     assert.equal(publicRouteSlashResponse.status, 200);
     assert.equal(publicRouteSlashResponse.url, `${baseUrl}/terms`);
     const publicRouteSlashBody = await publicRouteSlashResponse.text();
-    assert.match(publicRouteSlashBody, /Terms of Use are pending legal approval/);
+    assert.match(publicRouteSlashBody, /<h1>Terms of Use<\/h1>/);
 
     assert.equal(publicRouteAssetResponse.status, 200);
     assert.equal(publicRouteAssetResponse.url, `${baseUrl}/terms`);
     const publicRouteAssetBody = await publicRouteAssetResponse.text();
-    assert.match(publicRouteAssetBody, /Terms of Use are pending legal approval/);
+    assert.match(publicRouteAssetBody, /<h1>Terms of Use<\/h1>/);
 
     assert.equal(pageResponse.status, 200);
     assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
     const pageBody = await pageResponse.text();
-    assert.match(pageBody, /pending legal approval/);
+    assert.match(pageBody, /<h1>Terms of Use<\/h1>/);
 
     assert.equal(shortRouteResponse.status, 200);
     assert.match(shortRouteResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(shortRouteResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
     const shortRouteBody = await shortRouteResponse.text();
-    assert.match(shortRouteBody, /Terms of Use are pending legal approval/);
+    assert.match(shortRouteBody, /<h1>Terms of Use<\/h1>/);
     assert.equal(publicRouteBody, pageBody);
     assert.equal(publicRouteSlashBody, pageBody);
     assert.equal(publicRouteAssetBody, pageBody);
@@ -955,23 +959,27 @@ test('Terms of Use routes are blocked pending legal-approved content', async () 
     assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
     assert.equal(contractResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
     assert.equal(contractBody.status, TERMS_OF_USE_LEGAL_STATUS.status);
-    assert.equal(contractBody.data.contentStatus, 'pending-legal-approved-content');
+    assert.equal(contractBody.data.contentStatus, 'published');
   });
 });
 
-test('privacy routes expose an accurate prelaunch status without inventing approved policy text', async () => {
+test('published Privacy Notice matches current analytics, rights and contact behavior', async () => {
   const privacyRoute = JSON_ROUTE_MAP.get('/privacy.json');
   const privacyContract = buildJsonResponse(privacyRoute, '2026-07-13T00:00:00.000Z');
   const privacyPage = renderPrivacyPage();
 
   assert.ok(privacyRoute);
   assert.equal(privacyContract.status, PRIVACY_LEGAL_STATUS.status);
-  assert.equal(privacyContract.data.contentStatus, 'pending-legal-approved-content');
-  assert.equal(privacyContract.data.publicationStatus, 'not-published');
+  assert.equal(privacyContract.data.contentStatus, 'published');
+  assert.equal(privacyContract.data.publicationStatus, 'published');
   assert.equal(privacyContract.data.currentIntakeNotice, CONTRIBUTION_PRIVACY_NOTICE);
-  assert.match(privacyPage, /Privacy policy review and contact/);
-  assert.match(privacyPage, /not a substitute for a final policy/);
-  assert.match(privacyPage, /<meta name="robots" content="noindex,nofollow" \/>/);
+  assert.match(privacyPage, /<h1>Privacy Notice<\/h1>/);
+  assert.match(privacyPage, /up to 180 days/);
+  assert.match(privacyPage, /withdrawal stops optional collection and discards unsent events/);
+  assert.match(privacyPage, /not a universal deletion deadline/);
+  assert.match(privacyPage, /agent@bittrees.org/);
+  assert.doesNotMatch(privacyPage, /pending legal|Final version pending|reference terms|Machine-readable status/);
+  assert.match(privacyPage, /<meta name="robots" content="noindex,nofollow"\s*\/?>/);
 
   await withPortalServer(async (baseUrl) => {
     const pageResponse = await fetch(`${baseUrl}/privacy`);
@@ -981,11 +989,11 @@ test('privacy routes expose an accurate prelaunch status without inventing appro
     assert.equal(pageResponse.status, 200);
     assert.match(pageResponse.headers.get('content-type') ?? '', /^text\/html/);
     assert.equal(pageResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(await pageResponse.text(), /pending legal approval/);
+    assert.match(await pageResponse.text(), /<h1>Privacy Notice<\/h1>/);
 
     assert.equal(contractResponse.status, 200);
     assert.match(contractResponse.headers.get('content-type') ?? '', /^application\/json/);
-    assert.equal(contractBody.data.contentStatus, 'pending-legal-approved-content');
+    assert.equal(contractBody.data.contentStatus, 'published');
   });
 });
 
@@ -1892,6 +1900,15 @@ test('human pages expose a keyboard skip target and visible focus treatment', ()
   ];
 
   for (const html of pages) {
+    if (html.includes('class="legal-document"')) {
+      assert.match(html, /class="skip-link" href="#main"/);
+      assert.match(html, /<main id="main" tabindex="-1">/);
+      assert.match(html, /href="\/hub.css"/);
+      const css = readFileSync(new URL('../public/hub.css', import.meta.url), 'utf8');
+      assert.match(css, /a:focus-visible/);
+      assert.match(css, /\.skip-link:focus/);
+      continue;
+    }
     assert.match(html, /class="skip-link" href="#page-content"/);
     assert.match(html, /<header class="topline">[\s\S]*?<\/header>\s*<main>/);
     assert.match(html, /<section id="page-content" class="hero"/);
@@ -3108,6 +3125,12 @@ test('human pages expose shared primary navigation and route metadata', () => {
       assert.ok(page.html.includes(`href="${path}"`));
     }
     assert.match(page.html, /href="\/contribute"/);
+    if (page.html.includes('class="legal-document"')) {
+      assert.match(page.html, /class="site-header"/);
+      assert.match(page.html, /<meta name="theme-color" content="#173e35">/);
+      assert.match(page.html, /<link rel="describedby" href="\/llms\.txt" type="text\/plain">/);
+      continue;
+    }
     assert.match(page.html, /href="https:\/\/mcp.bittrees.org\/connect"/);
     assert.match(page.html, /<meta name="theme-color" content="#eef3ec" \/>/);
     assert.match(page.html, /<link rel="describedby" href="\/llms\.txt" type="text\/plain" \/>/);
@@ -3169,9 +3192,9 @@ test('public status badges and route cards only use the five-state public vocabu
     );
   }
 
-  // The four honest blockers keep truthful public wording.
-  assert.match(renderTermsOfUsePage(), /Legal review pending/);
-  assert.match(renderPrivacyPage(), /Legal review pending/);
+  // Published notices have no review badge; identity rollout remains pending.
+  assert.doesNotMatch(renderTermsOfUsePage(), /Legal review pending/);
+  assert.doesNotMatch(renderPrivacyPage(), /Legal review pending/);
   assert.match(renderIdentityKeysPage(), /Coming soon/);
 });
 
