@@ -4,7 +4,7 @@ import { AGENT_WALLET_POLICY_SCHEMA, AGENT_WALLET_DEFAULT_DURATION, validateAgen
 import { renderHubPage } from '../src/ecosystem/ui.mjs';
 const addr = digit => '0x' + digit.repeat(40);
 function policy() {
-  return { schema: AGENT_WALLET_POLICY_SCHEMA, agentId: 'agent:local-ai', revision: 1, chainId: 1,
+  return { schema: AGENT_WALLET_POLICY_SCHEMA, agentId: 'agent:11111111-1111-4111-8111-111111111111', revision: 1, chainId: 1,
     safe: addr('1'), signer: addr('2'), duration: { ...AGENT_WALLET_DEFAULT_DURATION },
     signIns: [{domain:'roles.bittrees.org', uri:'https://roles.bittrees.org/'}],
     calls: [{ruleId:'transfer-one',target:addr('3'),calldata:'0xa9059cbb'+'0'.repeat(64)+'0'.repeat(63)+'1',maxNativeValue:'0',maxNativePerPeriod:'0',assetLimits:[{token:addr('3'),maxPerTransaction:'1',maxPerPeriod:'10'}],maxCallsPerPeriod:10,gasLimit:'100000',maxFeePerGas:'1000000000'}],
@@ -22,7 +22,7 @@ test('review binds exact network, signer, Safe, calldata and raw-unit amounts wi
   draft.proposed.calls[0].maxNativeValue='99';assert.equal(p.calls[0].maxNativeValue,'0');
 });
 test('mainnet policy denies wildcards, unknown fields, unsafe signatures/calls and unbounded or imprecise limits',()=>{
-  const mutations=[p=>p.chainId=10,p=>p.signer=p.safe,p=>p.unknownCalls='allow',p=>p.delegatecall='allow',
+  const mutations=[p=>p.agentId='public-agent-profile',p=>p.chainId=10,p=>p.signer=p.safe,p=>p.unknownCalls='allow',p=>p.delegatecall='allow',
     p=>p.privateKey='secret',p=>p.signIns[0].domain='*.bittrees.org',p=>p.signIns[0].uri='https://roles.bittrees.org.evil.org/',
     p=>p.signIns[0].uri='https://roles.bittrees.org/#sign',p=>p.signIns[0].uri='https://user@roles.bittrees.org/',
     p=>p.signIns[0].domain='example.org',p=>p.calls[0].target=p.safe,p=>p.calls[0].calldata='0x',

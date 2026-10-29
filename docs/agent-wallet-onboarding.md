@@ -73,6 +73,11 @@ separate review; signer changes cannot use the limit-amendment helper.
 
 Canonical review helper: `shared/agent-wallet-policy.mjs`. Amounts are decimal
 strings in raw token units/wei, not USD estimates or JavaScript floating point.
+`agentId` is the actual enrolled Roles MCP `agent:<UUID>` principal, resolved
+from the signed-in owner's current enrolled agents. It is not a public Agent
+registry profile ID. Do not infer association or ownership from matching names,
+caller booleans or a syntactically valid ID. With no owned enrolled agent, show
+an empty state and complete pairing first; never invent a principal to proceed.
 `calls` bind stable rule IDs, exact target/calldata, per-call and per-period
 native/asset caps, call quota, gas and fee cap. Global native/asset budgets
 share one policy period. These fields are requirements for the wallet adapter,

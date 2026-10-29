@@ -45,7 +45,9 @@ function validateCall(rule, policy) {
 export function validateAgentWalletPolicy(policy) {
   if (!exact(policy, ['schema', 'agentId', 'revision', 'chainId', 'safe', 'signer', 'duration', 'signIns', 'calls', 'periodSeconds', 'nativeBudgetPerPeriod', 'assetBudgets', 'administration', 'delegatecall', 'unknownCalls'])
     || policy.schema !== AGENT_WALLET_POLICY_SCHEMA || typeof policy.agentId !== 'string'
-    || !/^[a-zA-Z0-9][a-zA-Z0-9:._-]{2,127}$/.test(policy.agentId)
+    // agentId is the enrolled Roles MCP agent principal, not a public Agent
+    // profile ID. Ownership and any association must be independently verified.
+    || !/^agent:[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(policy.agentId)
     || !integer(policy.revision, 1, Number.MAX_SAFE_INTEGER) || policy.chainId !== 1
     || !address(policy.safe) || !address(policy.signer) || policy.safe === policy.signer
     || policy.administration !== 'safe-threshold' || policy.delegatecall !== 'deny' || policy.unknownCalls !== 'deny'
