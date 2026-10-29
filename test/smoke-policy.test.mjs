@@ -5,6 +5,7 @@ import {
   RELEASE_METADATA_SCHEMA,
   SMOKE_ROUTES,
   healthContractFailures,
+  robotsHeaderMatches,
   securityHeaderFailures,
 } from '../scripts/smoke-policy.mjs';
 
@@ -46,4 +47,15 @@ test('securityHeaderFailures requires the restrictive header set', () => {
   assert.deepEqual(securityHeaderFailures({ get: (name) => goodHeaders.get(name) }, '/'), []);
   const failures = securityHeaderFailures({ get: () => '' }, '/');
   assert.ok(failures.length >= 3);
+});
+
+test('preview platform noindex remains excluded while production requires the intended full policy', () => {
+  assert.equal(robotsHeaderMatches('noindex', '/', { protectedPreview: true }), true);
+  assert.equal(robotsHeaderMatches('noindex', '/'), false);
+  assert.equal(robotsHeaderMatches('noindex, nofollow, noindex', '/'), true);
+  assert.equal(robotsHeaderMatches('index, follow', '/', { protectedPreview: true }), false);
+  assert.equal(robotsHeaderMatches('index, follow', '/', { publicHub: true }), true);
+  assert.equal(robotsHeaderMatches('noindex, index, follow', '/', { publicHub: true }), false);
+  assert.equal(robotsHeaderMatches('index, follow', '/api/health', { publicHub: true }), false);
+  assert.equal(robotsHeaderMatches('noindex', '/', { publicHub: true, protectedPreview: true }), false);
 });

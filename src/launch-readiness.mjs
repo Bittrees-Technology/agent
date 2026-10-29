@@ -16,14 +16,14 @@ const DECISIONS = [
   {
     id: 'legal-terms-of-use',
     domain: 'legal',
-    owner: 'legal/hr-manager',
+    owner: 'Bittrees, Inc. publication owner and legal reviewer',
     status: 'pending',
     gate: 'Publish legal-approved Terms of Use before presenting the portal as launched.',
   },
   {
     id: 'legal-privacy-policy',
     domain: 'legal',
-    owner: 'legal/hr-manager',
+    owner: 'Bittrees, Inc. publication owner and legal reviewer',
     status: 'pending',
     gate: 'Publish legal-approved Privacy Policy and a public contact route.',
   },
@@ -104,6 +104,15 @@ export function buildLaunchReadiness({ env = process.env, releaseMetadata = DEPL
       source: releaseMetadata.source,
     },
     featureGates: gates,
+    publicHub: {
+      scope: 'Informational hub pages only; no durable contribution writes or downstream execution',
+      responsibleEntity: 'Bittrees, Inc.',
+      publicContact: 'agent@bittrees.org',
+      indexablePaths: gates.publicIndexing.indexablePaths,
+      indexingEnabled: gates.publicIndexing.enabled,
+      finalTermsAndPrivacyApproved: false,
+      reviewStatus: 'Final legal publication and selective indexing approval pending',
+    },
     decisions,
     blockers: blockers.map((decision) => ({ id: decision.id, domain: decision.domain, gate: decision.gate })),
     summary: {

@@ -5,6 +5,8 @@ import { once } from 'node:events';
 import { createRequestHandler, buildStaticAssets } from '../src/portal.mjs';
 import { HUB_PATHS, renderHubPage } from '../src/ecosystem/ui.mjs';
 import { BITTREES_TOOLS, EXTERNAL_RESOURCES, HUB_PAGES } from '../src/ecosystem/resources.mjs';
+import { createServerRequestHandler } from '../src/server.mjs';
+import { INDEXABLE_HUB_PATHS } from '../src/feature-gates.mjs';
 
 test('hub resources have unique identities and fixed HTTPS destinations', () => {
   const all = [...BITTREES_TOOLS, ...EXTERNAL_RESOURCES];
@@ -16,10 +18,50 @@ test('hub resources have unique identities and fixed HTTPS destinations', () => 
   }
   const home = renderHubPage();
   assert.ok(home.indexOf('Set up Bittrees AI') < home.indexOf('Understand MCP'));
-  assert.match(home, /Apple signing and notarization remain open/);
+  assert.match(home, /not Apple Developer ID signed or Apple-notarized/);
   assert.match(home, /Sign-in does not grant execution access/);
   assert.doesNotMatch(home, /<form|<iframe|universal connector access/);
   assert.throws(() => renderHubPage('/unknown'));
+});
+
+test('selective indexing keeps HTML, headers and sitemap aligned without opening APIs or writes', async () => {
+  const saved = { flag: process.env.PUBLIC_INDEXING_ENABLED, target: process.env.VERCEL_ENV };
+  process.env.PUBLIC_INDEXING_ENABLED = 'true';
+  process.env.VERCEL_ENV = 'production';
+  const server = createServer(createRequestHandler());
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    for (const path of INDEXABLE_HUB_PATHS) {
+      const response = await fetch(base + path);
+      assert.equal(response.headers.get('x-robots-tag'), 'index, follow', path);
+      assert.match(await response.text(), /<meta name="robots" content="index,follow">/);
+      assert.equal((await fetch(base + path, { method: 'POST' })).headers.get('x-robots-tag'), 'noindex, nofollow');
+    }
+    for (const path of ['/api/health', '/projects.json', '/tasks.json', '/readiness', '/mcp-docs', '/privacy', '/tools/private']) {
+      assert.equal((await fetch(base + path)).headers.get('x-robots-tag'), 'noindex, nofollow', path);
+    }
+    const assets = buildStaticAssets();
+    const sitemap = assets.find(({ path }) => path === 'sitemap.xml').body;
+    assert.equal((sitemap.match(/<loc>/g) ?? []).length, INDEXABLE_HUB_PATHS.length);
+    assert.doesNotMatch(sitemap, /\/administration|\/privacy|\/readiness|\/mcp</);
+    for (const path of INDEXABLE_HUB_PATHS) {
+      const assetPath = path === '/' ? 'index.html' : `${path.slice(1)}/index.html`;
+      assert.match(assets.find(({ path }) => path === assetPath).body, /content="index,follow"/);
+    }
+    assert.match(await (await fetch(base + '/robots.txt')).text(), /Sitemap: /);
+    assert.match(assets.find(({ path }) => path === 'robots.txt').body, /Sitemap: /);
+    process.env.VERCEL_ENV = 'preview';
+    assert.equal((await fetch(base)).headers.get('x-robots-tag'), 'noindex, nofollow');
+    assert.match(await (await fetch(base)).text(), /content="noindex,nofollow"/);
+  } finally {
+    for (const [key, value] of [['PUBLIC_INDEXING_ENABLED', saved.flag], ['VERCEL_ENV', saved.target]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test('public hub has static/live parity, canonical metadata, working links and unchanged gates', async () => {
@@ -63,6 +105,19 @@ test('public hub has static/live parity, canonical metadata, working links and u
     const contribution = await (await fetch(base + '/contribute')).text();
     assert.match(contribution, /does not provide a general submission form/);
     assert.doesNotMatch(contribution, /<form/);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('administration remains noindex independently of platform headers', async () => {
+  const server = createServer(createServerRequestHandler());
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/administration`);
+    assert.match(response.headers.get('x-robots-tag'), /^noindex(?:, nofollow)?$/);
   } finally {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));

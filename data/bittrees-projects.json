@@ -8,7 +8,7 @@
     {
       "id": "agent",
       "name": "Bittrees Agent",
-      "summary": "Person and agent onboarding, ecosystem discovery, and reviewed contribution workflows. Integration, automation and rules are owned by the separate MCP service.",
+      "summary": "Public guide to Bittrees AI tools, MCP connections, workflows and selected learning resources. Each linked app retains its own permissions and approvals.",
       "lanes": [
         "discovery",
         "research",
@@ -22,7 +22,9 @@
       "sourceEvidence": [
         "repository README",
         "IDACC project catalog",
-        "https://agent.bittrees.org/api/health"
+        "https://agent.bittrees.org/api/health",
+        "https://github.com/Bittrees-Technology/agent/pull/30",
+        "https://agent.bittrees.org/tools"
       ],
       "aliases": [],
       "affiliation": "bittrees",
@@ -34,18 +36,21 @@
       ],
       "owner": {
         "repositoryController": "Bittrees-Technology",
-        "accountableContact": null,
-        "contactStatus": "pending"
+        "accountableContact": "agent@bittrees.org",
+        "contactStatus": "owner-designated; recipient routing and forwarding verified"
       },
       "source": {
-        "revision": "1f56a091d12ee346998871df0c3557ed847007be",
-        "observedAt": "2026-09-16T16:45:00Z",
+        "revision": "9d0a628f7e43ba962a67572960996243e46a544b",
+        "observedAt": "2026-10-29T01:26:41.344363Z",
         "manifestPath": "bittrees.project.json"
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://agent.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -100,8 +105,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://capital.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -156,8 +164,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://gov.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -210,8 +221,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -267,8 +281,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://research.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -321,8 +338,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://bounties.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -377,8 +397,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://chirpy.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -496,8 +519,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://idacc.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -551,8 +577,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://nftfactory.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -606,8 +635,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://tcp.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -657,8 +689,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://roles.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -708,8 +743,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://insights.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -759,8 +797,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://crm.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -810,8 +851,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://autonote.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -863,8 +907,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://mercado.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -914,8 +961,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://ecrypt.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -965,8 +1015,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://cryptoalegre.vercel.app",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -1020,8 +1073,11 @@
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://verse.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -1179,7 +1235,10 @@
       "lifecycle": "active",
       "health": {
         "status": "reachable",
-        "checkedAt": "2026-09-16T18:00:38.840Z"
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://mcp.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -1200,7 +1259,7 @@
     {
       "id": "ai",
       "name": "Bittrees AI",
-      "summary": "Mac development preview for local AI tasks and reviewed app connections. Models are separate downloads; Apple signing, notarization and personal pilot acceptance remain open. This catalog entry grants no app access.",
+      "summary": "Mac development preview for local models, drafts and saved context. Runtime and models are separate setup steps; the development download is not Apple Developer ID signed or Apple-notarized. Connected actions require their own permissions.",
       "lanes": [
         "discovery"
       ],
@@ -1209,7 +1268,10 @@
       "publicUrl": "https://ai.bittrees.org",
       "sourceEvidence": [
         "https://github.com/Bittrees-Technology/ai/blob/main/docs/macos-companion.md",
-        "https://github.com/Bittrees-Technology/ai/blob/main/docs/mac-download-provenance.md"
+        "https://github.com/Bittrees-Technology/ai/blob/main/docs/mac-download-provenance.md",
+        "https://ai.bittrees.org/",
+        "https://ai.bittrees.org/#setup",
+        "29 October 2026 AI owner source review: local app preview and setup; no downstream action acceptance implied."
       ],
       "aliases": [
         "bittrees-ai"
@@ -1227,14 +1289,17 @@
         "contactStatus": "pending"
       },
       "source": {
-        "revision": "b6e18be56888e4abf51fef5f2ee7d3de2ee236ff",
-        "observedAt": "2026-09-25T15:06:03Z",
+        "revision": null,
+        "observedAt": "2026-10-29T01:26:41.344363Z",
         "manifestPath": "docs/macos-companion.md"
       },
       "lifecycle": "preview",
       "health": {
-        "status": "unverified",
-        "checkedAt": null
+        "status": "reachable",
+        "checkedAt": "2026-10-29T01:26:41.344363Z",
+        "httpStatus": 200,
+        "finalUrl": "https://ai.bittrees.org",
+        "scope": "Public landing-page reachability only; no authenticated action verified."
       },
       "adapter": {
         "type": "catalog-resource",
@@ -1264,5 +1329,10 @@
       "repository": "Bittrees-Technology/wbtc-erc20",
       "reason": "Development-only test token; excluded from production defaults."
     }
-  ]
+  ],
+  "reachabilityReview": {
+    "checkedAt": "2026-10-29T01:26:41.344363Z",
+    "scope": "Public landing-page requests only. Source review dates and task acceptance are separate.",
+    "checkedSites": 20
+  }
 }

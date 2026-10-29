@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { robotsTagFor } from '../src/feature-gates.mjs';
 import { MCP_GATEWAY, PORTAL_SECURITY_HEADERS, ROBOTS_TXT_PATH, ROUTE_DEFINITIONS, createRequestHandler, handleMcpRequest, normalizeCanonicalPath } from '../src/portal.mjs';
 
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
@@ -168,7 +169,7 @@ const server = createServer(async (req, res) => {
       'Content-Length': body.byteLength,
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
-      'X-Robots-Tag': 'noindex, nofollow',
+      'X-Robots-Tag': robotsTagFor(process.env, getContentType(assetPath, pathname).startsWith('text/html') ? pathname : null),
       ...PORTAL_SECURITY_HEADERS,
     });
     res.end(req.method === 'HEAD' ? undefined : body);

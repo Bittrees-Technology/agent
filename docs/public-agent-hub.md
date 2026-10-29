@@ -54,3 +54,32 @@ before changing task status. Existing local AI ownership is the preferred path
 for future scheduled upkeep only after its adapter, source authority and native
 execution are verified. No new crawler, hosted search, service or paid inference
 is required by this hub.
+
+## Selective indexing preparation (29 October 2026)
+
+The existing indexing flag now applies only to the six explicit hub paths in
+`INDEXABLE_HUB_PATHS`. Preview and development deployments stay noindex even if
+the flag is present. Error responses, JSON, administration and legacy review
+pages stay excluded. HTML metadata, response headers and the enabled sitemap
+share the route policy. The enabled robots policy allows crawling public pages
+so crawlers can read noindex on excluded reference pages; authenticated APIs
+and administration remain disallowed. Robots rules are not access control.
+
+Rebuild after any indexing environment change so generated assets and runtime
+policy agree. The global Vercel noindex header was removed because it would
+contradict a later public hub opt-in; default-off runtime behavior remains
+noindex, and administration/API/static HTML aliases retain platform exclusions.
+For an approved indexing release, pass `--expect-public-hub-indexing` to the
+smoke suite and update the explicit hosted release expectation together. Never
+turn on indexing solely because the code is deployable.
+
+Owner supplied Bittrees, Inc., agent@bittrees.org and Bounties' terms as the
+publication reference. The Open Metaverse framework does not supply an
+incorporation country or business mailing address. Final terms/policy approval
+is not asserted by the factual notice or draft. Recipient acceptance and
+forwarding configuration are verified; end-to-end email delivery was not tested.
+
+The October reconciliation preserves original all-project review dates and all
+66 task statuses. Agent evidence notes and public landing-page observations are
+new evidence, not completion decisions. Consumers must refresh the task-feed
+revision before preparing a source-bound CRM sync approval.
