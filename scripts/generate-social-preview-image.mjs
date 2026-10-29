@@ -1,3 +1,4 @@
+import { BRAND_SHAPES, BRAND_COLORS } from '../src/ecosystem/brand.mjs';
 // Regenerates public/social-preview.png: the Open Graph / Twitter Card
 // social-preview asset served by SOCIAL_PREVIEW_IMAGE_PATH. Written with a
 // tiny dependency-free PNG encoder (zlib is a Node builtin) so the portal
@@ -17,9 +18,9 @@ const hexToRgb = (hex) => {
 };
 
 const BACKGROUND = hexToRgb('f6f7f2');
-const GREEN = hexToRgb('1f6b4f');
+const GREEN = hexToRgb(BRAND_COLORS.forest);
 const DARK = hexToRgb('17201c');
-const GOLD = hexToRgb('8b5c10');
+const LIME = hexToRgb(BRAND_COLORS.lime);
 const MUTED = hexToRgb('5e6963');
 
 // Minimal 5x7 bitmap font covering only the glyphs needed for the wordmark
@@ -145,15 +146,39 @@ function encodePng(pixels) {
   ]);
 }
 
+function contains(shape, x, y) {
+  if (shape.type === 'circle') return (x - shape.cx) ** 2 + (y - shape.cy) ** 2 <= shape.r ** 2;
+  if (shape.type === 'rect') {
+    if (x < shape.x || y < shape.y || x > shape.x + shape.width || y > shape.y + shape.height) return false;
+    const cx = Math.max(shape.x + shape.rx, Math.min(x, shape.x + shape.width - shape.rx));
+    const cy = Math.max(shape.y + shape.rx, Math.min(y, shape.y + shape.height - shape.rx));
+    return (x - cx) ** 2 + (y - cy) ** 2 <= shape.rx ** 2;
+  }
+  let inside = false;
+  for (let i = 0, j = shape.points.length - 1; i < shape.points.length; j = i++) {
+    const [xi, yi] = shape.points[i], [xj, yj] = shape.points[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function drawBrandMark(pixels, left, top, size) {
+  const shapes = [...BRAND_SHAPES].reverse();
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const samples = [];
+    for (const dy of [.25, .75]) for (const dx of [.25, .75]) {
+      const shape = shapes.find(s => contains(s, (x + dx) * 64 / size, (y + dy) * 64 / size));
+      samples.push(shape ? hexToRgb(BRAND_COLORS[shape.fill]) : BACKGROUND);
+    }
+    pixels[top + y][left + x] = [0, 1, 2].map(i => Math.round(samples.reduce((n, color) => n + color[i], 0) / 4));
+  }
+}
+
 export function buildSocialPreviewPng() {
   const pixels = makeCanvas();
 
-  // Brand mark: a green roundel with a gold center, echoing the portal's
-  // existing green/gold accent palette.
-  fillCircle(pixels, 150, 195, 70, GREEN);
-  fillCircle(pixels, 150, 195, 40, BACKGROUND);
-  fillCircle(pixels, 150, 195, 18, GOLD);
-  fillRect(pixels, 90, 260, 1110, 264, GOLD);
+  drawBrandMark(pixels, 90, 75, 170);
+  fillRect(pixels, 90, 260, 1110, 264, LIME);
 
   drawText(pixels, 90, 300, 'agent.bittrees.org', 9, DARK);
   drawText(pixels, 90, 400, 'ai tools and resources', 5, MUTED);

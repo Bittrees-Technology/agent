@@ -1,3 +1,4 @@
+import { BRAND_VERSION, LOGO_SVG_BODY } from './ecosystem/brand.mjs';
 import { CONSOLIDATED_PAGES, consolidatedDestination, LEGACY_DISCOVERY_PATHS, buildHubAgentGuide } from './ecosystem/public-surface.mjs';
 import { LEGAL_EFFECTIVE_DATE, renderLegalDocument } from './ecosystem/legal.mjs';
 import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
@@ -48,10 +49,10 @@ const SCHEMA_URL = 'https://json-schema.org/draft/2020-12/schema';
 const PORTAL_BASE_URL = 'https://agent.bittrees.org';
 export const ROBOTS_TXT_PATH = '/robots.txt';
 export const SITEMAP_XML_PATH = '/sitemap.xml';
-export const SOCIAL_PREVIEW_IMAGE_PATH = '/social-preview.png';
+export const SOCIAL_PREVIEW_IMAGE_PATH = '/social-preview-robot-elf.png';
 export const FAVICON_SVG_PATH = '/favicon.svg';
 const SOCIAL_PREVIEW_IMAGE_ALT =
-  'Bittrees Agent — AI tools and resources';
+  'Bittrees Agent robot elf — AI tools and resources';
 const PROJECTS_PAGE_PATH = '/projects';
 const READINESS_PAGE_PATH = '/readiness';
 const READINESS_JSON_PATH = '/readiness.json';
@@ -72,10 +73,7 @@ const TERMS_STATIC_ASSET_ROUTE_REDIRECTS = new Map([
   [`${TERMS_OF_USE_SHORT_ROUTE}/index.html`, TERMS_OF_USE_SHORT_ROUTE],
 ]);
 const ROBOTS_TXT_BODY = 'User-agent: *\nDisallow: /\n';
-const FAVICON_SVG_BODY = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#183f35"/>
-  <path d="M32 11 17 29h10L16 44h13v9h6v-9h13L37 29h10L32 11Z" fill="#d8ee7e"/>
-</svg>\n`;
+const FAVICON_SVG_BODY = LOGO_SVG_BODY;
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PORTAL_REQUEST_ID = Symbol('portalRequestId');
@@ -5094,14 +5092,14 @@ function renderPageMetadata({
   return `<meta name="description" content="${escapeHtml(description)}" />
     <meta name="robots" content="${escapeHtml(robots)}" />
     <meta name="theme-color" content="#eef3ec" />
-    <link rel="icon" href="${FAVICON_SVG_PATH}" type="image/svg+xml" />
+    <link rel="icon" href="${FAVICON_SVG_PATH}?v=${BRAND_VERSION}" type="image/svg+xml" />
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
     <link rel="describedby" href="/llms.txt" type="text/plain" />
     <link rel="alternate" href="/projects.json" type="application/json" title="Bittrees project registry" />
     <link rel="alternate" href="${READINESS_JSON_PATH}" type="application/json" title="Bittrees project production readiness" />
     <link rel="alternate" href="/mcp.json" type="application/json" title="Bittrees MCP contract" />
     <link rel="alternate" href="${escapeHtml(MCP_SERVER_CARD_PATH)}" type="application/mcp-server-card+json" title="Bittrees MCP server card" />
-    <meta property="og:site_name" content="agent.bittrees.org" />
+    <meta property="og:site_name" content="Bittrees Agent" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="${escapeHtml(title)}" />
@@ -11096,6 +11094,8 @@ export function buildStaticAssets(
       path: LLMS_FULL_TXT_PATH.replace(/^\//, ''),
       body: buildHubAgentGuide({ full: true }),
     },
+    { path: 'logo.svg', body: LOGO_SVG_BODY },
+    { path: 'social-preview.png', body: SOCIAL_PREVIEW_IMAGE_BUFFER },
     ...routeAssets,
     {
       path: 'portal-manifest.json',
@@ -11242,14 +11242,14 @@ export function createRequestHandler({
       });
     }
 
-    if (pathname === SOCIAL_PREVIEW_IMAGE_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+    if ([SOCIAL_PREVIEW_IMAGE_PATH, '/social-preview.png'].includes(pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
       return sendBody(res, 200, SOCIAL_PREVIEW_IMAGE_BUFFER, 'image/png', includeBody, {
         ...telemetry,
         status: 200,
       });
     }
 
-    if (pathname === FAVICON_SVG_PATH && (req.method === 'GET' || req.method === 'HEAD')) {
+    if ([FAVICON_SVG_PATH, '/logo.svg'].includes(pathname) && (req.method === 'GET' || req.method === 'HEAD')) {
       return sendBody(res, 200, FAVICON_SVG_BODY, 'image/svg+xml; charset=utf-8', includeBody, {
         ...telemetry,
         status: 200,
