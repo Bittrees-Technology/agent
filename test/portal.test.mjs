@@ -775,13 +775,13 @@ test('html pages emit description and Open Graph metadata', () => {
     // shipped an og:image/twitter:image, so link unfurls had no preview).
     assert.match(
       html,
-      /<meta property="og:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png"\s*\/?>/,
+      /<meta property="og:image" content="https:\/\/agent\.bittrees\.org\/social-preview-robot-elf\.png"\s*\/?>/,
       route,
     );
     assert.match(html, /<meta property="og:image:alt" content="[^"]+"\s*\/?>/, route);
     assert.match(
       html,
-      /<meta name="twitter:image" content="https:\/\/agent\.bittrees\.org\/social-preview\.png"\s*\/?>/,
+      /<meta name="twitter:image" content="https:\/\/agent\.bittrees\.org\/social-preview-robot-elf\.png"\s*\/?>/,
       route,
     );
     assert.match(html, /<meta name="twitter:card" content="summary_large_image"\s*\/?>/, route);
@@ -1164,7 +1164,14 @@ test('workflow HTML responses keep script-src none without inline scripts or wal
 
       assert.equal(response.status, expectedStatus, path);
       assert.match(response.headers.get('content-security-policy') ?? '', /script-src https:\/\/insights\.bittrees\.org\/consent\.js https:\/\/insights\.bittrees\.org\/tracker\.js;/, path);
-      assert.doesNotMatch(html.replaceAll('<script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>', ''), /<script\b/i, path);
+      // Structured data is a JSON data block, never executable page code.
+      const withoutStructuredData = html.replace(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g, (_, data) => {
+        const document = JSON.parse(data);
+        assert.equal(document['@context'], 'https://schema.org');
+        assert.ok(Array.isArray(document['@graph']));
+        return '';
+      });
+      assert.doesNotMatch(withoutStructuredData.replaceAll('<script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>', ''), /<script\b/i, path);
       assert.doesNotMatch(html, /id="intent-connect-wallet"/, path);
       assert.doesNotMatch(html, />Connect wallet<\/button>/, path);
       assert.doesNotMatch(html, /data-signing-state="pending"/, path);
