@@ -66,7 +66,16 @@ Roles scope. Controller/key/endpoint changes hold the affected association for
 review; they never transfer Bittrees delegation automatically. Historical receipts
 retain the binding revision that actually performed the work.
 
-## Remaining Workflows evidence contract (not implemented or activated)
+## Workflows evidence contract (partially implemented, not activated)
+
+Local Workflows follow-up now implements part of this contract on branch
+`feat/agent-work-history-20261029`: new completions retain source-recorded
+principal/credential and authority provenance atomically with completion, and
+the existing owner-scoped run response projects a filtered history panel.
+It has no production deployment or public Agent association. It deliberately
+does not claim reviewer acceptance, an independent signed attestation, reputation
+credit or an external business mutation. The remaining contract below still
+requires identity association, source-reader authorization and acceptance.
 
 Workflows is the canonical owner of history; Agent consumes a privacy-filtered
 read projection rather than maintaining a second mutable task ledger. A receipt
