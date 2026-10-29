@@ -20,6 +20,10 @@ test('default posture is no-go with named legal, security, and ops decisions', (
     assert.ok(decision.gate, 'decision names its gate');
   }
 
+  assert.equal(readiness.decisions.find((d) => d.id === 'legal-terms-of-use').status, 'pending');
+  assert.equal(readiness.decisions.find((d) => d.id === 'legal-privacy-policy').status, 'pending');
+  assert.equal(readiness.publicHub.termsAndPrivacyPublished, true);
+  assert.equal(readiness.publicHub.finalTermsAndPrivacyApproved, false);
   assert.ok(readiness.blockers.length > 0);
   assert.ok(readiness.blockers.some((blocker) => blocker.id === 'ops-durable-shared-storage'));
   assert.equal(readiness.summary.total, readiness.decisions.length);

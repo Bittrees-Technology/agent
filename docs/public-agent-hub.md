@@ -76,13 +76,15 @@ For an approved indexing release, pass `--expect-public-hub-indexing` to the
 smoke suite and update the explicit hosted release expectation together. Never
 turn on indexing solely because the code is deployable.
 
-Owner supplied Bittrees, Inc., agent@bittrees.org and Bounties' terms as the
-publication reference. The Open Metaverse framework does not supply an
-incorporation country or business mailing address. Final terms/policy approval
-is not asserted by the factual notice or draft. Recipient acceptance and
-forwarding configuration are verified; end-to-end email delivery was not tested.
+The owner requested production publication of the Terms and Privacy Notice on
+29 October 2026 using the existing Bittrees framework. Both use the hub shell,
+numbered sections, an effective date, contact and accessible section links.
+Public pages omit source commentary and internal review tables. JSON publication
+metadata and route descriptions match the published notices. No independent
+counsel opinion is represented. The Open Metaverse principles preserve mandatory
+rights and do not claim sovereign or territorial jurisdiction. Privacy describes
+Agent’s actual hosting, optional analytics, browser storage and contact handling;
+it does not import Bounties’ escrow, marketplace or database claims.
 
-The October reconciliation preserves original all-project review dates and all
-66 task statuses. Agent evidence notes and public landing-page observations are
-new evidence, not completion decisions. Consumers must refresh the task-feed
-revision before preparing a source-bound CRM sync approval.
+Recipient acceptance and forwarding configuration are verified; end-to-end email
+delivery was not tested. Selective indexing and contribution writes remain off.

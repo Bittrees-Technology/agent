@@ -221,12 +221,14 @@ async function checkRoute(path, kind) {
   }
 
   if (path === '/terms' || path === '/terms-of-use') {
-    check(text.includes('Terms of Use are pending legal approval'), `${path} missing legal approval status`);
+    check(text.includes('<h1>Terms of Use</h1>'), `${path} missing published Terms`);
+    check(text.includes('2026-10-29') && text.includes('agent@bittrees.org'), `${path} missing effective date/contact`);
   }
 
   if (path === '/privacy') {
-    check(text.includes('The final privacy policy remains pending legal approval'), '/privacy missing legal approval status');
-    check(text.includes('not a substitute for a final policy'), '/privacy overstates the pending policy');
+    check(text.includes('<h1>Privacy Notice</h1>'), '/privacy missing published notice');
+    check(text.includes('Your choices and rights') && text.includes('Analytics preferences'), '/privacy missing choices');
+    check(!text.includes('pending legal approval'), '/privacy still shows a placeholder');
   }
 
   if (path === '/onboarding') {

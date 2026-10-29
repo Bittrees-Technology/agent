@@ -1,3 +1,4 @@
+import { LEGAL_EFFECTIVE_DATE, renderLegalDocument } from './ecosystem/legal.mjs';
 import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
 import { publicCatalog } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
@@ -2046,34 +2047,30 @@ export const LAUNCH_FRESHNESS_MONITORING = {
 export const TERMS_OF_USE_LEGAL_STATUS = {
   responsibleEntity: 'Bittrees, Inc.',
   publicContact: 'agent@bittrees.org',
-  referenceTerms: 'https://bounties.bittrees.org/terms',
-  publicationScope: 'Final approved policy only; current factual notice and review draft are available',
-  status: 'blocked-pending-legal-approved-content',
-  contentStatus: 'pending-legal-approved-content',
+  effectiveDate: LEGAL_EFFECTIVE_DATE,
+  publicationScope: 'Bittrees Agent informational hub and hosted interfaces',
+  status: 'published',
+  contentStatus: 'published',
   pageRoute: '/terms-of-use',
   aliasRoutes: [TERMS_PAGE_ROUTE, TERMS_OF_USE_SHORT_ROUTE],
   jsonRoute: '/terms-of-use.json',
-  legalContentOwner: 'legal/general-counsel',
-  publicationStatus: 'not-published',
-  reason: 'Legal-approved Terms of Use content has not been supplied to the portal.',
-  requiredNextAction:
-    'Bittrees, Inc. must record approval of the final hub Terms of Use before they are published.',
+  legalContentOwner: 'Bittrees, Inc.',
+  publicationStatus: 'published',
+  requiredNextAction: null,
 };
 
 export const PRIVACY_LEGAL_STATUS = {
   responsibleEntity: 'Bittrees, Inc.',
   publicContact: 'agent@bittrees.org',
-  referenceTerms: 'https://bounties.bittrees.org/terms',
-  publicationScope: 'Final approved policy only; current factual notice and review draft are available',
-  status: 'blocked-pending-legal-approved-content',
-  contentStatus: 'pending-legal-approved-content',
+  effectiveDate: LEGAL_EFFECTIVE_DATE,
+  publicationScope: 'Information processed to operate Bittrees Agent',
+  status: 'published',
+  contentStatus: 'published',
   pageRoute: PRIVACY_PAGE_ROUTE,
   jsonRoute: '/privacy.json',
-  legalContentOwner: 'legal/general-counsel',
-  publicationStatus: 'not-published',
-  reason: 'A final approved privacy policy has not been supplied. The owner has designated Bittrees, Inc. and agent@bittrees.org as the responsible entity and contact.',
-  requiredNextAction:
-    'Bittrees, Inc. must approve the final privacy notice and confirm outstanding provider-retention details before final publication.',
+  legalContentOwner: 'Bittrees, Inc.',
+  publicationStatus: 'published',
+  requiredNextAction: null,
 };
 
 export const MCP_IMPORT_SNIPPETS = [
@@ -4064,7 +4061,7 @@ function buildTermsOfUseStatus() {
     launchStatus: LAUNCH_STATUS,
     robotsPolicy: 'noindex,nofollow',
     caveat:
-      'This is a prelaunch implementation-status route, not Terms of Use text, a legal agreement, or an acceptance flow.',
+      'Published Terms of Use apply to Bittrees Agent; linked services have their own terms.',
   };
 }
 
@@ -4075,7 +4072,7 @@ function buildPrivacyStatus() {
     robotsPolicy: 'noindex,nofollow',
     currentIntakeNotice: CONTRIBUTION_PRIVACY_NOTICE,
     caveat:
-      'This is a prelaunch implementation-status route and contribution-intake notice, not a final privacy policy.',
+      'Published Privacy Notice describes Bittrees Agent; linked services have their own privacy practices.',
   };
 }
 
@@ -4467,9 +4464,9 @@ const JSON_ROUTES = [
   },
   {
     path: '/terms-of-use.json',
-    label: 'Terms of Use legal-content status',
+    label: 'Terms of Use publication details',
     description:
-      'Prelaunch Terms of Use status. Legal-approved content is pending and this route does not publish Terms of Use text.',
+      'Published Terms of Use for Bittrees Agent and its hosted interfaces.',
     status: TERMS_OF_USE_LEGAL_STATUS.status,
     schema: {
       $schema: SCHEMA_URL,
@@ -4490,9 +4487,9 @@ const JSON_ROUTES = [
   },
   {
     path: '/privacy.json',
-    label: 'Privacy legal-content status',
+    label: 'Privacy Notice publication details',
     description:
-      'Current site data practices and Bittrees, Inc. contact details; final privacy policy review remains pending.',
+      'How Bittrees Agent processes information, analytics choices, privacy rights and contact details.',
     status: PRIVACY_LEGAL_STATUS.status,
     schema: {
       $schema: SCHEMA_URL,
@@ -4624,26 +4621,26 @@ export const ROUTE_DEFINITIONS = [
   },
   {
     path: TERMS_PAGE_ROUTE,
-    label: 'Terms status page alias',
+    label: 'Terms of Use page alias',
     description:
-      'Compatibility alias for the prelaunch Terms of Use status page. Legal-approved content is pending and this page does not publish Terms of Use text.',
+      'Compatibility alias for the published Bittrees Agent Terms of Use.',
     kind: 'html',
     status: TERMS_OF_USE_LEGAL_STATUS.status,
     canonicalPath: TERMS_OF_USE_PAGE_ROUTE,
   },
   {
     path: '/terms-of-use',
-    label: 'Terms of Use status page',
+    label: 'Terms of Use',
     description:
-      'Final approved Terms remain pending; a proposed informational-hub draft and public contact are available for review.',
+      'Terms governing use of Bittrees Agent and its hosted interfaces.',
     kind: 'html',
     status: TERMS_OF_USE_LEGAL_STATUS.status,
   },
   {
     path: PRIVACY_PAGE_ROUTE,
-    label: 'Privacy status page',
+    label: 'Privacy Notice',
     description:
-      'Current site data practices and Bittrees, Inc. contact details; final privacy policy review remains pending.',
+      'How Bittrees Agent processes information, analytics choices, privacy rights and contact details.',
     kind: 'html',
     status: PRIVACY_LEGAL_STATUS.status,
   },
@@ -9637,142 +9634,11 @@ export function renderNotFoundPage() {
 }
 
 export function renderTermsOfUsePage() {
-  const termsStatus = buildTermsOfUseStatus();
-  const pageTitle = 'Terms of Use status - agent.bittrees.org';
-  const pageDescription = getRouteDescription(
-    '/terms-of-use',
-    'Final approved Terms remain pending; a proposed informational-hub draft and public contact are available for review.',
-  );
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: '/terms-of-use', image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
-    ${renderHumanLookupStyles()}
-  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
-</head>
-  <body>
-    <a class="skip-link" href="#page-content">Skip to main content</a>
-    <header class="topline">
-      <p class="brand"><a href="/">agent.bittrees.org</a></p>
-      <div class="topline-meta">
-        ${renderPrimaryPortalNav('/terms-of-use')}
-        <span class="status">${escapeHtml(humanizeStatus(termsStatus.status))}</span>
-      </div>
-    </header>
-    <main>
-
-      <section id="page-content" class="hero" aria-labelledby="terms-of-use-title">
-        <h1 id="terms-of-use-title">Terms of Use are pending legal approval.</h1>
-        <p class="lede">
-          A proposed hub-specific draft is available below for publication review. This page records the current review status. It is not a legal agreement, acceptance flow, or substitute for final approved Terms of Use. Final approval has not been recorded.
-        </p>
-      </section>
-
-      <section class="band" aria-labelledby="terms-status-title">
-        <h2 id="terms-status-title">Current publication facts</h2><p>Bittrees, Inc. publishes this directory. For questions, contact <a href="mailto:agent@bittrees.org">agent@bittrees.org</a>. Tool listings describe the reviewed setup and access requirements; linked services have their own terms and approvals. This page does not create a contract acceptance flow.</p><h3>Final terms review</h3>
-        <table>
-          <tbody>
-            <tr><th>Content status</th><td><code>${escapeHtml(humanizeStatus(termsStatus.contentStatus))}</code></td></tr>
-            <tr><th>Publication status</th><td>Final version pending review</td></tr>
-            <tr><th>Publication owner</th><td>${escapeHtml(termsStatus.responsibleEntity)}</td></tr>
-            <tr><th>Required next action</th><td>${escapeHtml(termsStatus.requiredNextAction)}</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="band" aria-labelledby="hub-terms-draft-title">
-        <h2 id="hub-terms-draft-title">Proposed terms for this hub</h2>
-        <p>This draft is prepared for publication review. It applies to Agent’s informational pages, not the separate accounts, transactions or permissions of linked services.</p>
-        <h3>Purpose and availability</h3><p>Bittrees Agent helps visitors find AI tools, setup guidance, learning resources and contribution routes. Descriptions reflect reviewed sources and can change. Preview labels and setup requirements should be checked on the owning service before use. A listing is not a guarantee that a tool supports a particular task.</p>
-        <h3>Responsible use</h3><p>Use the site and its interfaces within the access granted to you. Do not submit credentials, confidential information or content you lack permission to share. An agent’s discovery of a project does not give it permission to access accounts, publish changes, spend, sign or act for another person. Existing contribution interfaces retain their documented review and authorization requirements.</p>
-        <h3>Linked services and resources</h3><p>Third-party publishers and linked Bittrees apps control their own products, terms, privacy practices and access requirements. Review those before installing software, connecting a tool or enabling an action. Agent does not take custody of wallets or approve transactions through this public hub.</p>
-        <h3>The Open Metaverse framework</h3><p>Following the <a href="https://bounties.bittrees.org/terms">Bounties reference terms</a> selected by the owner, the proposed framework emphasizes voluntary participation, informed choices, respect for ownership, verifiable commitments, interoperability and nonaggression. This describes contractual principles, not a country, court, sovereign authority or exemption from law. Applicable rights and legal requirements that cannot be waived continue to apply. No incorporation jurisdiction or mailing address is inferred from that reference.</p>
-        <h3>Changes and questions</h3><p>We may update the directory and will date material changes to the published notice. Contact <a href="mailto:agent@bittrees.org">agent@bittrees.org</a> about the hub, source corrections, privacy or security. Do not put confidential reports into public issue trackers.</p>
-      </section>
-
-      <section class="band" aria-labelledby="terms-contract-title">
-        <h2 id="terms-contract-title">Machine-readable status</h2>
-        <div>
-          <p class="lede">The equivalent status object is available at <a href="/terms-of-use.json">/terms-of-use.json</a>.</p>
-          <p class="lede caveat">This route remains <code>noindex,nofollow</code> while the launch gate is active.</p>
-        </div>
-      </section>
-    </main>
-    ${renderPortalFooter()}
-  </body>
-</html>`;
+  return renderLegalDocument('terms');
 }
 
 export function renderPrivacyPage() {
-  const privacyStatus = buildPrivacyStatus();
-  const pageTitle = 'Privacy status - agent.bittrees.org';
-  const pageDescription = getRouteDescription(
-    PRIVACY_PAGE_ROUTE,
-    'Current site data practices and Bittrees, Inc. contact details; final privacy policy review remains pending.',
-  );
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(pageTitle)}</title>
-    ${renderPageMetadata({ title: pageTitle, description: pageDescription, path: PRIVACY_PAGE_ROUTE, image: SOCIAL_PREVIEW_IMAGE_PATH, imageAlt: SOCIAL_PREVIEW_IMAGE_ALT })}
-    ${renderHumanLookupStyles()}
-  <script defer src="https://insights.bittrees.org/consent.js" data-insights-site="agent"></script>
-</head>
-  <body>
-    <a class="skip-link" href="#page-content">Skip to main content</a>
-    <header class="topline">
-      <p class="brand"><a href="/">agent.bittrees.org</a></p>
-      <div class="topline-meta">
-        ${renderPrimaryPortalNav(PRIVACY_PAGE_ROUTE)}
-        <span class="status">${escapeHtml(humanizeStatus(privacyStatus.status))}</span>
-      </div>
-    </header>
-    <main>
-
-      <section id="page-content" class="hero" aria-labelledby="privacy-title">
-        <h1 id="privacy-title">Privacy policy review and contact.</h1>
-        <p class="lede">
-          Bittrees, Inc. is responsible for this hub. Contact <a href="mailto:agent@bittrees.org">agent@bittrees.org</a> for privacy, security and support requests. The final privacy policy remains pending legal approval; this factual notice is not a substitute for a final policy.
-        </p>
-      </section>
-
-      <section class="band" aria-labelledby="privacy-notice-title">
-        <div>
-          <h2 id="privacy-notice-title">What this site currently does</h2><p>This public hub serves tool descriptions and links. It has no general contribution form. The site uses Vercel hosting and loads the Bittrees Insights consent interface. Optional usage analytics depend on your consent choice; use Analytics preferences to review that choice. Administration uses a separate authenticated Roles session. Linked apps apply their own privacy practices.</p><p>Optional analytics may record page views, labeled clicks, form interaction events, active time, a random per-site session identifier, referrer hostname and selected campaign parameters. The collector derives country, device category and traffic classification. Form field values are not read by the tracker. Raw IP addresses and user-agent headers are processed for operational controls and classification but are not stored as analytics event identifiers.</p><p>Consent choices are stored in this browser for up to 180 days; accepted receipts may also use a Bittrees-domain cookie, and receipt checks can renew that period. Visit caching lasts 30 minutes. Analytics session storage rotates after 30 minutes of inactivity. The integration checks Do Not Track and Global Privacy Control at initialization. The consent interface itself makes a network request.</p><p>Insights scheduled cleanup is configured to delete analytics and administrative audit records older than 90 days. This review has not verified every production cleanup run. Hosting logs, backups and other service records have separate retention practices still being confirmed. No guaranteed deletion deadline is promised here.</p><h3>Contact requests</h3><p>If you email agent@bittrees.org, Bittrees, Inc. receives your address and the content you send through its managed mail service. Requests may be routed to the responsible operator for handling. Send only what is needed to explain the request; do not include credentials or confidential material in an initial message. No automatic mailbox-deletion period is represented here.</p><h3>Existing contribution interfaces</h3>
-          <p class="lede">${escapeHtml(privacyStatus.currentIntakeNotice)}</p>
-        </div>
-      </section>
-
-      <section class="band" aria-labelledby="privacy-status-title">
-        <h2 id="privacy-status-title">Publication status</h2>
-        <table>
-          <tbody>
-            <tr><th>Content status</th><td><code>${escapeHtml(humanizeStatus(privacyStatus.contentStatus))}</code></td></tr>
-            <tr><th>Publication status</th><td>Final version pending review</td></tr>
-            <tr><th>Publication owner</th><td>${escapeHtml(privacyStatus.responsibleEntity)}</td></tr>
-            <tr><th>Required next action</th><td>${escapeHtml(privacyStatus.requiredNextAction)}</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="band" aria-labelledby="privacy-contract-title">
-        <h2 id="privacy-contract-title">Machine-readable status</h2>
-        <div>
-          <p class="lede">The equivalent status object is available at <a href="/privacy.json">/privacy.json</a>.</p>
-          <p class="lede caveat">This route remains <code>noindex,nofollow</code> while the launch gate is active.</p>
-        </div>
-      </section>
-    </main>
-    ${renderPortalFooter()}
-  </body>
-</html>`;
+  return renderLegalDocument('privacy');
 }
 
 export function renderOnboardingPage() {
