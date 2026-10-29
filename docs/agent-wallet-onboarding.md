@@ -10,7 +10,15 @@ and transaction activation are not installed. No Safe is deployed by this code.
 2. Pair the Mac through its native owner-confirmed key possession flow. Keep
    identity and Ethereum transaction keys separate. Never export private keys
    to the browser, model, MCP, logs or a policy document.
-3. Connect an existing Ethereum mainnet Safe and verify its deployed code,
+3. Choose Create a new agent Safe or Connect an existing Safe on Ethereum
+   mainnet. Identity registration can complete before a wallet exists. For a
+   new Safe, choose actual connected recovery owners and threshold, verify the
+   canonical factory/implementation and network, prepare an idempotent deployment
+   plan and show its gas estimate. Obtain native wallet approval before any
+   deployment or gas use. A predicted address is pending, never an active wallet;
+   reconcile the original deployment reference on uncertainty instead of
+   automatically deploying again. Start unfunded and without agent transaction
+   authority. Once confirmed, verify the deployed code,
    chain, current owners/threshold, module path and recovery control. Check
    that the agent cannot change owners, threshold, modules or its own limits.
    Creating/funding a Safe is a separate reviewed transaction and gas approval.
@@ -98,7 +106,7 @@ simulation, Safe owner approval, confirmations/reorg handling, current policy
 readback, revocation and every-execution enforcement. No adapter is installed
 by this helper, and no caller-supplied boolean can activate it.
 
-Live activation still requires the actual Safe address, approved contracts,
+Live activation still requires a confirmed Safe address, approved contracts,
 calls and asset/gas limits. Mainnet was selected by the user; no asset amounts,
-Safe deployment or gas spending were approved. Use existing resources and
+Safe deployment or gas spending were approved by implementing this flow. Use existing resources and
 retain the project's additional-spending boundary.

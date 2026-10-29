@@ -55,7 +55,7 @@ test('pending suspension/revocation never claims wallet access stopped; edits do
 });
 test('setup guide separates all four owner steps and makes current availability explicit',()=>{
   const html=renderHubPage('/workflows');
-  for(const text of ['id="agent-wallet"','Create the agent identity','Connect its wallet','Review exact permissions','Approve and confirm activation','Wallet activation is not available yet.','Existing limits remain in force']) assert.ok(html.includes(text),text);
+  for(const text of ['id="agent-wallet"','Create the agent identity','Create or connect its wallet','Review exact permissions','Approve and confirm activation','Wallet activation is not available yet.','Existing limits remain in force','Create a new agent Safe','It starts unfunded']) assert.ok(html.includes(text),text);
   assert.ok(html.includes('https://roles.bittrees.org/profile'));
   assert.doesNotMatch(html, /<button[^>]*>Activate|<input[^>]*private/i);
 });
