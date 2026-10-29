@@ -18,6 +18,7 @@ for (const agentId of ['idacc-default-lead', 'unknown-agent']) {
     const result = callMcpTool('get_agent_reputation', { agentId }).structuredContent;
     assert.equal(result.status, agentId === 'unknown-agent' ? 'not_found' : 'reviewed_profile_found');
     assert.equal(result.reputation.score, null);
+    assert.equal(result.queuedSubmissionCount, null);
     assert.equal(result.reputation.status, 'insufficient-evidence');
     assert.equal(result.reputation.profileReview, agentId === 'unknown-agent' ? 'unknown-profile' : 'reviewed-profile');
     assert.equal(result.reputation.workHistory.acceptedWorkCount, null);

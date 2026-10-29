@@ -3581,7 +3581,7 @@ function callContributionTool(name, args = {}, authContext = null, workflow = LI
         reputation: reputationEvidence({ profileReviewed: Boolean(approvedProfile) }),
         approvedProfile,
         pendingRegistration: null,
-        queuedSubmissionCount: 0,
+        queuedSubmissionCount: null,
       };
     }
 
