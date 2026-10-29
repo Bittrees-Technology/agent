@@ -14,6 +14,7 @@ test('withdrawn products are absent from every generated public asset and readin
 test('a future snapshot cannot republish excluded identities, aliases or pending entries',()=>{
   const copied=structuredClone(CATALOG);for(const id of ids)copied.projects.push({...structuredClone(CATALOG.projects[0]),id});
   copied.projects.push({...structuredClone(CATALOG.projects[0]),id:'renamed-product',aliases:['bag']});
+  copied.projects.push({...structuredClone(CATALOG.projects[0]),id:'renamed-idacc',name:'ID Agents Control Center'});
   assert.equal(validateCatalog(copied).projects.length,22);
   const view=catalogView(copied,selectionFromParams(new URLSearchParams()),{includePending:true});assert.doesNotMatch(JSON.stringify(view),names);assert.ok(!view.projects.some(p=>ids.includes(p.id)));
   for(const id of [...ids,'vault','bag','ipsf-node','bittrees-wallet'])assert.throws(()=>selectionFromParams(new URLSearchParams({mode:'selected',projects:id})),/not available/);
