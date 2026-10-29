@@ -1899,7 +1899,7 @@ test('human pages expose a keyboard skip target and visible focus treatment', ()
   }
 });
 
-test('vercel leaves indexing to route policy and retains protected-surface exclusions', () => {
+test('vercel keeps generated static pages excluded until an approved indexing rollout', () => {
   const vercelConfig = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
   const catchAllHeaders = vercelConfig.headers.find((entry) => entry.source === '/(.*)')?.headers ?? [];
   const configuredHeaders = Object.fromEntries(catchAllHeaders.map((header) => [header.key, header.value]));
@@ -1912,7 +1912,7 @@ test('vercel leaves indexing to route policy and retains protected-surface exclu
   assert.equal(configuredHeaders['Vercel-CDN-Cache-Control'], 'no-store');
   assert.equal(configuredHeaders.Pragma, 'no-cache');
   assert.equal(configuredHeaders['X-Content-Type-Options'], 'nosniff');
-  assert.equal(configuredHeaders['X-Robots-Tag'], undefined);
+  assert.equal(configuredHeaders['X-Robots-Tag'], 'noindex, nofollow');
   for (const source of ['/administration', '/api/:path*']) {
     const entry = vercelConfig.headers.find((item) => item.source === source);
     assert.ok(entry.headers.some((item) => item.key === 'X-Robots-Tag' && item.value === 'noindex, nofollow'));

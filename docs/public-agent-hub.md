@@ -66,9 +66,12 @@ so crawlers can read noindex on excluded reference pages; authenticated APIs
 and administration remain disallowed. Robots rules are not access control.
 
 Rebuild after any indexing environment change so generated assets and runtime
-policy agree. The global Vercel noindex header was removed because it would
-contradict a later public hub opt-in; default-off runtime behavior remains
-noindex, and administration/API/static HTML aliases retain platform exclusions.
+policy agree. Keep the global Vercel noindex header while indexing approval is
+pending: Vercel serves generated HTML directly, bypassing runtime response
+headers. A future approved indexing release must replace that global header
+with explicit platform rules for the six hub pages and retain exclusions for
+all other paths, then verify the public production headers. Protected previews
+add their own noindex header and cannot prove this platform behavior.
 For an approved indexing release, pass `--expect-public-hub-indexing` to the
 smoke suite and update the explicit hosted release expectation together. Never
 turn on indexing solely because the code is deployable.
