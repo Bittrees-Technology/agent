@@ -1,3 +1,4 @@
+import { LEGACY_DISCOVERY_PATHS } from '../src/ecosystem/public-surface.mjs';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
@@ -692,7 +693,7 @@ test('static build includes all advertised routes', () => {
 
   assert.deepEqual(
     manifest.routes.map((route) => route.path),
-    ROUTE_DEFINITIONS.map((route) => route.path),
+    ROUTE_DEFINITIONS.filter(route => !LEGACY_DISCOVERY_PATHS.has(route.path)).map((route) => route.path),
   );
   assert.ok(termsAliasRoute);
   assert.equal(termsAliasRoute.canonicalPath, '/terms-of-use');
@@ -710,15 +711,15 @@ test('static build includes all advertised routes', () => {
   assert.ok(assetPaths.has('index.html'));
   assert.ok(assetPaths.has('projects/index.html'));
   assert.ok(!assetPaths.has('readiness/index.html'), 'readiness filters require dynamic rendering');
-  assert.ok(assetPaths.has('identity-keys/index.html'));
+  assert.equal(assetPaths.has('identity-keys/index.html'), false, 'retired page must not shadow its redirect');
   // This query-driven page must remain dynamic. A generated index.html shadows
   // the Vercel function route and can self-refresh instead of loading status.
   assert.equal(assetPaths.has('submission-status/index.html'), false);
-  assert.ok(assetPaths.has('reputation/index.html'));
+  assert.equal(assetPaths.has('reputation/index.html'), false, 'retired page must not shadow its redirect');
   assert.ok(assetPaths.has('terms/index.html'));
   assert.ok(assetPaths.has('terms-of-use/index.html'));
   assert.ok(assetPaths.has('privacy/index.html'));
-  assert.ok(assetPaths.has('onboarding/index.html'));
+  assert.equal(assetPaths.has('onboarding/index.html'), false, 'retired page must not shadow its redirect');
   assert.ok(assetPaths.has('tou/index.html'));
   assert.ok(assetPaths.has('llms.txt'));
   assert.ok(assetPaths.has('favicon.svg'));
@@ -811,7 +812,7 @@ test('unknown GET routes content-negotiate HTML for browsers and JSON for agent 
     assert.match(agentResponse.headers.get('content-type') ?? '', /^application\/json/);
     assert.equal(agentBody.error, 'not_found');
     assert.equal(agentBody.message, 'No portal route exists at this path.');
-    assert.deepEqual(agentBody.availableRoutes, ROUTE_DEFINITIONS.map((definition) => definition.path));
+    assert.deepEqual(agentBody.availableRoutes, ROUTE_DEFINITIONS.filter(definition => !LEGACY_DISCOVERY_PATHS.has(definition.path)).map((definition) => definition.path));
   });
 });
 
@@ -828,7 +829,7 @@ test('sitemap.xml lists canonical HTML pages without weakening noindex posture',
     assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
     assert.match(body, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
     assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/<\/loc>/);
-    assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+    assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/contribute<\/loc>/);
     assert.match(body, /<loc>https:\/\/agent\.bittrees\.org\/terms-of-use<\/loc>/);
     // Alias routes (/terms, /tou) must not appear as separate sitemap entries
     // alongside their canonical /terms-of-use URL.
@@ -889,8 +890,8 @@ test('homepage adds product-first project and agent connection paths', () => {
   assert.match(html, /<a class="hero-cta hero-cta-secondary" href="\/mcp-docs">Connect an agent<\/a>/);
   assert.match(html, /<nav id="contribution-paths" class="action-grid"/);
   assert.match(html, /<p class="status-panel">[^<]*Prelaunch:[^<]*<\/p>/);
-  assert.match(html, /<a href="\/projects"[^>]*>Projects<\/a>/);
-  assert.match(html, /<a href="\/mcp"[^>]*>MCP<\/a>/);
+  assert.match(html, /<a href="\/projects"[^>]*>All projects<\/a>/);
+  assert.match(html, /<a href="https:\/\/mcp.bittrees.org\/connect"[^>]*>Connect through MCP<\/a>/);
   assert.match(html, /<summary>Explore every portal route<\/summary>/);
 });
 
@@ -1091,7 +1092,7 @@ test('signing island shows the exact wallet message preview before any wallet pr
   );
   assert.match(
     html,
-    /This wallet signature derives a local encryption key\. It is not a transaction, does not spend funds, and does not grant Bittrees, IDACC, or this portal authority over your wallet\./,
+    /This wallet signature derives a local encryption key\. It is not a transaction, does not spend funds, and does not grant Bittrees or this portal authority over your wallet\./,
   );
   assert.match(
     html,
@@ -1268,7 +1269,7 @@ test('static build publishes a sitemap and a same-origin social-preview asset', 
   assert.match(sitemap, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
   assert.match(sitemap, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/<\/loc>/);
-  assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/agent\.bittrees\.org\/contribute<\/loc>/);
 
   const image = assets.find((asset) => asset.path === 'social-preview.png').body;
   assert.ok(Buffer.isBuffer(image));
@@ -1286,7 +1287,7 @@ test('sitemap and social-preview routes serve with the noindex posture intact', 
     assert.equal(sitemap.status, 200);
     assert.match(sitemap.headers.get('content-type'), /application\/xml/);
     assert.equal(sitemap.headers.get('x-robots-tag'), 'noindex, nofollow');
-    assert.match(sitemapBody, /<loc>https:\/\/agent\.bittrees\.org\/onboarding<\/loc>/);
+    assert.match(sitemapBody, /<loc>https:\/\/agent\.bittrees\.org\/contribute<\/loc>/);
 
     const image = await fetch(`${baseUrl}/social-preview.png`);
     const imageBody = Buffer.from(await image.arrayBuffer());
@@ -1307,7 +1308,7 @@ test('visible route lists collapse canonical alias destinations', () => {
   const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
   const routeCardDestinations = extractRouteCardDestinations(actionGrid);
   const primaryNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Primary portal routes'));
-  const footerNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Footer routes'));
+  const footerNavHrefs = extractHrefValues(extractNavByAriaLabel(html, 'Supporting resources'));
   const notFoundHtml = renderNotFoundPage();
   const notFoundRoutesMatch = notFoundHtml.match(
     /<h2 id="notfound-routes-title">Portal pages<\/h2>\s*<ul>([\s\S]*?)<\/ul>/,
@@ -1335,7 +1336,7 @@ test('landing route directory groups human pages contracts and workflow APIs', (
   const actionGrid = extractNavByAriaLabel(html, 'Portal route directory');
 
   assert.match(actionGrid, /<h2 id="route-group-portal-pages">Portal pages<\/h2>/);
-  assert.match(actionGrid, /Human-readable pages for onboarding, status, reputation, legal gates, and documentation\./);
+  assert.match(actionGrid, /Human-readable pages for projects, contribution status, policies and documentation\./);
   assert.match(actionGrid, /<h2 id="route-group-agent-contracts">Agent-readable contracts<\/h2>/);
   assert.match(actionGrid, /Text and JSON contracts for crawlers, agent clients, release checks, and source verification\./);
   assert.match(actionGrid, /<h2 id="route-group-workflow-apis">Workflow APIs<\/h2>/);
@@ -1345,11 +1346,11 @@ test('landing route directory groups human pages contracts and workflow APIs', (
   const contractsGroup = actionGrid.match(/id="route-group-agent-contracts"[\s\S]*?<\/section>/)?.[0] ?? '';
   const workflowGroup = actionGrid.match(/id="route-group-workflow-apis"[\s\S]*?<\/section>/)?.[0] ?? '';
 
-  assert.match(portalGroup, /href="\/onboarding"/);
+  assert.doesNotMatch(portalGroup, /href="\/onboarding"/);
   assert.match(portalGroup, /href="\/submission-status"/);
   assert.doesNotMatch(portalGroup, /href="\/agents\.json"/);
 
-  assert.match(contractsGroup, /href="\/agents\.json"/);
+  assert.doesNotMatch(contractsGroup, /href="\/agents\.json"/);
   assert.match(contractsGroup, /href="\/llms\.txt"/);
   assert.match(contractsGroup, /href="\/api\/health"/);
   assert.doesNotMatch(contractsGroup, /href="\/v1\/workflow\/opportunities"/);
@@ -1399,7 +1400,7 @@ test('legal disclaimers and privacy notice are present across public route outpu
 
   assert.equal(
     UNIVERSAL_PORTAL_DISCLAIMER,
-    'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees, IDACC, or any wallet, Safe, signer, controller, registry owner, or governance body.',
+    'Informational staging material only. Nothing on this portal is legal, tax, accounting, investment, trading, treasury, governance, employment, or other professional advice. Nothing here is an offer to sell or a solicitation to buy any security, token, digital asset, or other financial instrument. Nothing on this portal grants authority, authorization, approval, or permission to act on behalf of Bittrees or any wallet, Safe, signer, controller, registry owner, or governance body.',
   );
   assert.equal(
     NO_RIGHTS_CREATED_DISCLAIMER,
@@ -2271,8 +2272,8 @@ test('onboarding page and registry feed are mounted routes', async () => {
 
     assert.equal(onboardingResponse.status, 200);
     assert.match(onboardingResponse.headers.get('content-type') ?? '', /^text\/html/);
-    assert.match(onboardingBody, /Agent onboarding/);
-    assert.match(onboardingBody, /\/onboarding\.json/);
+    assert.match(onboardingBody, /Bring useful work to Bittrees/);
+    assert.equal(onboardingResponse.url, `${baseUrl}/contribute`);
 
     const registryResponse = await fetch(`${baseUrl}/v1/registry/agents`);
     const registryBody = await registryResponse.json();
@@ -4120,7 +4121,7 @@ test('idacc release snapshot includes verifiable download metadata', () => {
 test('readiness filters combine priority, status, and project without hiding global totals', () => {
   const html = renderReadinessPage(new URLSearchParams('priority=P1&status=todo&project=agent'));
   assert.equal((html.match(/class="readiness-task priority-/g) ?? []).length, 3);
-  assert.match(html, /Showing 3 of 66 tasks across 1 project/);
+  assert.match(html, /Showing 3 of 60 tasks across 1 project/);
   assert.match(html, /id="readiness-agent" open/);
   assert.doesNotMatch(html, /id="agent-p0-durable-control-plane"/);
   assert.match(html, /value="P1" selected/);
@@ -4130,6 +4131,6 @@ test('readiness filters combine priority, status, and project without hiding glo
 test('readiness filters handle empty matches and ignore unrecognized inputs', () => {
   assert.match(renderReadinessPage(new URLSearchParams('project=agent&priority=P2')), /No tasks match/);
   const html = renderReadinessPage(new URLSearchParams('priority=%3Cscript%3E&project=unknown&status=nope'));
-  assert.match(html, /Showing 66 of 66 tasks/);
+  assert.match(html, /Showing 60 of 60 tasks/);
   assert.doesNotMatch(html, /<script>/);
 });

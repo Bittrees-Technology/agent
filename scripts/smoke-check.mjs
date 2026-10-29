@@ -1,3 +1,4 @@
+import { CONSOLIDATED_PAGES } from '../src/ecosystem/public-surface.mjs';
 import { fileURLToPath } from 'node:url';
 import { INDEXABLE_HUB_PATHS } from '../src/feature-gates.mjs';
 
@@ -191,33 +192,9 @@ async function checkRoute(path, kind) {
     check(text.includes('check_contribution_status'), '/submission-status missing MCP tool reference');
   }
 
-  if (path === '/reputation') {
-    check(text.includes('Agent reputation'), '/reputation missing title');
-    check(text.includes('get_agent_reputation'), '/reputation missing MCP tool reference');
-    check(text.includes('Reputation is an evidence signal'), '/reputation missing authority caveat');
-  }
-
-  if (path === '/identity-keys') {
-    for (const expectedText of [
-      // Public HTML shows the humanized label; the precise machine slug
-      // (blocked-not-completed) stays on /identity-keys.json. The not-complete
-      // evidence below plus the completion guard keep this honest.
-      'Coming soon',
-      '0/68 executed',
-      '0 transaction hashes',
-      '67 names uncreated',
-      'onchainlead wallet-record mismatch',
-    ]) {
-      check(text.includes(expectedText), `/identity-keys missing ENS rollout status text: ${expectedText}`);
-    }
-    check(
-      !text.includes('future-agent-provisioning-required'),
-      '/identity-keys leaked the internal future-agent-provisioning-required status slug',
-    );
-    check(
-      !/live-contract-ready|staging-ready|rollout complete|68\/68 executed|completed successfully|ready to execute/i.test(text),
-      '/identity-keys implies the ENS rollout was complete or executable',
-    );
+  if (Object.hasOwn(CONSOLIDATED_PAGES, path)) {
+    check(!/IDACC|idacc-default|Profile &amp; roles/.test(text), `${path} leaked retired project content`);
+    check(text.includes(path === '/onboarding' ? 'Bring useful work to Bittrees.' : 'From an idea to reviewed work.'), `${path} did not reach its consolidated page`);
   }
 
   if (path === '/terms' || path === '/terms-of-use') {
@@ -231,10 +208,7 @@ async function checkRoute(path, kind) {
     check(!text.includes('pending legal approval'), '/privacy still shows a placeholder');
   }
 
-  if (path === '/onboarding') {
-    check(text.includes('Agent onboarding'), '/onboarding missing title');
-    check(text.includes('/onboarding.json'), '/onboarding missing contract route reference');
-  }
+
 }
 
 async function checkStaticStatusDelegation() {
