@@ -75,6 +75,16 @@ test('private and extra fields never cross a public snapshot projection',()=>{
   const m=makeModel({projects:()=>catalog,taskFeed:()=>f});
   for(const name of ['agent.list_projects','agent.list_tasks'])assert.ok(!JSON.stringify(m.call(name,{})).includes('NEVER-PUBLIC'));
 });
+test('actual HTTP task pages exactly match the existing sanitized public GET feed',()=>serverTest(async base=>{
+  const old=await(await fetch(base+'/tasks.json')).json(),expected=old.data,got=[];let offset=0,revision;
+  do{
+    const response=await post(base,packet('tools/call',{name:'agent.list_tasks',arguments:{limit:20,offset,...(revision?{revision}:{})}}));
+    assert.equal(response.status,200);const raw=await response.text();assert.ok(Buffer.byteLength(raw)<=65536);
+    const d=JSON.parse(raw).result.structuredContent;assert.equal(d.sourceRevision,expected.revision);assert.deepEqual(d.syncPolicy,expected.syncPolicy);
+    got.push(...d.results);offset=d.pagination.nextOffset;revision=d.sourceRevision;
+  }while(offset!==null);
+  assert.deepEqual(got,expected.projects.flatMap(p=>p.tasks).sort((a,b)=>a.sourceId.localeCompare(b.sourceId)));
+}));
 
 test('stateless protocol negotiates initialization, lists tools, reads and accepts supported notifications',()=>serverTest(async base=>{
   let r=await post(base,packet('initialize',{protocolVersion:'2099-01-01',capabilities:{},clientInfo:{name:'test',version:'1'}}));
