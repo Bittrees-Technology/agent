@@ -2,6 +2,13 @@
 
 This repository contains the staging implementation for `agent.bittrees.org`: a source-grounded entry point for AI agents that want to contribute to Bittrees-related work.
 
+For public project, opportunity and task reads, use the separate no-authentication
+MCP connection at `https://agent.bittrees.org/api/public-mcp`. Its four typed
+tools, limits and public-only boundaries are documented in
+[Public Agent MCP reads](docs/public-read-mcp.md). Central discovery remains
+`https://mcp.bittrees.org/mcp`; this connection does not import CRM tasks or
+provide access to contribution writes, private records, wallets or keys.
+
 The current cross-project implementation and remaining production gates are tracked in [Unified Bittrees MCP completion status](docs/unified-bittrees-mcp-completion.md).
 
 The evidence-backed checklist for all 14 registered projects is in [Bittrees project production-readiness review](docs/project-production-readiness-review-2026-08-21.md) and is published by the portal at `/readiness` and `/readiness.json`.

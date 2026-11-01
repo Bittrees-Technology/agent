@@ -3,5 +3,18 @@
   "version": 1,
   "projectId": "agent",
   "canonicalDiscovery": "https://mcp.bittrees.org/mcp",
-  "connections": []
+  "connections": [
+    {
+      "projectId": "agent",
+      "transport": "mcp",
+      "endpoint": "https://agent.bittrees.org/api/public-mcp",
+      "setup": {"authentication": "none"},
+      "verification": "source-owned-public-read-adapter",
+      "source": "https://github.com/Bittrees-Technology/agent/blob/5eada11864b45762047c8bf7683a60dc2e5c3503/src/public-read-mcp.mjs",
+      "operations": {
+        "read": ["agent.list_projects", "agent.list_opportunities", "agent.get_opportunity", "agent.list_tasks"]
+      },
+      "boundary": "Public curated project, opportunity and task snapshots only. No credentials required. Pagination preserves source task identities, hashes and revisions. No private queue, receipt, controller, key, wallet, write or CRM import access; discovery does not grant authority."
+    }
+  ]
 }

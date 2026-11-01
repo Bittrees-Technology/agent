@@ -3,6 +3,7 @@ import { reputationEvidence } from './reputation-evidence.mjs';
 import { CONSOLIDATED_PAGES, consolidatedDestination, LEGACY_DISCOVERY_PATHS, buildHubAgentGuide } from './ecosystem/public-surface.mjs';
 import { LEGAL_EFFECTIVE_DATE, renderLegalDocument } from './ecosystem/legal.mjs';
 import { buildTaskFeed, TASK_FEED_SCHEMA } from './task-feed.mjs';
+import { createPublicAgentReadModel, createPublicAgentMcpHandler, publicAgentToolManifest, PUBLIC_MCP_PATH, PUBLIC_MANIFEST_PATH } from './public-read-mcp.mjs';
 import { publicCatalog, isExcludedProject } from './public-project-policy.mjs';
 import { CATALOG, catalogRevision, catalogView, selectionFromParams, clientConfiguration, projectState } from './ecosystem/catalog.mjs';
 import { scopedMcpResult } from './ecosystem/mcp.mjs';
@@ -11042,6 +11043,7 @@ export function buildStaticAssets(
       body: renderEcosystemConnect(),
     },
     ...HUB_PATHS.filter((path) => path !== '/').map((path) => ({ path: `${path.slice(1)}/index.html`, body: renderHubPage(path, { notices: [UNIVERSAL_PORTAL_DISCLAIMER, NO_RIGHTS_CREATED_DISCLAIMER, CONTRIBUTION_PRIVACY_NOTICE] }) })),
+    { path: PUBLIC_MANIFEST_PATH.slice(1), body: `${JSON.stringify(publicAgentToolManifest(), null, 2)}\n` },
     { path: 'hub.css', body: readFileSync(new URL('../public/hub.css', import.meta.url), 'utf8') },
     {
       path: 'projects/index.html',
@@ -11106,6 +11108,12 @@ export function createRequestHandler({
   workflow = LIVE_CONTRIBUTOR_PORTAL_WORKFLOW,
   releaseMetadata = DEPLOYED_RELEASE_METADATA,
 } = {}) {
+  const publicReadHandler = createPublicAgentMcpHandler(createPublicAgentReadModel({
+    projects: () => publicSafeContent(BITTREES_PROJECT_REGISTRY),
+    opportunities: () => publicSafeContent(OPPORTUNITIES),
+    taskFeed: () => buildTaskFeed(publicSafeContent(PROJECT_READINESS_REGISTRY), publicSafeContent(BITTREES_PROJECT_REGISTRY)),
+    sourceCommit: releaseMetadata.commitSha ?? null,
+  }), { headers: PORTAL_RESPONSE_HARDENING_HEADERS });
   return async function handleRequest(req, res) {
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const includeBody = req.method !== 'HEAD';
@@ -11115,6 +11123,16 @@ export function createRequestHandler({
       : rawPathname;
     const telemetry = withRequestTelemetry(req, { method: req.method ?? 'GET', path: rawPathname }, rawPathname);
     const normalizedPath = normalizeCanonicalPath(pathname);
+    // Separate, public-only handler: never enters legacy contribution, queue,
+    // registry, authentication or outbox dispatch, even with credentials present.
+    if (pathname === PUBLIC_MCP_PATH) {
+      if (requestUrl.search) return sendBody(res, 400, JSON.stringify({error:'query_not_supported'}), 'application/json; charset=utf-8', includeBody, telemetry);
+      return publicReadHandler(req, res);
+    }
+    if (pathname === PUBLIC_MANIFEST_PATH) {
+      if (!['GET','HEAD'].includes(req.method)) return sendEmpty(res,405,telemetry,{Allow:'GET, HEAD'});
+      return sendBody(res,200,`${JSON.stringify(publicAgentToolManifest(),null,2)}\n`,'application/json; charset=utf-8',includeBody,telemetry);
+    }
     const consolidated = consolidatedDestination(pathname);
     if (consolidated && (req.method === 'GET' || req.method === 'HEAD')) {
       return sendRedirect(res, 301, consolidated, { ...telemetry, status: 301 });
