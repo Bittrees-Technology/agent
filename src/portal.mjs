@@ -308,7 +308,7 @@ export const PORTAL_CACHE_HEADERS = Object.freeze({
 
 export const PORTAL_SECURITY_HEADERS = Object.freeze({
   'Content-Security-Policy':
-    "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src https://insights.bittrees.org/consent.js https://insights.bittrees.org/tracker.js; connect-src https://insights.bittrees.org; style-src 'self' 'unsafe-inline' https://insights.bittrees.org/consent.css; upgrade-insecure-requests",
+    "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src https://insights.bittrees.org/analytics-preferences.html; img-src 'self' data:; object-src 'none'; script-src https://insights.bittrees.org/consent.js https://insights.bittrees.org/tracker.js; connect-src https://insights.bittrees.org; style-src 'self' 'unsafe-inline' https://insights.bittrees.org/consent.css; upgrade-insecure-requests",
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
